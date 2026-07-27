@@ -9,6 +9,44 @@ remembering, and anything left behind as debt.
 
 ## M3 — Exam Builder · *in progress*
 
+### Shipped — section and rule builder (0018)
+
+Sections and their selection rules are editable on `/exams/[id]`, each rule
+showing **two numbers**:
+
+    available — what this rule matches on its own, within its difficulty band
+    drawn     — what it actually gets once earlier rules have taken theirs
+
+One number would be a trap. Two rules matching the same 23 questions each report
+"23 available" and publish then refuses both. "23 available · 19 already taken by
+an earlier rule" says the same thing while the chef can still act on it.
+`available` updates live as they edit, debounced; `drawn` needs the real draw, so
+it refreshes on save.
+
+**The refactor matters more than the feature.** Counting a rule needs the same
+predicate `draw_paper()` selects with. A second copy would drift, and the builder
+would promise questions the draw does not agree exist. `question_pool()` is that
+predicate extracted; `draw_paper()`, `exam_rule_counts()` and
+`preview_rule_count()` all call it, so there is one definition of what a rule
+matches. The existing 21 draw tests passed unchanged against the refactored
+function, which is what a refactor should be able to show.
+
+`preview_rule_count()` takes rule *parameters* rather than a rule id, so the
+count answers for a rule that has not been saved yet. It reports `available`
+only — a rule with no place in the running order has no meaningful `drawn`, and
+inventing one would be worse than omitting it.
+
+**Counts are in-band only.** `question_pool()` deliberately returns out-of-band
+questions so the draw can widen to adjacent difficulty, but a chef asking "how
+many match this rule?" means the rule as written. Counting the widened pool made
+the difficulty control look inert — narrowing 1–5 to 3–3 left the number
+unchanged.
+
+`saveSections()` is separate from `saveExam()`. Routing a sections-only save
+through the settings action would mean sending a title the builder does not own,
+which is how a form writes back a stale copy of something somebody else just
+changed.
+
 ### Shipped — exam list and settings
 
 `/exams` lists, filters and paginates; `/exams/new` and `/exams/[id]` create and

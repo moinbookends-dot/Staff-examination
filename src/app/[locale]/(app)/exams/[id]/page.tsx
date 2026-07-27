@@ -1,10 +1,14 @@
 import { notFound } from 'next/navigation'
 import { getTranslations, getFormatter } from 'next-intl/server'
 import { requirePermission } from '@/lib/auth/guards'
-import { getExam } from '@/server/actions/exams'
+import { getExam, getRuleCounts } from '@/server/actions/exams'
+import { listCategories } from '@/server/actions/questions'
 import { ExamSettingsForm, type ExamSettings } from '@/components/exams/exam-settings-form'
+import {
+  SectionBuilder,
+  type SectionDraft,
+} from '@/components/exams/section-builder'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { LockIcon } from 'lucide-react'
 
 /**
@@ -24,6 +28,27 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
   if (!data) notFound()
 
   const exam = data.exam
+  const [categories, ruleCounts] = await Promise.all([listCategories(), getRuleCounts(id)])
+
+  // The builder works in drafts keyed by a client-side handle rather than by
+  // database id: a rule the chef has just added has no id yet, and React needs
+  // a stable key for it either way.
+  const initialSections: SectionDraft[] = data.sections.map((section, index) => ({
+    key: `s${index}`,
+    id: section.id,
+    title: section.title,
+    instructions: section.instructions ?? '',
+    rules: section.rules.map((rule, ruleIndex) => ({
+      key: `s${index}r${ruleIndex}`,
+      id: rule.id,
+      categoryId: rule.category_id,
+      includeSubcategories: rule.include_subcategories,
+      difficultyMin: rule.difficulty_min,
+      difficultyMax: rule.difficulty_max,
+      questionCount: rule.question_count,
+      marksPerQuestion: rule.marks_per_question === null ? null : Number(rule.marks_per_question),
+    })),
+  }))
   // The 0016 trigger refuses content edits once an exam leaves draft, so the
   // form is shown read-only rather than letting somebody type into fields the
   // database will reject on save.
@@ -68,32 +93,13 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
 
       <ExamSettingsForm exam={exam as unknown as ExamSettings} readOnly={locked} />
 
-      {/* The section and rule builder lands in the next slice. Stated rather
-          than hidden, so the page does not look finished when it is not. */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">{t('sections.title')}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {data.sections.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              {t('sections.none')}
-            </p>
-          ) : (
-            <ul className="space-y-2">
-              {data.sections.map((section) => (
-                <li key={section.id} className="rounded-md border p-3 text-sm">
-                  <span className="font-medium">{section.title}</span>
-                  <span className="text-muted-foreground">
-                    {' '}
-                    · {t('sections.ruleCount', { count: section.exam_rules?.length ?? 0 })}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+      <SectionBuilder
+        examId={exam.id}
+        initialSections={initialSections}
+        categories={categories}
+        ruleCounts={ruleCounts}
+        readOnly={locked}
+      />
     </div>
   )
 }

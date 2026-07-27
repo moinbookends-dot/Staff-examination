@@ -280,13 +280,48 @@ try {
   const listWithExam = await get('/en/exams')
   check(listWithExam.html.includes(examTitle), 'a draft exam appears in the list', 'the exam was not listed')
 
+  // Empty state FIRST, before any section exists — and matched as a text node.
+  // `includes('No sections yet')` would pass either way, because next-intl
+  // serialises the whole message bundle into the page for the client provider.
+  const emptyDetail = await get(`/en/exams/${examId}`)
+  check(
+    />No sections yet/.test(emptyDetail.html),
+    'a sectionless exam shows the empty state',
+    'the empty section state is missing',
+  )
+
+  // A section with two rules over the SAME category, so the second is starved
+  // by the first — the case the two-number display exists for.
+  const { rows: sectionRows } = await db.query(
+    `insert into public.exam_sections (exam_id, title, sort_order)
+     values ($1,'Render check section',0) returning id`,
+    [examId],
+  )
+  await db.query(
+    `insert into public.exam_rules (section_id, category_id, question_count, difficulty_min, difficulty_max, sort_order)
+     values ($1,$2,3,1,5,0), ($1,$2,3,1,5,1)`,
+    [sectionRows[0].id, '00000000-0000-0000-0000-00000000f001'],
+  )
+
+  const withSections = await get(`/en/exams/${examId}`)
+  check(
+    withSections.html.includes('Render check section'),
+    'the section builder renders a saved section',
+    'the section did not render',
+  )
+  check(
+    withSections.html.includes('match this rule'),
+    'each rule shows its match count',
+    'the live rule count is missing',
+  )
+
   const examDetail = await get(`/en/exams/${examId}`)
   check(examDetail.status === 200, '/en/exams/[id] renders', `status ${examDetail.status}`)
   check(examDetail.html.includes(examTitle), 'the exam detail shows its title', 'title missing')
   check(
-    examDetail.html.includes('No sections yet'),
-    'the empty section state is shown',
-    'section placeholder missing',
+    !/>No sections yet/.test(examDetail.html),
+    'the empty state disappears once a section exists',
+    'the empty state is still shown for an exam that has sections',
   )
 
   // NOTE THE `>text<` FORM. next-intl serialises the whole message bundle into

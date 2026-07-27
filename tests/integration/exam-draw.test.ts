@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import type { Client } from 'pg'
-import { connect, hasDatabase, asUser, chef, fixtures } from './helpers/db'
+import { connect, hasDatabase, asUser, chef, employee, fixtures } from './helpers/db'
 
 /**
  * draw_paper() and exam_health() — the heart of M3.
@@ -17,6 +17,8 @@ const describeDb = hasDatabase ? describe : describe.skip
 const CHEF = 'aaaa9999-9999-9999-9999-999999999999'
 const CAT_A = '00000000-0000-0000-0000-0000000d0a01'
 const CAT_B = '00000000-0000-0000-0000-0000000d0b01'
+/** An approved employee, used only for the permission-denial cases. */
+const EMP_FOR_DENIAL = 'bbbb9999-9999-9999-9999-999999999999'
 
 /** Deterministic ids so assertions can name individual questions. */
 const q = (n: number) => `00000000-0000-0000-0000-0000000q${String(n).padStart(4, '0')}`.replace('q', 'e')
@@ -29,14 +31,15 @@ describeDb('exam draw and health', () => {
     await db.query('begin')
 
     await db.query(
-      `insert into auth.users (id, email) values ($1,'examchef@test.local')
+      `insert into auth.users (id, email) values
+         ($1,'examchef@test.local'), ($2,'examemp@test.local')
        on conflict (id) do nothing`,
-      [CHEF],
+      [CHEF, EMP_FOR_DENIAL],
     )
     await db.query(
       `update public.profiles set approval_status='approved', outlet_id=$2, company_id=$3
-        where id = $1`,
-      [CHEF, fixtures.outletAiko, fixtures.company],
+        where id = any($1::uuid[])`,
+      [[CHEF, EMP_FOR_DENIAL], fixtures.outletAiko, fixtures.company],
     )
 
     await db.query(
@@ -88,7 +91,7 @@ describeDb('exam draw and health', () => {
       Array.from({ length: 10 }, (_, i) => q(i + 1)),
     ])
     await db.query('delete from public.categories where id = any($1::uuid[])', [[CAT_A, CAT_B]])
-    await db.query('delete from auth.users where id = $1', [CHEF])
+    await db.query('delete from auth.users where id = any($1::uuid[])', [[CHEF, EMP_FOR_DENIAL]])
     await db.query('commit')
     await db.end()
   })
@@ -262,6 +265,90 @@ describeDb('exam draw and health', () => {
     expect(a).not.toEqual(other)
     expect(new Set([...a, ...other]).size).toBeGreaterThan(a.length)
     expect(other).toHaveLength(6)
+  })
+
+  // ── Live counts for the builder ────────────────────────────────────────────
+
+  describe('rule counts', () => {
+    it('reports available and drawn separately', async () => {
+      // THE WHOLE POINT OF TWO NUMBERS. Both rules match the same 5-question
+      // pool and want 4. Each is satisfiable alone — "available: 5" — but the
+      // second only gets 1 once the first has taken four. A single number would
+      // tell the chef both rules are fine and let publish refuse them later.
+      const counts = await asUser(db, chef(CHEF), async (c) => {
+        const examId = await buildExam(c, [
+          { category: CAT_A, count: 4, section: 0 },
+          { category: CAT_A, count: 4, section: 1 },
+        ])
+        const rules = await c.query(
+          `select r.id from public.exam_rules r
+             join public.exam_sections s on s.id = r.section_id
+            where s.exam_id = $1 order by s.sort_order`,
+          [examId],
+        )
+        const result = await c.query('select * from public.exam_rule_counts($1)', [examId])
+        return rules.rows.map((r) => result.rows.find((x) => x.rule_id === r.id))
+      })
+
+      expect(counts[0]).toMatchObject({ available: 5, drawn: 4 })
+      expect(counts[1]).toMatchObject({ available: 5, drawn: 1 })
+    })
+
+    it('agrees with the draw for a rule nothing competes with', async () => {
+      const counts = await asUser(db, chef(CHEF), async (c) => {
+        const examId = await buildExam(c, [{ category: CAT_A, count: 3 }])
+        return (await c.query('select * from public.exam_rule_counts($1)', [examId])).rows
+      })
+      expect(counts).toHaveLength(1)
+      expect(counts[0]).toMatchObject({ available: 5, drawn: 3 })
+    })
+
+    it('counts a rule the chef has not saved yet', async () => {
+      // preview_rule_count takes parameters rather than a rule id so the
+      // builder can answer "how many would this match?" while somebody is still
+      // adjusting the difficulty range.
+      const n = await asUser(db, chef(CHEF), async (c) => {
+        const examId = await buildExam(c, [{ category: CAT_A, count: 1 }])
+        return (
+          await c.query(
+            `select public.preview_rule_count($1, $2, true, '{}'::uuid[], null, 1::smallint, 5::smallint) as n`,
+            [examId, CAT_B],
+          )
+        ).rows[0].n
+      })
+      // Category B holds five, and the unsaved rule competes with nothing.
+      expect(n).toBe(5)
+    })
+
+    it('narrows the preview as the difficulty band narrows', async () => {
+      const counts = await asUser(db, chef(CHEF), async (c) => {
+        const examId = await buildExam(c, [{ category: CAT_A, count: 1 }])
+        const wide = await c.query(
+          `select public.preview_rule_count($1, $2, true, '{}'::uuid[], null, 1::smallint, 5::smallint) as n`,
+          [examId, CAT_A],
+        )
+        const narrow = await c.query(
+          `select public.preview_rule_count($1, $2, true, '{}'::uuid[], null, 3::smallint, 3::smallint) as n`,
+          [examId, CAT_A],
+        )
+        return { wide: wide.rows[0].n, narrow: narrow.rows[0].n }
+      })
+      expect(counts.wide).toBe(5)
+      expect(counts.narrow).toBe(1)
+    })
+
+    it('refuses a caller without exams.read', async () => {
+      // Not nested inside the chef's transaction: asUser opens its own, and an
+      // exam created in a rolled-back one would be invisible here regardless.
+      // Any id is enough — the permission gate runs before the lookup.
+      await expect(
+        asUser(db, employee(EMP_FOR_DENIAL), async (c) =>
+          c.query('select * from public.exam_rule_counts($1)', [
+            '00000000-0000-0000-0000-0000000000ff',
+          ]),
+        ),
+      ).rejects.toThrow(/forbidden/)
+    })
   })
 
   // ── Health ─────────────────────────────────────────────────────────────────

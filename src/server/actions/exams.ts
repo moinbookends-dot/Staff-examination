@@ -92,16 +92,34 @@ export async function getExam(id: string) {
   const supabase = await createClient()
   const [{ data: exam }, { data: sections }, { data: assignments }] = await Promise.all([
     supabase.from('exams').select('*').eq('id', id).is('deleted_at', null).maybeSingle(),
-    supabase
-      .from('exam_sections')
-      .select('*, exam_rules(*)')
-      .eq('exam_id', id)
-      .order('sort_order'),
+    supabase.from('exam_sections').select('*').eq('exam_id', id).order('sort_order'),
     supabase.from('exam_assignments').select('*').eq('exam_id', id),
   ])
 
   if (!exam) return null
-  return { exam, sections: sections ?? [], assignments: assignments ?? [] }
+
+  // Rules are fetched separately rather than through PostgREST's embedded
+  // select. `scripts/gen-types.mjs` emits `Relationships: []`, so an embed like
+  // `exam_sections(*, exam_rules(*))` works at runtime but is untypeable — and
+  // a cast to paper over that would hide a genuinely wrong query just as
+  // readily as a correct one.
+  const sectionIds = (sections ?? []).map((s) => s.id)
+  const { data: rules } = sectionIds.length
+    ? await supabase
+        .from('exam_rules')
+        .select('*')
+        .in('section_id', sectionIds)
+        .order('sort_order')
+    : { data: [] }
+
+  return {
+    exam,
+    sections: (sections ?? []).map((section) => ({
+      ...section,
+      rules: (rules ?? []).filter((r) => r.section_id === section.id),
+    })),
+    assignments: assignments ?? [],
+  }
 }
 
 /**
@@ -118,6 +136,67 @@ export async function getExamHealth(id: string): Promise<HealthIssue[]> {
   const { data, error } = await supabase.rpc('exam_health', { p_exam_id: id })
   if (error) return []
   return (data ?? []) as unknown as HealthIssue[]
+}
+
+export interface RuleCount {
+  rule_id: string
+  /** How many questions this rule matches on its own, within its difficulty band. */
+  available: number
+  /** How many it actually gets once earlier rules have taken theirs. */
+  drawn: number
+}
+
+/**
+ * The two numbers the builder shows beside each saved rule.
+ *
+ * `available` alone would be a trap: two rules can match the same questions, and
+ * the second only discovers at publish that the first took them. Showing both
+ * turns "your exam is short" at publish time into "19 of these are already
+ * taken" while the chef is still editing.
+ */
+export async function getRuleCounts(examId: string): Promise<RuleCount[]> {
+  await requirePermission('exams.read')
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('exam_rule_counts', { p_exam_id: examId })
+  if (error) return []
+  return (data ?? []) as unknown as RuleCount[]
+}
+
+const previewSchema = z.object({
+  examId: dbId(),
+  categoryId: dbId().nullable().default(null),
+  includeSubcategories: z.boolean().default(true),
+  tagIds: z.array(dbId()).default([]),
+  difficultyMin: z.number().int().min(1).max(5).default(1),
+  difficultyMax: z.number().int().min(1).max(5).default(5),
+})
+
+/**
+ * How many questions an UNSAVED rule would match.
+ *
+ * Only the `available` half: a rule with no position in the running order has
+ * no meaningful `drawn`, and inventing one would be worse than omitting it.
+ */
+export async function previewRuleCount(input: unknown): Promise<number | null> {
+  await requirePermission('exams.read')
+
+  const parsed = previewSchema.safeParse(input)
+  if (!parsed.success) return null
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('preview_rule_count', {
+    p_exam_id: parsed.data.examId,
+    p_category_id: parsed.data.categoryId,
+    p_include_sub: parsed.data.includeSubcategories,
+    p_tag_ids: parsed.data.tagIds,
+    p_types: null,
+    p_difficulty_min: parsed.data.difficultyMin,
+    p_difficulty_max: parsed.data.difficultyMax,
+  })
+
+  if (error) return null
+  return data as unknown as number
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -244,6 +323,75 @@ export async function saveExam(
   revalidatePath('/exams')
   revalidatePath(`/exams/${examId}`)
   return { ok: true, id: examId }
+}
+
+const saveSectionsSchema = z.object({
+  examId: dbId(),
+  sections: z.array(examSectionSchema),
+})
+
+/**
+ * Replace an exam's section tree, without touching its settings.
+ *
+ * Separate from saveExam because the two are edited by different forms and
+ * neither should have to restate the other's fields. Routing a sections-only
+ * save through saveExam would mean sending a title the section builder does not
+ * own, which is how a form ends up writing back a stale copy of something
+ * somebody else just changed.
+ */
+export async function saveSections(input: unknown): Promise<MutationResult> {
+  await requirePermission('exams.update')
+
+  const parsed = saveSectionsSchema.safeParse(input)
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid sections.' }
+  }
+
+  const { examId, sections } = parsed.data
+  const supabase = await createClient()
+
+  // Replace-set: the builder sends the whole tree, so a merge would make
+  // deleting a rule impossible. Rules cascade with their section.
+  const { error: wipeError } = await supabase.from('exam_sections').delete().eq('exam_id', examId)
+  if (wipeError) return { ok: false, error: friendlyWriteError(wipeError) }
+
+  for (const [index, section] of sections.entries()) {
+    const { data: created, error: sectionError } = await supabase
+      .from('exam_sections')
+      .insert({
+        exam_id: examId,
+        title: section.title,
+        description: section.description,
+        instructions: section.instructions,
+        duration_minutes: section.durationMinutes,
+        sort_order: index,
+      })
+      .select('id')
+      .single()
+
+    if (sectionError || !created) return { ok: false, error: friendlyWriteError(sectionError) }
+
+    if (section.rules.length > 0) {
+      const { error: ruleError } = await supabase.from('exam_rules').insert(
+        section.rules.map((rule, ruleIndex) => ({
+          section_id: created.id,
+          sort_order: ruleIndex,
+          category_id: rule.categoryId,
+          include_subcategories: rule.includeSubcategories,
+          tag_ids: rule.tagIds,
+          question_types: rule.questionTypes,
+          difficulty_min: rule.difficultyMin,
+          difficulty_max: rule.difficultyMax,
+          question_count: rule.questionCount,
+          marks_per_question: rule.marksPerQuestion,
+        })),
+      )
+      if (ruleError) return { ok: false, error: friendlyWriteError(ruleError) }
+    }
+  }
+
+  revalidatePath(`/exams/${examId}`)
+  return { ok: true }
 }
 
 /**

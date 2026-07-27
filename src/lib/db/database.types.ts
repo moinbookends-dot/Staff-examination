@@ -1111,6 +1111,10 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "exam_rule_counts": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "exam_status_transition_allowed": {
         Args: Record<string, unknown>
         Returns: unknown
@@ -1167,7 +1171,15 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "preview_rule_count": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "publish_exam": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "question_pool": {
         Args: Record<string, unknown>
         Returns: unknown
       }
