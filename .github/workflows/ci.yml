@@ -1,0 +1,164 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Static analysis + unit tests ────────────────────────────────────────────
+  check:
+    name: Typecheck · Lint · Unit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Production build
+        run: npm run build
+        env:
+          # Build-time placeholders. Real values are never needed to compile;
+          # if the build starts *requiring* a live Supabase connection, that is
+          # a bug — it means something is querying at module scope.
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_placeholder
+
+  # ── Migration replay + RLS policy tests ─────────────────────────────────────
+  #
+  # There is no local Supabase stack (no Docker on the dev machine), so this
+  # job is the ONLY proof that migrations apply cleanly from an empty database.
+  # A migration that only works incrementally against the linked dev project
+  # is broken, and this is what catches it. Do not disable.
+  database:
+    name: Migration replay · RLS
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install psql client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Bootstrap Supabase-compatible objects
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/bootstrap.sql
+
+      - name: Replay every migration from empty
+        run: |
+          shopt -s nullglob
+          files=(supabase/migrations/*.sql)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No migrations yet — nothing to replay."
+            exit 0
+          fi
+          for f in "${files[@]}"; do
+            echo "── applying $f"
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"
+          done
+
+      - name: Seed
+        run: |
+          if [ -f supabase/seed.sql ]; then
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/seed.sql
+          else
+            echo "No seed.sql yet."
+          fi
+
+      - name: RLS policy tests
+        run: npm run test:rls
+
+  # ── Generated types must match the schema ───────────────────────────────────
+  #
+  # Schema/type drift is one of the two classic solo-dev disasters (the other
+  # is unreplayable migrations, covered above). Regenerating from the replayed
+  # schema and diffing against the committed file catches it for ~10 lines.
+  types:
+    name: Type drift
+    runs-on: ubuntu-latest
+    needs: database
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+      - name: Install psql client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Rebuild schema
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/bootstrap.sql
+          shopt -s nullglob
+          for f in supabase/migrations/*.sql; do
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"
+          done
+
+      - name: Regenerate and diff
+        run: |
+          if [ ! -f src/lib/db/database.types.ts ]; then
+            echo "No committed types yet — skipping drift check."
+            exit 0
+          fi
+          npx supabase gen types typescript --db-url "$DATABASE_URL" > /tmp/generated.types.ts
+          if ! diff -u src/lib/db/database.types.ts /tmp/generated.types.ts; then
+            echo "::error::database.types.ts is stale. Run 'npm run gen:types' and commit."
+            exit 1
+          fi

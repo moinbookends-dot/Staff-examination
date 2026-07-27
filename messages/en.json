@@ -1,0 +1,76 @@
+{
+  "app": {
+    "name": "Bookends Learning",
+    "tagline": "Training and assessment for Aiko, Capiche and Prep"
+  },
+  "common": {
+    "loading": "Loading…",
+    "save": "Save",
+    "cancel": "Cancel",
+    "back": "Back",
+    "next": "Next",
+    "submit": "Submit",
+    "search": "Search",
+    "filter": "Filter",
+    "signOut": "Sign out",
+    "language": "Language",
+    "retry": "Try again",
+    "somethingWentWrong": "Something went wrong."
+  },
+  "auth": {
+    "login": {
+      "title": "Sign in",
+      "subtitle": "Access your training and exams",
+      "email": "Email",
+      "password": "Password",
+      "submit": "Sign in",
+      "forgot": "Forgot your password?",
+      "noAccount": "Don’t have an account?",
+      "register": "Register",
+      "invalidCredentials": "That email and password combination is not recognised."
+    },
+    "register": {
+      "title": "Create your account",
+      "subtitle": "Your account needs approval from a manager before you can sign in.",
+      "fullName": "Full name",
+      "phone": "Phone number",
+      "outlet": "Outlet",
+      "department": "Department",
+      "preferredLanguage": "Preferred language",
+      "submit": "Register",
+      "hasAccount": "Already registered?",
+      "checkEmail": "Check your email for a verification link."
+    },
+    "pending": {
+      "title": "Awaiting approval",
+      "body": "Your account has been created and is waiting for a manager to approve it. You’ll be able to sign in as soon as that happens.",
+      "rejected": "Your registration was not approved.",
+      "reason": "Reason",
+      "checking": "Checking your status…"
+    },
+    "forgotPassword": {
+      "title": "Reset your password",
+      "body": "Enter your email and we’ll send you a reset link.",
+      "submit": "Send reset link",
+      "sent": "If that email is registered, a reset link is on its way."
+    }
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "questions": "Question bank",
+    "exams": "Exams",
+    "evaluate": "Evaluate",
+    "verify": "Verify",
+    "results": "Results",
+    "learning": "Learning",
+    "reports": "Reports",
+    "approvals": "Approvals",
+    "admin": "Administration"
+  },
+  "errors": {
+    "notFound": "That page doesn’t exist.",
+    "forbidden": "You don’t have permission to view this.",
+    "unauthorized": "Please sign in to continue.",
+    "pendingApproval": "Your account is still awaiting approval."
+  }
+}

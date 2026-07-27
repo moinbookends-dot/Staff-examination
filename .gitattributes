@@ -1,0 +1,18 @@
+# Normalise line endings across Windows/CI. Without this, CRLF from Windows
+# checkouts breaks shell scripts and produces noisy whole-file diffs.
+* text=auto eol=lf
+
+# Binary — never munge
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+
+# Generated — collapse in PR diffs
+package-lock.json           linguist-generated=true
+src/lib/db/database.types.ts linguist-generated=true
