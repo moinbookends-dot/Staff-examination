@@ -262,6 +262,7 @@ export type Database = {
           "target_role": string | null
           "assigned_by": string | null
           "assigned_at": string
+          "target_user_id": string | null
         }
         Insert: {
           "id"?: string
@@ -271,6 +272,7 @@ export type Database = {
           "target_role"?: string | null
           "assigned_by"?: string | null
           "assigned_at"?: string
+          "target_user_id"?: string | null
         }
         Update: {
           "id"?: string
@@ -280,6 +282,7 @@ export type Database = {
           "target_role"?: string | null
           "assigned_by"?: string | null
           "assigned_at"?: string
+          "target_user_id"?: string | null
         }
         Relationships: []
       }
@@ -1187,7 +1190,7 @@ export type Database = {
     }
     Enums: {
       "approval_status": "pending" | "approved" | "rejected" | "suspended"
-      "assignment_target": "outlet" | "department" | "brand" | "role"
+      "assignment_target": "outlet" | "department" | "brand" | "role" | "user"
       "attempt_status": "in_progress" | "submitted" | "auto_graded" | "evaluating" | "evaluated" | "verifying" | "verified" | "returned" | "published" | "expired" | "voided"
       "auto_grade_status": "not_applicable" | "pending" | "graded" | "needs_review"
       "exam_kind": "official" | "practice" | "quiz" | "monthly" | "annual" | "practical"

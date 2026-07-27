@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import type { Client } from 'pg'
-import { connect, hasDatabase, asUser, employee, chef, fixtures } from './helpers/db'
+import { connect, hasDatabase, asUser, asOwner, employee, chef, fixtures } from './helpers/db'
 
 /**
  * RLS for the exam layer.
@@ -21,6 +21,7 @@ const EXAM_OUTLET = '00000000-0000-0000-0000-00000000ea01'
 const EXAM_OTHER = '00000000-0000-0000-0000-00000000ea02'
 const EXAM_DRAFT = '00000000-0000-0000-0000-00000000ea03'
 const EXAM_ROLE = '00000000-0000-0000-0000-00000000ea04'
+const EXAM_USER = '00000000-0000-0000-0000-00000000ea05'
 const SECTION = '00000000-0000-0000-0000-00000000eb01'
 const QUESTION = '00000000-0000-0000-0000-00000000ec01'
 
@@ -65,6 +66,7 @@ describeDb('RLS — exams', () => {
       [EXAM_OTHER, 'scheduled'],
       [EXAM_DRAFT, 'draft'],
       [EXAM_ROLE, 'scheduled'],
+      [EXAM_USER, 'scheduled'],
     ] as const) {
       // Always created as a draft, then promoted below. The 0016 lock refuses
       // to attach sections or questions to anything that is not a draft — which
@@ -105,6 +107,12 @@ describeDb('RLS — exams', () => {
       `insert into public.exam_assignments (exam_id, target_kind, target_role) values ($1,'role','employee')`,
       [EXAM_ROLE],
     )
+    // Individual targeting: the Aiko employee only. The Capiche employee shares
+    // no outlet, department or role assignment with this exam.
+    await db.query(
+      `insert into public.exam_assignments (exam_id, target_kind, target_user_id) values ($1,'user',$2)`,
+      [EXAM_USER, EMP_AIKO],
+    )
 
     // Promote everything except EXAM_DRAFT, now that their content exists. This
     // is the order publish_exam() uses too: build while draft, freeze, flip.
@@ -113,7 +121,7 @@ describeDb('RLS — exams', () => {
           set status = 'scheduled', published_at = now(), published_by = $2,
               question_count = 1, total_marks = 2
         where id = any($1::uuid[])`,
-      [[EXAM_OUTLET, EXAM_OTHER, EXAM_ROLE], CHEF],
+      [[EXAM_OUTLET, EXAM_OTHER, EXAM_ROLE, EXAM_USER], CHEF],
     )
 
     await db.query('commit')
@@ -122,7 +130,7 @@ describeDb('RLS — exams', () => {
   afterAll(async () => {
     await db.query('begin')
     await db.query('delete from public.exams where id = any($1::uuid[])', [
-      [EXAM_OUTLET, EXAM_OTHER, EXAM_DRAFT, EXAM_ROLE],
+      [EXAM_OUTLET, EXAM_OTHER, EXAM_DRAFT, EXAM_ROLE, EXAM_USER],
     ])
     await db.query('delete from public.questions where id = $1', [QUESTION])
     await db.query('delete from auth.users where id = any($1::uuid[])', [
@@ -140,10 +148,10 @@ describeDb('RLS — exams', () => {
     it('a chef sees every exam in their company, including drafts', async () => {
       const rows = await asUser(db, chef(CHEF), async (c) =>
         (await c.query('select id from public.exams where id = any($1::uuid[])', [
-          [EXAM_OUTLET, EXAM_OTHER, EXAM_DRAFT, EXAM_ROLE],
+          [EXAM_OUTLET, EXAM_OTHER, EXAM_DRAFT, EXAM_ROLE, EXAM_USER],
         ])).rows,
       )
-      expect(rows).toHaveLength(4)
+      expect(rows).toHaveLength(5)
     })
 
     it('an employee sees an exam assigned to their outlet', async () => {
@@ -174,6 +182,47 @@ describeDb('RLS — exams', () => {
         (await c.query('select id from public.exams where id = $1', [EXAM_ROLE])).rows,
       )
       expect(idsOf(rows)).toEqual([EXAM_ROLE])
+    })
+
+    it('individual targeting reaches exactly that person', async () => {
+      // The retake case. Nobody else is assigned by outlet, department or role,
+      // so this exam must be visible to one employee and invisible to the other
+      // — even though both are approved, in the same company, and hold the same
+      // role. If the second sees it, "give one person another go" is impossible.
+      const mine = await asUser(db, employee(EMP_AIKO), async (c) =>
+        (await c.query('select id from public.exams where id = $1', [EXAM_USER])).rows,
+      )
+      expect(idsOf(mine)).toEqual([EXAM_USER])
+
+      const theirs = await asUser(db, employee(EMP_CAPICHE, fixtures.outletCapiche), async (c) =>
+        (await c.query('select id from public.exams where id = $1', [EXAM_USER])).rows,
+      )
+      expect(theirs, 'an individual assignment leaked to another employee').toHaveLength(0)
+    })
+
+    it('an individual assignment reaches exactly one person in the audience', async () => {
+      // exam_audience drives the notification and the queued email. If it
+      // returned the whole outlet, a retake for one person would tell everybody
+      // they had a new exam — visible in the UI or not.
+      const audience = await asUser(db, chef(CHEF), async (c) =>
+        (await c.query('select id from public.exam_audience($1)', [EXAM_USER])).rows,
+      )
+      expect(audience.map((r) => r.id)).toEqual([EMP_AIKO])
+    })
+
+    it('an individual assignment cannot reach outside the company', async () => {
+      // An id is not authorisation. exam_audience still filters on company_id,
+      // so an assignment naming somebody else's employee reaches nobody.
+      //
+      // Run as OWNER, and deliberately so: a chef cannot update another
+      // profile, so doing this through asUser would silently update no rows and
+      // the assertion would pass for the wrong reason. Arranging as owner and
+      // asserting on the definer function is the honest shape here.
+      const audience = await asOwner(db, async (c) => {
+        await c.query(`update public.profiles set company_id = null where id = $1`, [EMP_AIKO])
+        return (await c.query('select id from public.exam_audience($1)', [EXAM_USER])).rows
+      })
+      expect(audience).toHaveLength(0)
     })
 
     it('an employee may read the section titles of an assigned exam', async () => {

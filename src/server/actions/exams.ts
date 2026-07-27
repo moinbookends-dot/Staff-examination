@@ -321,6 +321,7 @@ export async function setAssignments(input: unknown): Promise<MutationResult> {
         target_kind: a.targetKind,
         target_id: a.targetId,
         target_role: a.targetRole,
+        target_user_id: a.targetUserId,
         assigned_by: claims.userId,
       })),
     )

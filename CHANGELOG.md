@@ -9,6 +9,31 @@ remembering, and anything left behind as debt.
 
 ## M3 — Exam Builder · *in progress*
 
+### Shipped — individual assignment (0017)
+
+An exam can now be assigned to one person, not only to a group.
+
+This closes the gap M3 recorded as known debt on the day it shipped: with group
+targeting alone, giving somebody a retake meant raising `max_attempts` for the
+whole cohort, which quietly hands a second go to everyone who already passed.
+For a programme with a pass mark that is not hypothetical — somebody fails, is
+coached, and sits it again, and nobody else should be affected.
+
+`is_exam_assigned_to_me()` gains a fourth branch and still joins nothing but
+`exam_assignments`: `auth.uid()` is as much a claim as `my_outlet()` is.
+`exam_audience()` gains the same branch and keeps its `company_id` filter, so an
+assignment naming somebody outside the company reaches nobody — an id is not
+authorisation.
+
+**Every comparison in that migration casts to `text`, deliberately.**
+`ALTER TYPE … ADD VALUE` is allowed inside a transaction from Postgres 12, but
+the new label cannot be *used* in the same transaction — a CHECK constraint or
+function body naming `'user'` as an enum literal fails with "unsafe use of new
+value of enum type". Comparing `target_kind::text = 'user'` never resolves the
+label, so the migration applies whether or not the runner wraps it. The
+alternative, splitting the `ALTER TYPE` into its own file, would make the schema
+depend on how the migration tool happens to batch statements.
+
 ### Shipped — data layer and the Exam Health engine
 
 Migrations 0014–0016. No UI yet: schema and engine land and are tested first,
@@ -90,7 +115,7 @@ failed every insert with `record "new" has no field "section_id"`. Rewritten as
 | Candidate fallback | Never refuse at attempt start | An administrator's misconfiguration must not stop somebody sitting an exam. |
 | Validator location | SQL, called by both the UI and the gate | A TypeScript copy would count per-rule and miss overlapping pools. |
 | Post-publish edits | Trigger allowlist | A UI that hides fields is a suggestion; psql, imports and scripts are not bound by it. |
-| Assignment targets | Groups only, role by **key** | A uuid role target forces the visibility policy to join `user_roles` per row — the join the JWT claims model exists to avoid. |
+| Assignment targets | Outlet, department, brand, role by **key**, and individual (0017) | A uuid role target forces the visibility policy to join `user_roles` per row — the join the JWT claims model exists to avoid. |
 | Candidate access to `exam_questions` | **None** | Reading the table is reading the whole paper before the timer starts. M4 serves it through a definer route gated on an in-progress attempt. |
 
 ### Deferred to M4, deliberately
@@ -109,8 +134,6 @@ other M4 obligations — persisting `fallback_reason` onto attempts, and
   totals from the rules, but nothing draws for a real attempt until M4.
 - `exam_sections.duration_minutes` is accepted and stored but enforced by
   nothing until M4 builds the delivery timer.
-- No individual retake mechanism — `max_attempts` applies to the whole cohort.
-  Adding `target_kind = 'user'` is a follow-up the schema accommodates.
 - The exam builder UI does not exist, so exams are currently creatable only
   through the server actions or psql.
 

@@ -114,20 +114,48 @@ export const examSchema = z.object({
 
 export type ExamInput = z.input<typeof examSchema>
 
+export const ASSIGNMENT_TARGETS = ['outlet', 'department', 'brand', 'role', 'user'] as const
+export const assignmentTargetSchema = z.enum(ASSIGNMENT_TARGETS)
+export type AssignmentTarget = z.infer<typeof assignmentTargetSchema>
+
+/**
+ * Exactly one target field, and which one depends on the kind.
+ *
+ * Three fields rather than one polymorphic column because they are genuinely
+ * different things: outlet/department/brand are org uuids, a role is a KEY (so
+ * the visibility policy can read it from the JWT instead of joining
+ * user_roles), and a user is a profile id. The refinement below mirrors the
+ * assignment_target_shape CHECK constraint, so a bad shape is refused with a
+ * sentence rather than a constraint name.
+ */
 export const assignmentSchema = z
   .object({
-    targetKind: z.enum(['outlet', 'department', 'brand', 'role']),
+    targetKind: assignmentTargetSchema,
     targetId: dbId().nullable().default(null),
-    // A role KEY, not a uuid — has_role() reads keys straight from the JWT, so
-    // a uuid would force the visibility policy to join user_roles.
     targetRole: z.string().trim().min(1).max(60).nullable().default(null),
+    targetUserId: dbId().nullable().default(null),
   })
   .refine(
-    (a) =>
-      a.targetKind === 'role'
-        ? a.targetRole !== null && a.targetId === null
-        : a.targetId !== null && a.targetRole === null,
-    { message: 'A role target needs a role key; every other target needs an id.' },
+    (a) => {
+      const set = [a.targetId, a.targetRole, a.targetUserId].filter((v) => v !== null).length
+      if (set !== 1) return false
+      if (a.targetKind === 'role') return a.targetRole !== null
+      if (a.targetKind === 'user') return a.targetUserId !== null
+      return a.targetId !== null
+    },
+    {
+      message:
+        'A role target needs a role key, an individual needs a person, and every other target needs an id.',
+    },
   )
 
 export type AssignmentInput = z.input<typeof assignmentSchema>
+
+/** Human labels for the assignment picker. */
+export const ASSIGNMENT_TARGET_LABELS: Record<AssignmentTarget, string> = {
+  outlet: 'Outlet',
+  department: 'Department',
+  brand: 'Brand',
+  role: 'Role',
+  user: 'Individual',
+}
