@@ -591,6 +591,7 @@ export type Database = {
           "created_at": string
           "updated_at": string
           "search_tsv": string | null
+          "revision": number
         }
         Insert: {
           "id"?: string
@@ -616,6 +617,7 @@ export type Database = {
           "deleted_at"?: string | null
           "created_at"?: string
           "updated_at"?: string
+          "revision"?: number
         }
         Update: {
           "id"?: string
@@ -641,6 +643,7 @@ export type Database = {
           "deleted_at"?: string | null
           "created_at"?: string
           "updated_at"?: string
+          "revision"?: number
         }
         Relationships: []
       }
@@ -749,6 +752,14 @@ export type Database = {
     }
     Functions: {
       "audit_row": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "bump_question_revision": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "bump_revision_from_answer_key": {
         Args: Record<string, unknown>
         Returns: unknown
       }
