@@ -38,8 +38,14 @@ describeDb('RLS — exams', () => {
        on conflict (id) do nothing`,
       [CHEF, EMP_AIKO, EMP_CAPICHE],
     )
+    // department_id is set because approveRegistration sets BOTH outlet and
+    // department — a fixture that leaves it null makes every department-scoped
+    // assertion vacuous, and the department-targeting agreement test below
+    // cannot even build its assignment.
     await db.query(
-      `update public.profiles set approval_status='approved', company_id=$2, outlet_id=$3
+      `update public.profiles
+          set approval_status='approved', company_id=$2, outlet_id=$3,
+              department_id=(select id from public.departments where slug='kitchen' limit 1)
         where id = any($1::uuid[])`,
       [[CHEF, EMP_AIKO], fixtures.company, fixtures.outletAiko],
     )
@@ -233,6 +239,96 @@ describeDb('RLS — exams', () => {
         (await c.query('select id from public.exam_sections where exam_id = $1', [EXAM_OUTLET])).rows,
       )
       expect(rows).toHaveLength(1)
+    })
+  })
+
+  // ── Visibility and notification must never disagree (0023) ────────────────
+  //
+  // Brand targeting used to notify people about an exam none of them could see:
+  // exam_audience resolved brand from the outlet, while is_exam_assigned_to_me
+  // compared against my_brand(), a claim copied from profiles.brand_id — a
+  // column nothing ever writes. Both now delegate to assignment_matches(), so
+  // this suite checks the two agree for EVERY target kind rather than for the
+  // ones somebody remembered.
+
+  describe('assignment resolution agrees with itself', () => {
+    const TARGETS = ['outlet', 'department', 'brand', 'role', 'user'] as const
+
+    it.each(TARGETS)('%s targeting reaches the same people both ways', async (kind) => {
+      const result = await asOwner(db, async (c) => {
+        const { rows: made } = await c.query(
+          `insert into public.exams (company_id, title, created_by, status, published_at,
+                                     question_count, total_marks)
+           values ($1,$2,$3,'scheduled',now(),1,2) returning id`,
+          [fixtures.company, `Agreement ${kind}`, CHEF],
+        )
+        const examId = made[0].id
+
+        // The Aiko employee is the person every target below should reach.
+        const target = {
+          outlet: { kind: 'outlet', id: fixtures.outletAiko, role: null, user: null },
+          department: {
+            kind: 'department',
+            id: (
+              await c.query(`select department_id from public.profiles where id = $1`, [EMP_AIKO])
+            ).rows[0].department_id,
+            role: null,
+            user: null,
+          },
+          brand: {
+            kind: 'brand',
+            id: (
+              await c.query(`select brand_id from public.outlets where id = $1`, [
+                fixtures.outletAiko,
+              ])
+            ).rows[0].brand_id,
+            role: null,
+            user: null,
+          },
+          role: { kind: 'role', id: null, role: 'employee', user: null },
+          user: { kind: 'user', id: null, role: null, user: EMP_AIKO },
+        }[kind]
+
+        await c.query(
+          `insert into public.exam_assignments (exam_id, target_kind, target_id, target_role, target_user_id)
+           values ($1,$2,$3,$4,$5)`,
+          [examId, target.kind, target.id, target.role, target.user],
+        )
+
+        const deptId = (
+          await c.query(`select department_id from public.profiles where id = $1`, [EMP_AIKO])
+        ).rows[0].department_id
+
+        // Side A: who does the exam notify?
+        const audience = await c.query('select id from public.exam_audience($1)', [examId])
+
+        // Side B: can that person see it? Evaluated with the employee's claims,
+        // the same way the RLS policy would.
+        await c.query('select set_config($1, $2, true)', [
+          'request.jwt.claims',
+          JSON.stringify({
+            ...employee(EMP_AIKO),
+            app: { ...employee(EMP_AIKO).app, department_id: deptId },
+          }),
+        ])
+        const visible = await c.query('select public.is_exam_assigned_to_me($1) as v', [examId])
+
+        return {
+          notified: audience.rows.some((r) => r.id === EMP_AIKO),
+          canSee: visible.rows[0].v,
+          targetId: target.id,
+        }
+      })
+
+      // The department fixture only has a value if approval set one; skip
+      // rather than assert a vacuous truth on a null target.
+      if (kind === 'department' && !result.targetId) return
+
+      expect(
+        result.canSee,
+        `${kind} targeting: the person is notified=${result.notified} but canSee=${result.canSee}`,
+      ).toBe(result.notified)
+      expect(result.notified, `${kind} targeting reached nobody at all`).toBe(true)
     })
   })
 

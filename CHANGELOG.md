@@ -9,6 +9,71 @@ remembering, and anything left behind as debt.
 
 ## M3 — Exam Builder · *in progress*
 
+### Architectural debt closed before M4 (0022–0024)
+
+Five things the audit surfaced that would each have become harder, not easier,
+once attempts and grading existed.
+
+**Grading reads the key that was served (0022).** `exam_questions` froze a
+question's content and its revision, but not its answer key — that stayed
+mutable in `question_answer_keys`. So the obvious grader, `select answer_key
+from question_answer_keys`, would mark Monday's attempts against Tuesday's
+corrections. Silently: nothing errors, the marks are simply wrong.
+
+0011 already bumped the revision on a key change and 0012 already stored the key
+*per revision*. Nothing connected either to grading. `answer_key_at_revision()`
+now does, and it is the only sanctioned source — internal, granted to nobody, and
+it **raises** rather than returning null, because a null key marks every
+candidate wrong while an exception stops the attempt being graded at all.
+`exam_health` gains a blocking `key.missing` check so a paper that cannot be
+graded cannot be published, which is what makes that exception unreachable.
+
+An integration test pins the invariant: after a published question's key is
+edited, the frozen and live keys disagree, and the test asserts which one an
+attempt is entitled to. **If M4 reads the wrong source, that test fails.**
+
+**One definition of who an assignment reaches (0023).** Two functions answered
+the same question and disagreed. `exam_audience` resolved brand from the
+outlet; `is_exam_assigned_to_me` compared against `my_brand()`, a claim the auth
+hook copied from `profiles.brand_id` — **a column nothing ever writes**.
+Registration does not set it and `approveRegistration` sets outlet and department
+only. So it was null for every user, and a brand-targeted exam notified and
+emailed people who then could not see it. The same null broke
+`exams_read_manage`, making brand-scoped exams invisible to everyone but a super
+admin.
+
+Fixed in two parts, because either alone would leave it fragile. The hook now
+**derives** brand from the outlet, so the claim is true; and
+`assignment_matches()` is the single place that decides whether an assignment
+reaches a person — both callers pass their own view of that person into it and
+neither contains a comparison of its own. Two implementations cannot drift when
+there is one implementation. A test asserts the two paths agree for **every**
+target kind, and the walkthrough asserts a real minted token actually carries a
+brand, which is the only place that can be checked.
+
+**Cross-company isolation is now tested (`tenancy.test.ts`, 16 cases).** Every
+other suite ran inside one seeded company, so `company_id = my_company()` — a
+predicate in a dozen policies and in the guard of every definer entry point — was
+never exercised. It matters most for the definer functions: they bypass RLS by
+construction, so that check is the *only* barrier. The suite adds a second
+tenant and asserts each entry point refuses it, with allow-cases alongside so the
+denials cannot pass because everything is broken for everybody.
+
+**Render assertions test rendered state, not translated text.** The remaining
+message-bundle matches are gone: the category filter now asserts real `<option>`
+elements, the type select asserts it has children, the settings form asserts its
+actual input ids, and the published notice matches the element rather than the
+sentence. The old settings-form check looked for "Food Safety" — a string that
+page never renders — so it would have passed against a blank page.
+
+**`include_subcategories` descends the whole tree (0024).** It matched exactly
+one level, while the seed already ships two (Food Safety → Temperature Control)
+and chefs can nest further. Questions filed deeper were silently excluded — the
+rule looked satisfied and the count was inexplicably low. Now a recursive CTE,
+using `UNION` rather than `UNION ALL` so a cyclic tree terminates instead of
+spinning forever, plus a CHECK forbidding self-parenthood. Tested at three levels
+and with a deliberate cycle.
+
 ### Security — two critical fixes found by audit (0020, 0021)
 
 An adversarial audit of the M3 exam layer, run before starting M4, found two live

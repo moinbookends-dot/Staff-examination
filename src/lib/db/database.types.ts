@@ -1063,6 +1063,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      "answer_key_at_revision": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "assignment_matches": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "audit_row": {
         Args: Record<string, unknown>
         Returns: unknown
@@ -1176,6 +1184,10 @@ export type Database = {
         Returns: unknown
       }
       "preview_rule_count": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "profile_brand": {
         Args: Record<string, unknown>
         Returns: unknown
       }

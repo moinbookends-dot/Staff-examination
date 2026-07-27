@@ -206,6 +206,16 @@ try {
   check(fresh.approved === true, 'REFRESHED token says approved:true', `refresh did not flip approval: ${JSON.stringify(fresh)}`)
   check(fresh.outlet_id === '00000000-0000-0000-0000-00000000a001', 'outlet present in refreshed claims', `outlet_id = ${fresh.outlet_id}`)
   check(Boolean(fresh.department_id), 'department present in refreshed claims', 'department_id missing')
+  // TIER 2, and the only place it can be checked: the RLS suite fabricates the
+  // `app` claim, so it cannot prove the hook mints one. Until 0023 the hook
+  // copied profiles.brand_id — a column nothing writes — so this was null for
+  // every user, and brand-targeted exams notified people who then could not see
+  // them. It is now derived from the outlet.
+  check(
+    Boolean(fresh.brand_id),
+    'brand present in refreshed claims — derived from the outlet',
+    'brand_id is null in a real token: brand-scoped exams and assignments will be invisible',
+  )
 
   // ── 5. Approved access ─────────────────────────────────────────────────────
   console.log('\n5. Approved user access')

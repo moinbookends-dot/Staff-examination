@@ -238,7 +238,14 @@ try {
   const list = await get('/en/questions')
   check(list.status === 200, '/en/questions renders', `status ${list.status} → ${list.location}`)
   check(list.html.includes(stem), 'the question appears in the table', 'the question was not listed')
-  check(list.html.includes('Food Safety'), 'seeded categories reach the filter', 'the category filter is empty')
+  // An <option> element, not the word. 'Food Safety' also appears in the
+  // serialised message bundle and in seeded question stems, so a bare includes()
+  // stays true even if listCategories() returns [] and the filter renders empty.
+  check(
+    /<option value="[0-9a-f-]{36}"[^>]*>(— )?Food Safety<\/option>/.test(list.html),
+    'the category filter is populated with real options',
+    'the category filter rendered no category options',
+  )
   // next-intl throws on a missing key, so this catches an untranslated string
   // before a chef meets it.
   check(!/MISSING_MESSAGE|IntlError/.test(list.html), 'every message key resolves', 'a translation key is missing')
@@ -255,7 +262,12 @@ try {
   console.log('\n3. Editor')
   const create = await get('/en/questions/new')
   check(create.status === 200, '/en/questions/new renders', `status ${create.status} → ${create.location}`)
-  check(create.html.includes('Multiple choice'), 'question types are translated', 'type labels are missing')
+  // Again as options: the type <select> must actually have children.
+  check(
+    (create.html.match(/<option value="(mcq_single|essay|true_false)"/g) ?? []).length >= 3,
+    'the question type select is populated',
+    'the question type select rendered no options',
+  )
   check(!/MISSING_MESSAGE|IntlError/.test(create.html), 'every message key resolves', 'a translation key is missing')
 
   if (questionId) {
@@ -295,7 +307,16 @@ try {
 
   const newExam = await get('/en/exams/new')
   check(newExam.status === 200, '/en/exams/new renders', `status ${newExam.status} → ${newExam.location}`)
-  check(newExam.html.includes('Food Safety'), 'the settings form renders its fields', 'form fields missing')
+  // The old check looked for 'Food Safety' — which this page never renders.
+  // It only ever matched the message bundle, so it would have passed against a
+  // blank page. Assert the form's actual inputs instead.
+  check(
+    newExam.html.includes('id="exam-title"') &&
+      newExam.html.includes('id="exam-kind"') &&
+      newExam.html.includes('id="exam-duration"'),
+    'the settings form renders its inputs',
+    'the settings form inputs are missing',
+  )
   check(
     !/MISSING_MESSAGE|IntlError/.test(newExam.html),
     'every message key resolves in the exam form',
@@ -504,7 +525,9 @@ try {
 
   const lockedDetail = await get(`/en/exams/${examId}`)
   check(
-    lockedDetail.html.includes('This exam is published'),
+    // The notice is rendered inside a <p>; the same sentence is in the message
+    // bundle, so match the element rather than the string.
+    />This exam is published/.test(lockedDetail.html),
     'a published exam shows the immutability notice',
     'the locked notice is missing from a published exam',
   )
@@ -558,7 +581,11 @@ try {
     'the per-question revision is missing',
   )
   check(
-    lockedDetail.html.includes('Published') && lockedDetail.html.includes('Render Chef'),
+    // 'Published' alone is always true — four message keys contain it. The
+    // publisher's NAME is the part only a real render can produce.
+    /Published [^<]*by <!-- -->Render Chef|>Published [^<]*by Render Chef/.test(lockedDetail.html) ||
+      (lockedDetail.html.includes('Render Chef') &&
+        />Published/.test(lockedDetail.html)),
     'the header names who published it and when',
     'publisher provenance is missing',
   )

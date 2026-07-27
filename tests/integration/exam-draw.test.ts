@@ -349,6 +349,86 @@ describeDb('exam draw and health', () => {
       expect(counts.narrow).toBe(1)
     })
 
+    it('descends the category tree to any depth', async () => {
+      // The seed already ships two levels (Food Safety → Temperature Control)
+      // and chefs can nest further, so the previous one-level
+      // `parent_id = X` join silently excluded questions filed deeper. Three
+      // levels here, because two would pass against the old implementation for
+      // the parent but not distinguish it from a genuine fix.
+      const counts = await asOwner(db, async (c) => {
+        const { rows: mid } = await c.query(
+          `insert into public.categories (company_id, parent_id, name, slug)
+           values ($1,$2,'Depth Mid','depth-mid-test') returning id`,
+          [fixtures.company, CAT_A],
+        )
+        const { rows: leaf } = await c.query(
+          `insert into public.categories (company_id, parent_id, name, slug)
+           values ($1,$2,'Depth Leaf','depth-leaf-test') returning id`,
+          [fixtures.company, mid[0].id],
+        )
+        // One question two levels below CAT_A.
+        await c.query(
+          `insert into public.questions
+             (company_id, type, response_format, stem, content, category_id,
+              difficulty, marks, status, created_by)
+           values ($1,'mcq_single','choice_single','Buried deep',
+                   '{"format":"choice_single","choices":[{"id":"a","text":"Y"},{"id":"b","text":"N"}]}'::jsonb,
+                   $2,3,2,'active',$3)`,
+          [fixtures.company, leaf[0].id, CHEF],
+        )
+
+        const examId = await buildExam(c, [{ category: CAT_A, count: 1 }])
+        const withSub = await c.query(
+          `select count(*)::int n from public.question_pool($1,$2,true,'{}'::uuid[],null,1::smallint,5::smallint)`,
+          [examId, CAT_A],
+        )
+        const withoutSub = await c.query(
+          `select count(*)::int n from public.question_pool($1,$2,false,'{}'::uuid[],null,1::smallint,5::smallint)`,
+          [examId, CAT_A],
+        )
+        return { withSub: withSub.rows[0].n, withoutSub: withoutSub.rows[0].n }
+      })
+
+      // CAT_A holds 5 directly; the buried one makes 6 only if the descent is
+      // recursive. A one-level join would return 5.
+      expect(counts.withSub).toBe(6)
+      // And switching descent off still means "this category only".
+      expect(counts.withoutSub).toBe(5)
+    })
+
+    it('terminates on a cyclic category tree', async () => {
+      // parent_id has no cycle constraint beyond self-parent, so A→B→A is
+      // representable. UNION (not UNION ALL) dedupes the working table, which
+      // is what stops the recursion spinning forever and taking the connection
+      // with it. Without it this test hangs rather than fails.
+      const n = await asOwner(db, async (c) => {
+        const { rows: x } = await c.query(
+          `insert into public.categories (company_id, parent_id, name, slug)
+           values ($1,$2,'Cycle X','cycle-x-test') returning id`,
+          [fixtures.company, CAT_B],
+        )
+        const { rows: y } = await c.query(
+          `insert into public.categories (company_id, parent_id, name, slug)
+           values ($1,$2,'Cycle Y','cycle-y-test') returning id`,
+          [fixtures.company, x[0].id],
+        )
+        // Close the loop: X's parent becomes its own descendant.
+        await c.query(`update public.categories set parent_id = $2 where id = $1`, [
+          x[0].id,
+          y[0].id,
+        ])
+
+        const examId = await buildExam(c, [{ category: CAT_B, count: 1 }])
+        return (
+          await c.query(
+            `select count(*)::int n from public.question_pool($1,$2,true,'{}'::uuid[],null,1::smallint,5::smallint)`,
+            [examId, CAT_B],
+          )
+        ).rows[0].n
+      })
+      expect(n).toBe(5)
+    })
+
     it('refuses a caller without exams.read', async () => {
       // Not nested inside the chef's transaction: asUser opens its own, and an
       // exam created in a rolled-back one would be invisible here regardless.
@@ -493,6 +573,15 @@ describeDb('exam draw and health', () => {
                  $3,3,10,'active',$4)`,
         ['00000000-0000-0000-0000-0000000eff01', fixtures.company, CAT_B, CHEF],
       )
+      // The key matters even for a manually-graded format: 0022's key.missing
+      // check refuses to publish a paper whose questions cannot be graded, and
+      // a real question always has one. Omitting it here made the fixture
+      // unrealistic in exactly the way that check exists to catch.
+      await c.query(
+        `insert into public.question_answer_keys (question_id, answer_key)
+         values ($1, '{"format":"text_long","rubric":[{"id":"c1","label":"Identifies the hazard","max":5}]}'::jsonb)`,
+        ['00000000-0000-0000-0000-0000000eff01'],
+      )
       const examId = await buildExam(c, [{ category: CAT_B, count: 6 }], { duration: 10 })
       await c.query('select * from public.publish_exam($1)', [examId])
       return (
@@ -618,6 +707,146 @@ describeDb('exam draw and health', () => {
           ]),
         ),
       ).rejects.toThrow(/forbidden/)
+    })
+  })
+
+  // ── The grading key is frozen too (0022) ───────────────────────────────────
+  //
+  // THIS IS AN M4 CONTRACT TEST. exam_questions freezes a question's CONTENT
+  // and the revision it was frozen at, but question_answer_keys stays mutable.
+  // The obvious grader — "select answer_key from question_answer_keys" — marks
+  // Monday's attempts against Tuesday's corrections, silently.
+  //
+  // If M4 reads the wrong source, the assertions below are what fail.
+
+  describe('answer keys are frozen with the paper', () => {
+    /**
+     * Runs as OWNER but with a chef's claims set.
+     *
+     * Needed because this describe straddles two privilege levels on purpose:
+     * publish_exam() checks has_perm('exams.publish'), which reads the JWT, while
+     * answer_key_at_revision() is granted to nobody and so needs owner rights.
+     * A chef cannot call the second and a claimless owner cannot pass the first,
+     * so the transaction supplies both — reset role, then set the claims the
+     * request would have carried.
+     */
+    const asGrader = <T>(fn: (c: Client) => Promise<T>) =>
+      asOwner(db, async (c) => {
+        await c.query('select set_config($1, $2, true)', [
+          'request.jwt.claims',
+          JSON.stringify(chef(CHEF)),
+        ])
+        return fn(c)
+      })
+
+    /** Publishes a one-question paper and returns its ids. */
+    async function publishOne(c: Client) {
+      const examId = await buildExam(c, [{ category: CAT_A, count: 1, min: 1, max: 1 }], {
+        duration: 1,
+      })
+      await c.query('select * from public.publish_exam($1)', [examId])
+      const { rows } = await c.query(
+        'select question_id, question_revision from public.exam_questions where exam_id = $1',
+        [examId],
+      )
+      return { examId, questionId: rows[0].question_id, revision: rows[0].question_revision }
+    }
+
+    it('serves the key captured at the frozen revision, not the current one', async () => {
+      const result = await asGrader(async (c) => {
+        const { questionId, revision } = await publishOne(c)
+
+        const frozenBefore = await c.query('select public.answer_key_at_revision($1,$2) as k', [
+          questionId,
+          revision,
+        ])
+
+        // A chef corrects the answer after publication. 0011 bumps the revision;
+        // 0012 captures the new key against the NEW revision.
+        await c.query(
+          `update public.question_answer_keys
+              set answer_key = '{"format":"choice_single","correct":"b"}'::jsonb
+            where question_id = $1`,
+          [questionId],
+        )
+
+        const frozenAfter = await c.query('select public.answer_key_at_revision($1,$2) as k', [
+          questionId,
+          revision,
+        ])
+        const live = await c.query(
+          'select answer_key from public.question_answer_keys where question_id = $1',
+          [questionId],
+        )
+        const nowAt = await c.query('select revision from public.questions where id = $1', [
+          questionId,
+        ])
+
+        return {
+          before: frozenBefore.rows[0].k,
+          after: frozenAfter.rows[0].k,
+          live: live.rows[0].answer_key,
+          frozenRevision: revision,
+          currentRevision: nowAt.rows[0].revision,
+        }
+      })
+
+      // The live key moved on…
+      expect(result.live).toMatchObject({ correct: 'b' })
+      expect(result.currentRevision).toBeGreaterThan(result.frozenRevision)
+
+      // …and the frozen one did not. THIS is what an attempt must be graded
+      // against; grading on `result.live` would mark a candidate who correctly
+      // answered 'a' as wrong.
+      expect(result.after).toEqual(result.before)
+      expect(result.after).toMatchObject({ correct: 'a' })
+      expect(result.after).not.toEqual(result.live)
+    })
+
+    it('raises rather than returning null for a revision it never captured', async () => {
+      // A null key silently marks every candidate wrong. An exception stops the
+      // attempt being graded at all, which is noticed.
+      await expect(
+        asGrader(async (c) => {
+          const { questionId } = await publishOne(c)
+          return c.query('select public.answer_key_at_revision($1, 999) as k', [questionId])
+        }),
+      ).rejects.toThrow(/no revision 999 recorded/)
+    })
+
+    it('refuses to publish a paper whose key was never captured', async () => {
+      // exam_health's key.missing check is what makes the exception above
+      // unreachable in practice.
+      const issues = await asGrader(async (c) => {
+        const examId = await buildExam(c, [{ category: CAT_A, count: 1, min: 1, max: 1 }], {
+          duration: 1,
+        })
+        // Simulate a question whose revision history lost its key — the shape a
+        // pre-0012 question or a bad import would have. Read the draw through
+        // exam_paper, the granted entry point, rather than draw_paper.
+        const drawn = await c.query(
+          'select question_id, question_revision from public.exam_paper($1, null)',
+          [examId],
+        )
+        await c.query(
+          `update public.question_revisions set answer_key = null
+            where question_id = $1 and revision = $2`,
+          [drawn.rows[0].question_id, drawn.rows[0].question_revision],
+        )
+        return (await health(c, examId)).rows
+      })
+
+      const missing = issues.filter((i) => i.code === 'key.missing')
+      expect(missing).toHaveLength(1)
+      expect(missing[0].severity).toBe('blocking')
+    })
+
+    it('is not callable by the application', async () => {
+      await expect(
+        asUser(db, chef(CHEF), async (c) =>
+          c.query('select public.answer_key_at_revision($1, 1)', [q(1)]),
+        ),
+      ).rejects.toThrow(/permission denied/)
     })
   })
 

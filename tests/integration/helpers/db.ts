@@ -141,12 +141,27 @@ export async function mutateAsOwner<T>(
 const COMPANY = '00000000-0000-0000-0000-00000000c001'
 const OUTLET_AIKO = '00000000-0000-0000-0000-00000000a001'
 const OUTLET_CAPICHE = '00000000-0000-0000-0000-00000000a002'
+const BRAND_AIKO = '00000000-0000-0000-0000-00000000b001'
+const BRAND_CAPICHE = '00000000-0000-0000-0000-00000000b002'
 
 export const fixtures = {
   company: COMPANY,
   outletAiko: OUTLET_AIKO,
   outletCapiche: OUTLET_CAPICHE,
+  brandAiko: BRAND_AIKO,
+  brandCapiche: BRAND_CAPICHE,
 } as const
+
+/**
+ * The brand a real token carries for a given outlet.
+ *
+ * Since migration 0023 the auth hook DERIVES brand_id from the user's outlet
+ * rather than copying profiles.brand_id, a column nothing writes. These claim
+ * builders have to mint the same thing, or they are less capable than reality
+ * and every brand-scoped assertion is vacuous — the mirror image of the M1 bug
+ * where fixtures were MORE capable than reality and hid a broken policy.
+ */
+const brandOf = (outlet: string) => (outlet === OUTLET_CAPICHE ? BRAND_CAPICHE : BRAND_AIKO)
 
 /** A user whose registration has not been approved. Should see almost nothing. */
 export function pendingUser(id: string): TestClaims {
@@ -163,6 +178,7 @@ export function employee(id: string, outlet = OUTLET_AIKO): TestClaims {
       approved: true,
       company_id: COMPANY,
       outlet_id: outlet,
+      brand_id: brandOf(outlet),
       roles: ['employee'],
       perms: ['attempts.take', 'attempts.read_own', 'reports.read_own', 'learning.read'],
     },
@@ -185,6 +201,7 @@ export function chef(id: string, outlet = OUTLET_AIKO): TestClaims {
       approved: true,
       company_id: COMPANY,
       outlet_id: outlet,
+      brand_id: brandOf(outlet),
       roles: ['chef'],
       perms: [
         'questions.read', 'questions.create', 'questions.update',
@@ -208,6 +225,7 @@ export function hr(id: string): TestClaims {
       approved: true,
       company_id: COMPANY,
       outlet_id: OUTLET_AIKO,
+      brand_id: BRAND_AIKO,
       roles: ['hr'],
       perms: ['users.read_all', 'attempts.read_all', 'reports.read_all', 'exams.read', 'learning.read'],
     },
@@ -218,6 +236,13 @@ export function hr(id: string): TestClaims {
 export function superAdmin(id: string): TestClaims {
   return {
     sub: id,
-    app: { approved: true, company_id: COMPANY, outlet_id: OUTLET_AIKO, roles: ['super_admin'], perms: [] },
+    app: {
+      approved: true,
+      company_id: COMPANY,
+      outlet_id: OUTLET_AIKO,
+      brand_id: BRAND_AIKO,
+      roles: ['super_admin'],
+      perms: [],
+    },
   }
 }

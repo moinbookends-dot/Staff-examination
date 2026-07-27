@@ -38,6 +38,9 @@ const INTERNAL = [
   'draw_paper',
   'exam_audience',
   'question_pool',
+  // 0022: returns answer keys for grading. The one thing that must never be
+  // reachable from a browser.
+  'answer_key_at_revision',
 ] as const
 
 /** Public entry points. Granted, and each carries has_perm/my_company/auth.uid(). */
