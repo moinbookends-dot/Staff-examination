@@ -63,12 +63,24 @@ const client = makeClient()
 await client.connect()
 
 // ── Enums ────────────────────────────────────────────────────────────────────
+// `not exists (… pg_depend … deptype = 'e')` excludes anything owned by an
+// extension.
+//
+// WHY IT MATTERS: on a hosted Supabase project, extensions are installed into
+// an `extensions` schema, so they never appear here. On a bare Postgres
+// container, `create extension pgcrypto` lands in `public` — and every pgcrypto
+// function would be emitted as if it were ours. The generator would then
+// produce different output in CI than locally, and the type-drift check would
+// fail permanently for a reason that has nothing to do with our schema.
 const { rows: enumRows } = await client.query(`
   select t.typname as name, e.enumlabel as label
     from pg_type t
     join pg_enum e on e.enumtypid = t.oid
     join pg_namespace n on n.oid = t.typnamespace
    where n.nspname = 'public'
+     and not exists (
+       select 1 from pg_depend d where d.objid = t.oid and d.deptype = 'e'
+     )
    order by t.typname, e.enumsortorder
 `)
 
@@ -97,6 +109,9 @@ const { rows: colRows } = await client.query(`
      and c.relkind in ('r','v','m')
      and a.attnum > 0
      and not a.attisdropped
+     and not exists (
+       select 1 from pg_depend d where d.objid = c.oid and d.deptype = 'e'
+     )
    order by c.relname, a.attnum
 `)
 
@@ -180,6 +195,9 @@ const { rows: fnRows } = await client.query(`
     join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public'
      and p.prokind = 'f'
+     and not exists (
+       select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e'
+     )
    order by p.proname
 `)
 
