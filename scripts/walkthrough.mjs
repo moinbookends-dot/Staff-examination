@@ -374,6 +374,86 @@ try {
     )
     check(after[1]?.change_note === 'reworded', 'the second note is stamped on revision 2', `note = ${after[1]?.change_note}`)
   }
+  // ── 8. Internal RPCs are not a public API ──────────────────────────────────
+  //
+  // ┌─────────────────────────────────────────────────────────────────────────┐
+  // │ THIS SECTION EXISTS BECAUSE THE ABSENCE OF IT COST US A REAL BREACH.    │
+  // │                                                                         │
+  // │ Four SECURITY DEFINER helpers were "protected" by `revoke … from        │
+  // │ public`, which does not remove a named role's grant. They stayed        │
+  // │ callable over PostgREST by anon — no session, just the publishable key  │
+  // │ that ships in every browser bundle — returning whole exam papers,       │
+  // │ question stems with options, and staff email addresses.                 │
+  // │                                                                         │
+  // │ Every other layer was green. The RLS suite could not see it because it  │
+  // │ speaks to Postgres directly; CI could not see it because CI re-granted  │
+  // │ every function after migrating. Only an HTTP call as an unprivileged    │
+  // │ caller could, and nothing made one. Now something does.                 │
+  // │                                                                         │
+  // │ Add any new SECURITY DEFINER function to this list.                     │
+  // └─────────────────────────────────────────────────────────────────────────┘
+  console.log('\n8. Internal RPCs are not reachable')
+
+  const INTERNAL_RPCS = [
+    ['question_snapshot', { p_question_id: '00000000-0000-0000-0000-000000000001' }],
+    ['draw_paper', { p_exam_id: '00000000-0000-0000-0000-000000000001', p_seed: 'x' }],
+    ['exam_audience', { p_exam_id: '00000000-0000-0000-0000-000000000001' }],
+    [
+      'question_pool',
+      {
+        p_exam_id: '00000000-0000-0000-0000-000000000001',
+        p_category_id: null,
+        p_include_sub: true,
+        p_tag_ids: [],
+        p_types: null,
+        p_difficulty_min: 1,
+        p_difficulty_max: 5,
+      },
+    ],
+  ]
+
+  const callRpc = (name, body, token) =>
+    fetch(`${URL_}/rest/v1/rpc/${name}`, {
+      method: 'POST',
+      headers: {
+        apikey: PUB,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    })
+
+  for (const [name, body] of INTERNAL_RPCS) {
+    const anon = await callRpc(name, body)
+    check(
+      anon.status === 401 || anon.status === 403 || anon.status === 404,
+      `anon cannot call ${name}`,
+      `ANON CAN CALL ${name} — returned ${anon.status}`,
+    )
+
+    // The refreshed employee session from section 4 — approved, signed in, and
+    // holding none of the exams.* permissions.
+    const asEmployee = await callRpc(name, body, refreshedSession.access_token)
+    check(
+      asEmployee.status === 401 || asEmployee.status === 403 || asEmployee.status === 404,
+      `an employee cannot call ${name}`,
+      `AN EMPLOYEE CAN CALL ${name} — returned ${asEmployee.status}`,
+    )
+  }
+
+  // The guarded entry points must still refuse an employee — for the right
+  // reason (their own permission check), not because they are unreachable.
+  for (const [name, body] of [
+    ['exam_paper', { p_exam_id: '00000000-0000-0000-0000-000000000001', p_seed: null }],
+    ['exam_health', { p_exam_id: '00000000-0000-0000-0000-000000000001' }],
+  ]) {
+    const res = await callRpc(name, body, refreshedSession.access_token)
+    check(
+      res.status >= 400,
+      `an employee is refused by ${name}`,
+      `AN EMPLOYEE REACHED ${name} — returned ${res.status}`,
+    )
+  }
 } catch (e) {
   bad(`walkthrough threw: ${e.message}`)
 } finally {

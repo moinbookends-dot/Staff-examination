@@ -46,6 +46,14 @@ export default defineConfig({
           // rows produce flakes that look like policy bugs. Not worth debugging.
           fileParallelism: false,
           testTimeout: 30_000,
+          // hookTimeout MUST be set too, and its absence was a real bug rather
+          // than a tuning nicety. It defaults to 10s regardless of testTimeout,
+          // and these beforeAll blocks build fixtures over ~20 sequential round
+          // trips to a database in another region. Run alone that fits; run as
+          // `npm test`, with the unit project competing for CPU and network, it
+          // tipped over and a DIFFERENT suite failed each time — which reads
+          // exactly like nondeterministic flakiness and is not.
+          hookTimeout: 30_000,
         },
       },
     ],

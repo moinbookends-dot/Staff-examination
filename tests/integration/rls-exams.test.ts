@@ -204,7 +204,9 @@ describeDb('RLS — exams', () => {
       // exam_audience drives the notification and the queued email. If it
       // returned the whole outlet, a retake for one person would tell everybody
       // they had a new exam — visible in the UI or not.
-      const audience = await asUser(db, chef(CHEF), async (c) =>
+      // As OWNER: exam_audience returns email addresses and is granted to
+      // nobody (migration 0020). It used to be callable by anon over PostgREST.
+      const audience = await asOwner(db, async (c) =>
         (await c.query('select id from public.exam_audience($1)', [EXAM_USER])).rows,
       )
       expect(audience.map((r) => r.id)).toEqual([EMP_AIKO])

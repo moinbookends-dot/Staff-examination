@@ -608,9 +608,19 @@ export async function setAssignments(input: unknown): Promise<MutationResult> {
   return { ok: true }
 }
 
+/**
+ * 'scheduled' IS DELIBERATELY ABSENT.
+ *
+ * Publishing is publishExam() and nothing else. When 'scheduled' was accepted
+ * here, anyone holding exams.update — not exams.publish — could move a draft
+ * straight to scheduled, skipping exam_health() entirely. For a per_attempt
+ * exam the database's CHECK did not catch it either, so an exam with no rules
+ * and no validation went live and was then locked permanently by the 0016
+ * trigger. Migration 0021 closes the database half; this closes the app half.
+ */
 const statusSchema = z.object({
   id: dbId(),
-  status: z.enum(['scheduled', 'active', 'completed', 'archived', 'cancelled']),
+  status: z.enum(['active', 'completed', 'archived', 'cancelled']),
 })
 
 export async function setExamStatus(input: unknown): Promise<MutationResult> {

@@ -101,12 +101,24 @@ jobs:
       # default. A missing GRANT surfaces as "permission denied", raised BEFORE
       # RLS is evaluated, which makes every policy test fail for a reason that
       # has nothing to do with policies.
+      # FUNCTIONS ARE DELIBERATELY NOT GRANTED HERE. This step used to include
+      #   grant execute on all functions in schema public to anon, authenticated
+      # which re-granted EVERY function after the migrations had run — including
+      # the internal SECURITY DEFINER helpers that migration 0020 revokes. That
+      # made CI disagree with production about who can call what, and it is the
+      # reason a real vulnerability (anon could call draw_paper, question_snapshot
+      # and exam_audience over PostgREST) passed CI for six commits.
+      #
+      # Every function the application actually invokes carries its own explicit
+      # `grant execute … to authenticated` in the migration that creates it, so
+      # nothing here needs a blanket grant. If a policy test starts failing with
+      # "permission denied for function", the missing GRANT belongs in the
+      # migration, not in this step.
       - name: Grant table privileges to Supabase roles
         run: |
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "
             grant all on all tables    in schema public to anon, authenticated, service_role;
             grant all on all sequences in schema public to anon, authenticated, service_role;
-            grant execute on all functions in schema public to anon, authenticated, service_role;
           "
 
       - name: Seed

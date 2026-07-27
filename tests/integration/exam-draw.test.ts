@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import type { Client } from 'pg'
-import { connect, hasDatabase, asUser, chef, employee, fixtures } from './helpers/db'
+import { connect, hasDatabase, asUser, asOwner, chef, employee, fixtures } from './helpers/db'
 
 /**
  * draw_paper() and exam_health() — the heart of M3.
@@ -51,36 +51,40 @@ describeDb('exam draw and health', () => {
 
     // 10 questions: 5 in category A, 5 in B, difficulties spread 1..5 so the
     // widening behaviour has somewhere to widen to.
-    for (let i = 1; i <= 10; i++) {
-      await db.query(
-        `insert into public.questions
-           (id, company_id, type, response_format, stem, content, category_id,
-            difficulty, marks, status, created_by, estimated_seconds)
-         values ($1,$2,'mcq_single','choice_single',$3,$4::jsonb,$5,$6,2,'active',$7,60)
-         on conflict (id) do nothing`,
-        [
-          q(i),
-          fixtures.company,
-          `Draw test question ${i}`,
-          JSON.stringify({
-            format: 'choice_single',
-            choices: [
-              { id: 'a', text: 'Yes' },
-              { id: 'b', text: 'No' },
-            ],
-          }),
-          i <= 5 ? CAT_A : CAT_B,
-          ((i - 1) % 5) + 1,
-          CHEF,
-        ],
-      )
-      await db.query(
-        `insert into public.question_answer_keys (question_id, answer_key)
-         values ($1,'{"format":"choice_single","correct":"a"}'::jsonb)
-         on conflict (question_id) do nothing`,
-        [q(i)],
-      )
-    }
+    //
+    // Inserted as TWO statements rather than twenty. The database is in another
+    // region, so a loop of single-row inserts spends most of its time on round
+    // trips — enough to push this hook past its timeout when the unit project
+    // is running alongside. unnest() keeps it to one round trip per table.
+    const ids = Array.from({ length: 10 }, (_, i) => q(i + 1))
+    const content = JSON.stringify({
+      format: 'choice_single',
+      choices: [
+        { id: 'a', text: 'Yes' },
+        { id: 'b', text: 'No' },
+      ],
+    })
+
+    await db.query(
+      `insert into public.questions
+         (id, company_id, type, response_format, stem, content, category_id,
+          difficulty, marks, status, created_by, estimated_seconds)
+       select u.id, $2, 'mcq_single', 'choice_single',
+              'Draw test question ' || u.ord, $3::jsonb,
+              case when u.ord <= 5 then $4::uuid else $5::uuid end,
+              ((u.ord - 1) % 5) + 1, 2, 'active', $6, 60
+         from unnest($1::uuid[]) with ordinality as u(id, ord)
+       on conflict (id) do nothing`,
+      [ids, fixtures.company, content, CAT_A, CAT_B, CHEF],
+    )
+
+    await db.query(
+      `insert into public.question_answer_keys (question_id, answer_key)
+       select u.id, '{"format":"choice_single","correct":"a"}'::jsonb
+         from unnest($1::uuid[]) as u(id)
+       on conflict (question_id) do nothing`,
+      [ids],
+    )
 
     await db.query('commit')
   })
@@ -150,9 +154,17 @@ describeDb('exam draw and health', () => {
     c.query('select * from public.exam_health($1)', [examId])
 
   // ── The draw ───────────────────────────────────────────────────────────────
+  //
+  // THESE RUN AS OWNER, NOT AS A CHEF, AND THAT IS THE POINT. draw_paper() is an
+  // internal helper granted to nobody (migration 0020) — before that fix it was
+  // callable by anon over PostgREST, which handed out whole papers. A chef
+  // cannot call it directly and should not be able to; only another SECURITY
+  // DEFINER function reaches it. Tests that go through the real surface
+  // (exam_health, exam_paper, publish_exam, exam_rule_counts) still run as a
+  // chef, because those are the granted, permission-checked entry points.
 
   it('draws exactly what a satisfiable rule asks for', async () => {
-    const rows = await asUser(db, chef(CHEF), async (c) => {
+    const rows = await asOwner(db, async (c) => {
       const examId = await buildExam(c, [{ category: CAT_A, count: 3 }])
       return (await draw(c, examId)).rows
     })
@@ -165,7 +177,7 @@ describeDb('exam draw and health', () => {
   it('never draws the same question twice across sections', async () => {
     // Both rules point at the same five-question pool and want four each. The
     // exclusion list spans the whole paper, so the second can only get one.
-    const rows = await asUser(db, chef(CHEF), async (c) => {
+    const rows = await asOwner(db, async (c) => {
       const examId = await buildExam(c, [
         { category: CAT_A, count: 4, section: 0 },
         { category: CAT_A, count: 4, section: 1 },
@@ -199,7 +211,7 @@ describeDb('exam draw and health', () => {
   it('prefers adjacent difficulty and says so when it widens', async () => {
     // Category A holds one question per difficulty. Asking for three at
     // difficulty 3 can only be met by reaching to 2 and 4.
-    const rows = await asUser(db, chef(CHEF), async (c) => {
+    const rows = await asOwner(db, async (c) => {
       const examId = await buildExam(c, [{ category: CAT_A, count: 3, min: 3, max: 3 }])
       const drawn = await draw(c, examId)
       const withDifficulty = await c.query(
@@ -222,7 +234,7 @@ describeDb('exam draw and health', () => {
   it('never widens across a section boundary', async () => {
     // Section 1 wants more of category A than exists. It must come up short
     // rather than borrowing from category B, which belongs to section 2.
-    const rows = await asUser(db, chef(CHEF), async (c) => {
+    const rows = await asOwner(db, async (c) => {
       const examId = await buildExam(c, [
         { category: CAT_A, count: 8, section: 0 },
         { category: CAT_B, count: 2, section: 1 },
@@ -247,7 +259,7 @@ describeDb('exam draw and health', () => {
   it('is reproducible for a seed, and different for another', async () => {
     // Reproducibility is what makes a fixed paper explainable months later, and
     // what lets M4 give each attempt its own paper by passing the attempt id.
-    const { a, b, c: other } = await asUser(db, chef(CHEF), async (client) => {
+    const { a, b, c: other } = await asOwner(db, async (client) => {
       const examId = await buildExam(client, [{ count: 6 }])
       return {
         a: (await draw(client, examId, 'seed-one')).rows.map((r) => r.question_id),

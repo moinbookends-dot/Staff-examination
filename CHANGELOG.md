@@ -9,6 +9,84 @@ remembering, and anything left behind as debt.
 
 ## M3 — Exam Builder · *in progress*
 
+### Security — two critical fixes found by audit (0020, 0021)
+
+An adversarial audit of the M3 exam layer, run before starting M4, found two live
+critical defects. Both were confirmed by exploit against the real database rather
+than by reading, and both are fixed.
+
+**1. Four internal helpers were callable by anyone, including anon.**
+
+0014 and 0018 protected `question_snapshot`, `draw_paper`, `exam_audience` and
+`question_pool` with `revoke all on function … from public`. That removes only
+the PUBLIC pseudo-role's ACL entry — it does nothing to an explicit grant held by
+a named role, and this database auto-grants EXECUTE on new functions to `anon`
+and `authenticated`. The ACLs still read `anon=X | authenticated=X`.
+
+With nothing but the publishable key that ships in every browser bundle, and no
+session at all:
+
+| Request | Result |
+|:--|:--|
+| `POST /rest/v1/rpc/draw_paper` | 200 — the whole paper, in order |
+| `POST /rest/v1/rpc/question_snapshot` | 200 — stem and every option |
+| `POST /rest/v1/rpc/exam_audience` | 200 — every assignee's email address |
+| `POST /rest/v1/rpc/question_pool` | 200 — enumerate the question bank |
+
+`publish_exam` seeds the draw with the exam id, so passing that id as the seed
+reproduced the exact frozen paper. A candidate could read the real paper before
+the timer started — the precise failure the answer-key split and the delivery
+design exist to prevent — and staff email addresses were readable by the open
+internet.
+
+Fixed in 0020 by revoking from `anon` and `authenticated` explicitly, with a DO
+block that fails the migration if any of the four is ever reachable again.
+
+These four cannot simply gain a `has_perm()` check instead: M4 must call
+`draw_paper` and `question_snapshot` for a **candidate** at attempt start, and a
+candidate holds no `exams.*` permission. Their guard is the ACL, so the ACL has
+to be right. The rule now: a SECURITY DEFINER function is either granted to
+`authenticated` **and** carries its own permission check, or granted to nobody
+and reached only from another definer function. "Revoked from public" is not a
+third option.
+
+**2. A per-attempt exam could go live without ever being validated.**
+
+`setExamStatus` accepted `scheduled` and required only `exams.update`, so it
+bypassed both `exams.publish` and the `exam_health()` gate. The database did not
+catch it either: `exams_published_has_paper` exempted `paper_mode='per_attempt'`
+from every condition, including `published_at`. A practice exam with no sections,
+no rules and no validation could be moved straight to `scheduled` by a plain
+UPDATE — and 0016 then locked it permanently, with no paper, no notifications and
+no way back except duplicating it. The same UPDATE on a `fixed` exam was
+correctly refused, which is why it went unnoticed.
+
+Fixed on both sides: `scheduled` is gone from the action's schema (publishing is
+`publishExam` and nothing else), and 0021 requires `published_at` on every
+non-draft row whatever its paper mode — which makes "was this validated?"
+checkable rather than assumed, and binds psql and imports too.
+
+### Fixed — CI disagreed with production about who can call what
+
+The workflow ran `grant execute on all functions in schema public to anon,
+authenticated` **after** replaying migrations, undoing every deliberate REVOKE in
+the only environment that tests them. That is why six commits of green CI said
+nothing about the vulnerability above. Functions are no longer granted there;
+every function the app invokes carries its own explicit grant in the migration
+that creates it.
+
+Three new guards so this class cannot return quietly:
+
+- `tests/integration/function-acl.test.ts` asserts the four internal helpers are
+  unreachable, that every granted definer function carries its own check, and —
+  generally — that **no** definer function is both anon-reachable and unguarded,
+  so one added later is caught without anybody remembering to list it.
+- `scripts/walkthrough.mjs` now calls each internal RPC over real HTTP as anon
+  and as an employee and requires a refusal. Nothing made an unprivileged HTTP
+  call before, which is exactly why nothing saw this.
+- The draw tests now run as **owner** rather than as a chef, because a chef
+  cannot call `draw_paper` and should not be able to.
+
 ### Shipped — paper preview and provenance (0019)
 
 **The paper preview mounts the same renderers exam delivery will.** That was the
