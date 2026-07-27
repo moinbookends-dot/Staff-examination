@@ -201,6 +201,52 @@ export const questionContentSchema = z.discriminatedUnion('format', [
 
 export type QuestionContent = z.infer<typeof questionContentSchema>
 
+/**
+ * DRAFT content — structure only, completeness not required.
+ *
+ * The strict schema above gates PUBLISHING (status = 'active'). It is the wrong
+ * thing to validate against while someone is typing: a fresh MCQ starts with
+ * two options whose text is empty, which is invalid-but-expected. Validating
+ * strictly during editing means the form opens covered in errors before the
+ * chef has entered anything, which trains people to ignore validation.
+ *
+ * So: draft parsing checks that the SHAPE is right (correct discriminant,
+ * arrays are arrays, ids well-formed) while allowing blank text and short
+ * collections. Autosave and status='draft' use this; activation uses the strict
+ * schema plus validateQuestion().
+ *
+ * The database CHECK is deliberately aligned with the draft rules, not the
+ * strict ones, so a half-finished question can be saved and returned to.
+ */
+const draftChoiceSchema = z.object({
+  id: optionIdSchema,
+  text: z.string().max(1000),          // may be empty while drafting
+  mediaId: z.string().uuid().optional(),
+})
+
+export const questionContentDraftSchema = z.discriminatedUnion('format', [
+  z.object({ format: z.literal('choice_single'), choices: z.array(draftChoiceSchema).max(6) }),
+  z.object({ format: z.literal('choice_multi'), choices: z.array(draftChoiceSchema).max(8) }),
+  z.object({ format: z.literal('boolean') }),
+  z.object({
+    format: z.literal('blanks'),
+    template: z.string().max(4000),
+    blanks: z.array(z.object({ id: optionIdSchema, label: z.string().max(120).optional() })).max(20),
+  }),
+  z.object({
+    format: z.literal('pairs'),
+    left: z.array(draftChoiceSchema).max(10),
+    right: z.array(draftChoiceSchema).max(12),
+    hasDistractors: z.boolean().default(false),
+  }),
+  z.object({ format: z.literal('order'), items: z.array(draftChoiceSchema).max(12) }),
+  z.object({ format: z.literal('text_short'), maxChars: z.number().int().min(10).max(2000).default(300) }),
+  z.object({ format: z.literal('text_long'), maxWords: z.number().int().min(20).max(2000).default(500) }),
+  z.object({ format: z.literal('evaluator_only'), instructions: z.string().max(4000).optional() }),
+])
+
+export type QuestionContentDraft = z.infer<typeof questionContentDraftSchema>
+
 // ─────────────────────────────────────────────────────────────────────────────
 // AnswerKey — separate table, chef/admin only, never sent to a candidate.
 // ─────────────────────────────────────────────────────────────────────────────

@@ -374,14 +374,18 @@ describe('order', () => {
 })
 
 describe('manual formats', () => {
-  it.each([
+  // Mutable (no `as const`): AnswerKey's arrays are mutable, and a readonly
+  // tuple will not narrow to it.
+  const manualCases: Array<[string, AnswerKey]> = [
     ['text_short', { format: 'text_short', keywords: [] }],
     ['text_long', { format: 'text_long', rubric: [] }],
     ['evaluator_only', { format: 'evaluator_only', rubric: [{ id: 'c', label: 'x', max: 5 }] }],
-  ] as const)('returns not_applicable for %s', (fmt, key) => {
-    const content = { format: fmt } as QuestionContent
+  ]
+
+  it.each(manualCases)('returns not_applicable for %s', (fmt, key) => {
+    const content = { format: fmt } as unknown as QuestionContent
     const answer = { format: fmt, text: 'anything', attachments: [] } as unknown as AnswerPayload
-    const r = gradeAnswer(content, key as AnswerKey, answer, opts)
+    const r = gradeAnswer(content, key, answer, opts)
     expect(r).toMatchObject({ score: 0, status: 'not_applicable' })
   })
 })
