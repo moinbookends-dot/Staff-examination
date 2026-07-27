@@ -185,24 +185,37 @@ validation. `questionContentDraftSchema` now checks shape only and gates
 | Filters | URL parameters | Shareable and bookmarkable, survives back-navigation, and is the shape M3's rule-based selection stores. |
 | DB identifiers | `dbId()` / `z.guid()` | Zod 4's `.uuid()` enforces RFC 4122 version bits that Postgres does not, and rejects every fixed id in the seed. |
 
-### Known debt
+### Deferred — chosen scope cuts, not oversights
+
+Each of these was cut deliberately so the authoring slice stayed reviewable.
+None is blocked; all are one focused slice each.
+
+| Deferred | Why it was cut | What it needs |
+|:--|:--|:--|
+| **Media attachment** | A storage-bucket migration, upload authorisation and byte accounting against the 1 GB cap are not UI concerns and would have doubled the diff. | Bucket + RLS, signed-URL upload action, alt-text enforcement, external video URLs. The type selector already offers all 14 types; the four media ones simply author without a stimulus. |
+| **Bulk CSV import** | Nothing to correct an import *with* until the editor existed. | An import screen and template download behind `questions.import`. The registry's `serialize`/`deserialize` are already written and round-trip-tested, so this is cheap. |
+| **Translation UI** | `question_translations` and its RLS exist; the authoring flow had to settle first. | A per-locale editor behind `questions.translate`. |
+| **Category hierarchy manager** | Inline creation from the editor's picker covers the real need today. | A tree screen, once anyone has enough categories to need one. |
+| **Revision diff and rollback** | History is captured and readable — the irreversible half is done. | A diff view over `question_revisions`, and a restore that writes a new revision rather than rewriting one. |
+
+### Known technical debt
 
 - `attempt_answers.question_revision` is an **M4 obligation**. Without it the
   revision exists with nothing recording which one was answered.
 - Geist ships a Latin subset only; Devanagari and Gujarati fall back to a system
   font. Needs script-appropriate webfonts at M8.
-- `hi` / `gu` / `hi-Latn` message files are stubs falling back to English.
-- **Media attachment is not built.** The type selector offers all 14 types, but
-  the four media ones author without a stimulus: no storage bucket, no upload,
-  no external video URL. Its own slice — a bucket migration, upload security and
-  byte accounting against the 1 GB cap do not belong in a UI commit.
-- **Bulk CSV import is not wired up.** The registry's `serialize`/`deserialize`
-  are written and round-trip-tested; `questions.import` has no screen behind it.
-- No translation UI yet, and no category hierarchy manager — categories are
-  created inline from the editor's picker.
-- Revision history is read-only. No diff view and no rollback.
-- `scripts/render-check.mjs` needs a running dev server, so it is not in CI. Run
-  it before merging anything that touches auth, routing or i18n.
+- `hi` / `gu` / `hi-Latn` message files are stubs falling back to English. The
+  question bank's ~90 new keys are English-only, so a Hindi-preferring chef
+  authors in English today.
+- `scripts/render-check.mjs` needs a running dev server, so it is **not in CI**.
+  It is the only check that renders a page with a real session — run it by hand
+  before merging anything touching auth, routing or i18n. Four bugs hid from
+  every other check precisely because nothing rendered a page.
+- The `(app)` layout and each page call `getAppClaims()` independently, so a
+  page render verifies the token more than once. Correct but wasteful; worth a
+  request-scoped cache when there is a reason to look at it.
+- `questions.usage_count` is never incremented. M3 owns it when exams start
+  drawing from the bank.
 
 ---
 
