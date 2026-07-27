@@ -4,12 +4,22 @@ import { requirePermission } from '@/lib/auth/guards'
 import { can } from '@/lib/auth/claims'
 import { getExam, getRuleCounts, getExamHealth } from '@/server/actions/exams'
 import { listCategories } from '@/server/actions/questions'
+import {
+  listOutlets,
+  listDepartments,
+  listBrands,
+  listAssignableRoles,
+  listTeamMembers,
+} from '@/server/actions/directory'
 import { ExamSettingsForm, type ExamSettings } from '@/components/exams/exam-settings-form'
 import {
   SectionBuilder,
   type SectionDraft,
 } from '@/components/exams/section-builder'
 import { ExamHealthPanel } from '@/components/exams/exam-health-panel'
+import { ExamSchedule } from '@/components/exams/exam-schedule'
+import { ExamAssignments, type AssignmentRow } from '@/components/exams/exam-assignments'
+import { CloneExamButton } from '@/components/exams/clone-exam-button'
 import { Badge } from '@/components/ui/badge'
 import { LockIcon } from 'lucide-react'
 
@@ -33,14 +43,24 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
   const canEdit = can(claims, 'exams.update')
   const canPublishExam = can(claims, 'exams.publish')
 
-  const [categories, ruleCounts, health] = await Promise.all([
-    listCategories(),
-    getRuleCounts(id),
-    // Skipped entirely without the permission: the RPC would raise, and
-    // swallowing that would hide a real authorisation failure behind an
-    // empty report.
-    canEdit ? getExamHealth(id) : Promise.resolve([]),
-  ])
+  const canAssign = can(claims, 'exams.assign')
+
+  const [categories, ruleCounts, health, outlets, departments, brands, roles, people] =
+    await Promise.all([
+      listCategories(),
+      getRuleCounts(id),
+      // Skipped entirely without the permission: the RPC would raise, and
+      // swallowing that would hide a real authorisation failure behind an
+      // empty report.
+      canEdit ? getExamHealth(id) : Promise.resolve([]),
+      listOutlets(),
+      listDepartments(),
+      listBrands(),
+      listAssignableRoles(),
+      // The individual picker reads profiles, which needs exams.assign. A
+      // reader without it gets an empty list rather than a thrown guard.
+      canAssign ? listTeamMembers() : Promise.resolve([]),
+    ])
 
   // The builder works in drafts keyed by a client-side handle rather than by
   // database id: a rule the chef has just added has no id yet, and React needs
@@ -94,6 +114,7 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
             )}
           </p>
         </div>
+        {can(claims, 'exams.create') && <CloneExamButton examId={exam.id} />}
       </div>
 
       {locked && (
@@ -111,6 +132,28 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
         categories={categories}
         ruleCounts={ruleCounts}
         readOnly={locked}
+      />
+
+      <ExamSchedule
+        examId={exam.id}
+        opensAt={exam.opens_at}
+        closesAt={exam.closes_at}
+        timezone={exam.timezone}
+        locked={locked}
+        canEdit={canEdit}
+      />
+
+      {/* Assignments stay editable after publish — the 0016 lock covers what is
+          asked, not who sits it. */}
+      <ExamAssignments
+        examId={exam.id}
+        initial={data.assignments as AssignmentRow[]}
+        outlets={outlets}
+        departments={departments}
+        brands={brands}
+        roles={roles}
+        people={people}
+        canAssign={canAssign}
       />
 
       {/* The health report needs exams.update — it returns question ids and

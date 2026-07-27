@@ -528,6 +528,51 @@ describeDb('exam draw and health', () => {
     ).rejects.toThrow(/published/)
   })
 
+  it('refuses to move the OPENING time of a published exam', async () => {
+    // The other half of the closes_at rule, and the one nothing asserted until
+    // now. Moving when an exam opens changes what candidates were told; moving
+    // when it closes does not. The UI narrows its write to match, but the
+    // trigger is what makes the rule true.
+    await expect(
+      asUser(db, chef(CHEF), async (c) => {
+        const examId = await buildExam(c, [{ category: CAT_A, count: 2 }], { duration: 2 })
+        await c.query('select * from public.publish_exam($1)', [examId])
+        return c.query(`update public.exams set opens_at = now() + interval '1 day' where id = $1`, [
+          examId,
+        ])
+      }),
+    ).rejects.toThrow(/published/)
+  })
+
+  it('refuses to change the timezone of a published exam', async () => {
+    await expect(
+      asUser(db, chef(CHEF), async (c) => {
+        const examId = await buildExam(c, [{ category: CAT_A, count: 2 }], { duration: 2 })
+        await c.query('select * from public.publish_exam($1)', [examId])
+        return c.query(`update public.exams set timezone = 'UTC' where id = $1`, [examId])
+      }),
+    ).rejects.toThrow(/published/)
+  })
+
+  it('still allows assignments to change after publish', async () => {
+    // The lock covers what is asked, not who sits it. Adding an outlet that
+    // opened late, or giving one person a retake, must stay possible.
+    const count = await asUser(db, chef(CHEF), async (c) => {
+      const examId = await buildExam(c, [{ category: CAT_A, count: 2 }], { duration: 2 })
+      await c.query('select * from public.publish_exam($1)', [examId])
+      await c.query(
+        `insert into public.exam_assignments (exam_id, target_kind, target_id) values ($1,'outlet',$2)`,
+        [examId, fixtures.outletCapiche],
+      )
+      return (
+        await c.query('select count(*)::int n from public.exam_assignments where exam_id = $1', [
+          examId,
+        ])
+      ).rows[0].n
+    })
+    expect(count).toBe(1)
+  })
+
   it('still allows the closing time to move', async () => {
     // Extending a window because a shift ran late is routine and changes
     // nothing about what was asked.

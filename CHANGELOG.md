@@ -9,6 +9,41 @@ remembering, and anything left behind as debt.
 
 ## M3 — Exam Builder · *in progress*
 
+### Shipped — assignments, schedule and clone
+
+**Assignment UI** covers all five target kinds — outlet, department, brand, role
+and individual. Assignments deliberately stay editable after publish: the 0016
+lock covers what is asked, not who sits it, and adding an outlet that opened
+late or giving one person a retake changes nothing about the paper. An exam with
+no assignments says so plainly, because a published exam nobody is assigned to
+is not an error the database catches and it silently reaches no one.
+
+**Schedule UI** with an asymmetry that mirrors the trigger: a draft edits the
+opening time, closing time and timezone; a **published exam offers only the
+closing time**, and the other two are rendered as read-only text rather than
+disabled inputs — a disabled field still reads as "temporarily unavailable", and
+this one never becomes available again. `updateSchedule()` narrows the write to
+match, so the chef gets a sentence instead of a constraint violation.
+
+**Clone** is the escape hatch that makes immutability liveable, and it drops the
+chef straight into the copy — the reason anyone duplicates an exam is to change
+something.
+
+Authenticated org lookups live in a new `directory.ts` rather than in `org.ts`,
+whose header warns against adding filters to the two unauthenticated
+admin-client functions it holds. Putting authenticated lookups beside them would
+blur a boundary that is currently unmistakable.
+
+### Fixed while building
+
+**The render check's disabled-button helper reported every button as disabled.**
+It tested `slice.includes('disabled')`, and every button in the app carries
+Tailwind variant classes containing the word — `disabled:pointer-events-none
+disabled:opacity-50`. So "the publish button is disabled while blocked" passed
+whether or not it was. It now matches the *attribute*, and the Publish button is
+asserted in both states — disabled when blocked, enabled when ready — so the
+check cannot pass vacuously again.
+
 ### Shipped — Exam Health dashboard and publish validation
 
 The health report a chef actually reads, on `/exams/[id]`. Blocking issues

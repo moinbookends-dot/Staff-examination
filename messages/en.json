@@ -271,6 +271,41 @@
       "confirmBody": "The paper is drawn and frozen now, and everyone assigned is notified. Published exams cannot be edited — you would have to duplicate it to make changes.",
       "confirmCancel": "Not yet",
       "confirmPublish": "Publish"
+    },
+    "duplicate": "Duplicate",
+    "duplicated": "Duplicated into a new draft.",
+    "schedule": {
+      "title": "Schedule",
+      "description": "When candidates can sit this exam. Leave blank to open it manually.",
+      "lockedDescription": "This exam is published. Only its closing time can still move.",
+      "opens": "Opens",
+      "closes": "Closes",
+      "notSet": "Not set",
+      "closesStillEditable": "Extending this is allowed after publishing — a shift running late is not a reason to rebuild the exam.",
+      "timezone": "Timezone",
+      "timezoneHint": "The wall clock these times refer to, not the one your browser is in.",
+      "save": "Save schedule",
+      "saved": "Schedule saved."
+    },
+    "assign": {
+      "title": "Who sits this exam",
+      "description": "Assignments can be changed after publishing — the paper is fixed, the audience is not.",
+      "none": "Nobody is assigned yet, so this exam would reach no one.",
+      "assignTo": "Assign to",
+      "which": "Which",
+      "choose": "Choose…",
+      "add": "Add",
+      "remove": "Remove {name}",
+      "save": "Save assignments",
+      "saved": "Assignments saved.",
+      "alreadyAssigned": "That is already assigned.",
+      "kinds": {
+        "outlet": "Outlet",
+        "department": "Department",
+        "brand": "Brand",
+        "role": "Role",
+        "user": "Individual"
+      }
     }
   },
   "nav": {

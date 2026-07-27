@@ -76,7 +76,13 @@ function buttonIsDisabled(html, label) {
   if (textAt === -1) return null
   const openAt = html.lastIndexOf('<button', textAt)
   if (openAt === -1) return null
-  return html.slice(openAt, textAt).includes('disabled')
+
+  // The ATTRIBUTE, not the substring. Every button in this app carries Tailwind
+  // variant classes containing the word — `disabled:pointer-events-none
+  // disabled:opacity-50` — so `.includes('disabled')` reports every button as
+  // disabled and any assertion built on it passes vacuously. The `\s` guard
+  // also keeps `aria-disabled` from matching.
+  return /\sdisabled(=""|\s|>)/.test(html.slice(openAt, textAt))
 }
 
 // Fail fast with a useful message rather than twenty confusing assertion errors.
@@ -261,7 +267,7 @@ try {
   const missing = await get('/en/questions/00000000-0000-0000-0000-0000000000ff')
   check(missing.status === 404, 'an unknown question 404s', `status ${missing.status}`)
 
-  // ── 5. Exams ───────────────────────────────────────────────────────────────
+  // ── 4. Exams ───────────────────────────────────────────────────────────────
   console.log('\n4. Exams')
 
   // ACTIVATED HERE, not at seed time. save_question() creates drafts and
@@ -362,11 +368,53 @@ try {
     'the save button is missing from a draft',
   )
 
+  // ── Schedule, assignments and clone ───────────────────────────────────────
+  console.log('\n5. Schedule and assignments')
+
+  check(
+    withSections.html.includes('id="exam-opens"') && withSections.html.includes('id="exam-closes"'),
+    'a draft offers both ends of the window',
+    'the schedule inputs are missing from a draft',
+  )
+  check(
+    withSections.html.includes('id="exam-timezone"'),
+    'a draft offers the timezone',
+    'the timezone control is missing',
+  )
+  check(
+    />Nobody is assigned yet/.test(withSections.html),
+    'an unassigned exam says so',
+    'the empty assignment state is missing',
+  )
+  check(
+    buttonIsDisabled(withSections.html, 'Duplicate') === false,
+    'the duplicate button is offered',
+    'the duplicate button is missing or disabled',
+  )
+
+  // Assign it, and confirm the badge names the outlet rather than a raw uuid.
+  await db.query(
+    `insert into public.exam_assignments (exam_id, target_kind, target_id)
+     values ($1,'outlet','00000000-0000-0000-0000-00000000a001')`,
+    [examId],
+  )
+  const assigned = await get(`/en/exams/${examId}`)
+  check(
+    assigned.html.includes('Aiko — Outlet 1'),
+    'an assignment renders with its outlet name',
+    'the assignment badge is missing or shows a raw id',
+  )
+  check(
+    !/>Nobody is assigned yet/.test(assigned.html),
+    'the empty assignment state disappears once assigned',
+    'the empty state is still shown for an assigned exam',
+  )
+
   // ── Exam Health ────────────────────────────────────────────────────────────
   // The two rules above each want 3 questions from Food Safety, and the bank
   // holds exactly the one this script seeded. So the paper is short and the
   // panel must say so rather than letting publish fail later.
-  console.log('\n5. Exam Health')
+  console.log('\n6. Exam Health')
 
   check(/>Exam health</.test(withSections.html), 'the health panel renders', 'the health panel is missing')
   check(
@@ -405,6 +453,14 @@ try {
     />This exam is ready to publish/.test(healthy.html),
     'a satisfiable exam reports ready',
     'the ready state was not reported',
+  )
+  // The other half of the disabled assertion above. Asserting only that a
+  // blocked exam disables Publish would pass even if the button were ALWAYS
+  // disabled — which is exactly what the old substring-based helper did.
+  check(
+    buttonIsDisabled(healthy.html, 'Publish') === false,
+    'the publish button is enabled once the exam is ready',
+    'Publish is still disabled for a healthy exam',
   )
   check(
     !healthy.html.includes('the bank could supply'),
@@ -450,6 +506,31 @@ try {
     !savedButton.test(lockedDetail.html),
     'a published exam hides its save button',
     'a published exam still offers Save, which the database would refuse',
+  )
+
+  // The schedule asymmetry, on the page. 0016 permits closes_at to move after
+  // publish and nothing else, so the opening time must stop being an input —
+  // not merely be disabled, which still reads as "temporarily unavailable".
+  check(
+    !lockedDetail.html.includes('id="exam-opens"'),
+    'a published exam stops offering the opening time',
+    'a published exam still renders an opens_at input the database would refuse',
+  )
+  check(
+    lockedDetail.html.includes('id="exam-closes"'),
+    'a published exam still offers the closing time',
+    'the closing time is not editable on a published exam',
+  )
+  check(
+    !lockedDetail.html.includes('id="exam-timezone"'),
+    'a published exam stops offering the timezone',
+    'a published exam still renders a timezone control',
+  )
+  // Assignments outlive the lock — the paper is fixed, the audience is not.
+  check(
+    buttonIsDisabled(lockedDetail.html, 'Save assignments') === false,
+    'a published exam can still be reassigned',
+    'assignments were locked along with the paper',
   )
 
   const missingExam = await get('/en/exams/00000000-0000-0000-0000-0000000000ff')

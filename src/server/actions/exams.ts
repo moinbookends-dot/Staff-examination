@@ -394,6 +394,68 @@ export async function saveSections(input: unknown): Promise<MutationResult> {
   return { ok: true }
 }
 
+const scheduleSchema = z.object({
+  examId: dbId(),
+  opensAt: z.string().datetime().nullable().default(null),
+  closesAt: z.string().datetime().nullable().default(null),
+  timezone: z.string().min(1).max(60).default('Asia/Kolkata'),
+})
+
+/**
+ * The exam window.
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ AFTER PUBLISH, ONLY closes_at MAY MOVE. This is not a UI preference —     │
+ * │ it is what migration 0016's trigger permits, and sending anything else    │
+ * │ would be refused with a constraint error rather than a sentence.          │
+ * │                                                                           │
+ * │ Extending a window because a shift ran late is routine and changes        │
+ * │ nothing about what was asked. Moving the OPENING of an exam that is       │
+ * │ already scheduled changes when people were told to sit it, and for an     │
+ * │ exam already open it is meaningless.                                      │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ *
+ * The narrowing happens here rather than being left to the trigger so the chef
+ * gets "this exam is published, only its closing time can change" instead of a
+ * raised exception — and so the rule is stated once, in the same words, in both
+ * layers.
+ */
+export async function updateSchedule(input: unknown): Promise<MutationResult> {
+  const claims = await requirePermission('exams.update')
+
+  const parsed = scheduleSchema.safeParse(input)
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid schedule.' }
+  }
+
+  const { examId, opensAt, closesAt, timezone } = parsed.data
+  if (opensAt && closesAt && new Date(closesAt) <= new Date(opensAt)) {
+    return { ok: false, error: 'The exam would close before it opens.' }
+  }
+
+  const supabase = await createClient()
+  const { data: exam } = await supabase
+    .from('exams')
+    .select('status')
+    .eq('id', examId)
+    .is('deleted_at', null)
+    .maybeSingle()
+
+  if (!exam) return { ok: false, error: 'That exam no longer exists.' }
+
+  const patch =
+    exam.status === 'draft'
+      ? { opens_at: opensAt, closes_at: closesAt, timezone, updated_by: claims.userId }
+      : { closes_at: closesAt, updated_by: claims.userId }
+
+  const { error } = await supabase.from('exams').update(patch).eq('id', examId)
+  if (error) return { ok: false, error: friendlyWriteError(error) }
+
+  revalidatePath('/exams')
+  revalidatePath(`/exams/${examId}`)
+  return { ok: true }
+}
+
 /**
  * Publish.
  *
