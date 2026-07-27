@@ -26,6 +26,12 @@
  * └───────────────────────────────────────────────────────────────────────────┘
  *
  * Creates one temporary chef and one question, and removes both at the end.
+ *
+ * ⚠ DO NOT RUN `next build` WHILE `next dev` IS RUNNING. They share .next, and
+ * the build overwrites the dev server's route manifest — every dynamic route
+ * then 404s while the list pages keep working, which looks exactly like a
+ * routing bug in the app. If this script suddenly fails en masse, stop dev,
+ * `rm -rf .next`, and start it again before believing any of it.
  */
 import { Client } from 'pg'
 import { readFileSync } from 'node:fs'
@@ -532,6 +538,38 @@ try {
     'a published exam can still be reassigned',
     'assignments were locked along with the paper',
   )
+
+  // ── 7. Paper preview and provenance ───────────────────────────────────────
+  console.log('\n7. Paper and provenance')
+
+  check(
+    lockedDetail.html.includes(stem),
+    'the frozen paper renders the question a candidate will see',
+    'the paper preview did not render the question',
+  )
+  check(
+    lockedDetail.html.includes('Rice bran'),
+    'the candidate-facing renderer is mounted, options and all',
+    'the question options did not render in the paper',
+  )
+  check(
+    /rev <!-- -->1|>rev 1</.test(lockedDetail.html),
+    'each question carries the revision that was frozen',
+    'the per-question revision is missing',
+  )
+  check(
+    lockedDetail.html.includes('Published') && lockedDetail.html.includes('Render Chef'),
+    'the header names who published it and when',
+    'publisher provenance is missing',
+  )
+  // The one thing a paper must never contain.
+  for (const forbidden of ['"correct"', 'modelAnswer', '"rubric"']) {
+    check(
+      !lockedDetail.html.includes(forbidden),
+      `the rendered paper contains no ${forbidden}`,
+      `THE PAPER LEAKED ${forbidden} TO THE BROWSER`,
+    )
+  }
 
   const missingExam = await get('/en/exams/00000000-0000-0000-0000-0000000000ff')
   check(missingExam.status === 404, 'an unknown exam 404s', `status ${missingExam.status}`)

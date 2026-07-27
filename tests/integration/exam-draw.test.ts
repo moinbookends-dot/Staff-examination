@@ -516,6 +516,99 @@ describeDb('exam draw and health', () => {
     }
   })
 
+  // ── exam_paper ─────────────────────────────────────────────────────────────
+
+  describe('exam_paper', () => {
+    it('previews an unpublished exam and says that it is a preview', async () => {
+      const rows = await asUser(db, chef(CHEF), async (c) => {
+        const examId = await buildExam(c, [{ category: CAT_A, count: 3 }], { duration: 3 })
+        return (await c.query('select * from public.exam_paper($1)', [examId])).rows
+      })
+
+      expect(rows).toHaveLength(3)
+      expect(rows.every((r) => r.is_preview === true)).toBe(true)
+      expect(rows.map((r) => r.paper_position)).toEqual([1, 2, 3])
+      expect(rows[0].section_title).toBe('Section 1')
+    })
+
+    it('returns the frozen paper once published, and stops calling it a preview', async () => {
+      const rows = await asUser(db, chef(CHEF), async (c) => {
+        const examId = await buildExam(c, [{ category: CAT_A, count: 3 }], { duration: 3 })
+        await c.query('select * from public.publish_exam($1)', [examId])
+        return (await c.query('select * from public.exam_paper($1)', [examId])).rows
+      })
+
+      expect(rows).toHaveLength(3)
+      expect(rows.every((r) => r.is_preview === false)).toBe(true)
+    })
+
+    it('keeps showing the wording that was frozen, not the current one', async () => {
+      // The whole reason snapshots exist. Editing a question after publication
+      // must not change what the paper says a candidate was asked.
+      const result = await asUser(db, chef(CHEF), async (c) => {
+        const examId = await buildExam(c, [{ category: CAT_A, count: 1, min: 1, max: 1 }], {
+          duration: 1,
+        })
+        await c.query('select * from public.publish_exam($1)', [examId])
+
+        const before = await c.query('select snapshot from public.exam_paper($1)', [examId])
+        const drawnId = (
+          await c.query('select question_id from public.exam_questions where exam_id = $1', [examId])
+        ).rows[0].question_id
+
+        await c.query(`update public.questions set stem = 'Completely rewritten' where id = $1`, [
+          drawnId,
+        ])
+
+        const after = await c.query('select snapshot, question_revision from public.exam_paper($1)', [
+          examId,
+        ])
+        const live = await c.query('select stem, revision from public.questions where id = $1', [
+          drawnId,
+        ])
+        return { before: before.rows[0], after: after.rows[0], live: live.rows[0] }
+      })
+
+      expect(result.live.stem).toBe('Completely rewritten')
+      expect(result.after.snapshot.stem).toBe(result.before.snapshot.stem)
+      expect(result.after.snapshot.stem).not.toBe('Completely rewritten')
+      // And the frozen revision is the OLD one, which is what analytics group by.
+      expect(result.after.question_revision).toBeLessThan(result.live.revision)
+    })
+
+    it('NEVER includes an answer key, in either branch', async () => {
+      // exam_paper is a second route to question content, so it gets the same
+      // assertion the frozen snapshot does. A leak here would be just as total.
+      const both = await asUser(db, chef(CHEF), async (c) => {
+        const examId = await buildExam(c, [{ category: CAT_A, count: 3 }], { duration: 3 })
+        const preview = (await c.query('select snapshot from public.exam_paper($1)', [examId])).rows
+        await c.query('select * from public.publish_exam($1)', [examId])
+        const frozen = (await c.query('select snapshot from public.exam_paper($1)', [examId])).rows
+        return { preview, frozen }
+      })
+
+      for (const [label, rows] of Object.entries(both)) {
+        expect(rows.length, `${label} returned nothing`).toBeGreaterThan(0)
+        for (const row of rows) {
+          const text = JSON.stringify(row.snapshot)
+          for (const forbidden of ['correct', 'accept', 'rubric', 'keywords', 'modelAnswer']) {
+            expect(text, `${label} snapshot leaked "${forbidden}"`).not.toContain(forbidden)
+          }
+        }
+      }
+    })
+
+    it('refuses a caller without exams.read', async () => {
+      await expect(
+        asUser(db, employee(EMP_FOR_DENIAL), async (c) =>
+          c.query('select * from public.exam_paper($1)', [
+            '00000000-0000-0000-0000-0000000000ff',
+          ]),
+        ),
+      ).rejects.toThrow(/forbidden/)
+    })
+  })
+
   // ── Immutability ───────────────────────────────────────────────────────────
 
   it('refuses to change a published exam', async () => {

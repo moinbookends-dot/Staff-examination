@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation'
 import { getTranslations, getFormatter } from 'next-intl/server'
 import { requirePermission } from '@/lib/auth/guards'
 import { can } from '@/lib/auth/claims'
-import { getExam, getRuleCounts, getExamHealth } from '@/server/actions/exams'
+import { getExam, getRuleCounts, getExamHealth, getExamPaper } from '@/server/actions/exams'
 import { listCategories } from '@/server/actions/questions'
 import {
   listOutlets,
@@ -20,6 +20,7 @@ import { ExamHealthPanel } from '@/components/exams/exam-health-panel'
 import { ExamSchedule } from '@/components/exams/exam-schedule'
 import { ExamAssignments, type AssignmentRow } from '@/components/exams/exam-assignments'
 import { CloneExamButton } from '@/components/exams/clone-exam-button'
+import { ExamPaperPreview } from '@/components/exams/exam-paper-preview'
 import { Badge } from '@/components/ui/badge'
 import { LockIcon } from 'lucide-react'
 
@@ -45,7 +46,7 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
 
   const canAssign = can(claims, 'exams.assign')
 
-  const [categories, ruleCounts, health, outlets, departments, brands, roles, people] =
+  const [categories, ruleCounts, health, outlets, departments, brands, roles, people, paper] =
     await Promise.all([
       listCategories(),
       getRuleCounts(id),
@@ -60,6 +61,7 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
       // The individual picker reads profiles, which needs exams.assign. A
       // reader without it gets an empty list rather than a thrown guard.
       canAssign ? listTeamMembers() : Promise.resolve([]),
+      getExamPaper(id),
     ])
 
   // The builder works in drafts keyed by a client-side handle rather than by
@@ -102,13 +104,22 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
               <>
                 <span>·</span>
                 <span>
-                  {t('publishedOn', {
-                    date: format.dateTime(new Date(exam.published_at), {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                    }),
-                  })}
+                  {data.publishedByName
+                    ? t('publishedOnBy', {
+                        date: format.dateTime(new Date(exam.published_at), {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        }),
+                        name: data.publishedByName,
+                      })
+                    : t('publishedOn', {
+                        date: format.dateTime(new Date(exam.published_at), {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        }),
+                      })}
                 </span>
               </>
             )}
@@ -167,6 +178,8 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
           canPublishExam={canPublishExam}
         />
       )}
+
+      <ExamPaperPreview paper={paper} />
     </div>
   )
 }

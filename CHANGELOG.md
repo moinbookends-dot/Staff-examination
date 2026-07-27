@@ -9,6 +9,40 @@ remembering, and anything left behind as debt.
 
 ## M3 — Exam Builder · *in progress*
 
+### Shipped — paper preview and provenance (0019)
+
+**The paper preview mounts the same renderers exam delivery will.** That was the
+point of typing `FormatRendererProps` as the candidate-facing contract back in
+M2 rather than building preview-only components: a preview drawn by different
+code drifts from delivery, and the drift is discovered during an exam. Read-only
+here, with each format's empty answer.
+
+`exam_paper()` serves both cases from one call — the frozen `exam_questions`
+rows when they exist, otherwise a representative draw flagged `is_preview`. A
+chef asks the same question of a draft and a published exam, so making them
+reason about which storage backs it would serve the schema rather than the
+person.
+
+For a `per_attempt` exam the preview is **nobody's paper**, and the UI says so
+at length. Every candidate draws their own; a chef who believes they are looking
+at *the* paper will reasonably conclude the exam is broken when a candidate
+reports different questions.
+
+The frozen branch reads the **stored** snapshot rather than rebuilding it, so
+editing a question after publication cannot change what the paper says a
+candidate was asked. A test proves it: rewrite the stem, and the paper still
+shows the original wording at the original revision.
+
+**Provenance**: each question carries the revision that was frozen — the number
+attempt analytics group by, so two wordings never merge into one statistic — and
+the header names who published it, not just when. A substituted question shows
+why, since a `fallback_reason` recorded at draw time is otherwise invisible when
+somebody asks months later why the paper looks odd.
+
+`exam_paper()` is a second route to question content, so it carries the same
+key-leak assertion the frozen snapshot does, in both branches. The rendered page
+is checked too — no `"correct"`, `modelAnswer` or `"rubric"` reaches the browser.
+
 ### Shipped — assignments, schedule and clone
 
 **Assignment UI** covers all five target kinds — outlet, department, brand, role

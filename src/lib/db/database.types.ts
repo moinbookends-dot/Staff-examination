@@ -1111,6 +1111,10 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "exam_paper": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "exam_rule_counts": {
         Args: Record<string, unknown>
         Returns: unknown

@@ -112,8 +112,21 @@ export async function getExam(id: string) {
         .order('sort_order')
     : { data: [] }
 
+  // Provenance: who published it, not just when. `published_by` is a uuid, and
+  // "published by 4f2a…" answers nobody's question.
+  let publishedByName: string | null = null
+  if (exam.published_by) {
+    const { data: publisher } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', exam.published_by)
+      .maybeSingle()
+    publishedByName = publisher?.full_name ?? null
+  }
+
   return {
     exam,
+    publishedByName,
     sections: (sections ?? []).map((section) => ({
       ...section,
       rules: (rules ?? []).filter((r) => r.section_id === section.id),
@@ -136,6 +149,50 @@ export async function getExamHealth(id: string): Promise<HealthIssue[]> {
   const { data, error } = await supabase.rpc('exam_health', { p_exam_id: id })
   if (error) return []
   return (data ?? []) as unknown as HealthIssue[]
+}
+
+export interface PaperQuestion {
+  section_id: string
+  section_title: string
+  question_id: string
+  question_revision: number
+  paper_position: number
+  marks: number
+  negative_marks: number
+  fallback_reason: string | null
+  snapshot: {
+    question_id: string
+    revision: number
+    type: string
+    response_format: string
+    stem: string
+    content: unknown
+    estimated_seconds: number | null
+    media: unknown[]
+  }
+  /** True when this is a representative draw, not anybody's actual paper. */
+  is_preview: boolean
+}
+
+/**
+ * What this exam asks.
+ *
+ * The frozen paper when one exists, otherwise a representative draw flagged
+ * `is_preview`. One call either way — a chef asks the same question of a draft
+ * and a published exam, and making them reason about which storage backs it
+ * would serve the schema rather than the person.
+ */
+export async function getExamPaper(examId: string): Promise<PaperQuestion[]> {
+  await requirePermission('exams.read')
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('exam_paper', {
+    p_exam_id: examId,
+    p_seed: null,
+  })
+
+  if (error) return []
+  return (data ?? []) as unknown as PaperQuestion[]
 }
 
 export interface RuleCount {

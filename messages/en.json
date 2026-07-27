@@ -306,6 +306,20 @@
         "role": "Role",
         "user": "Individual"
       }
+    },
+    "publishedOnBy": "Published {date} by {name}",
+    "paper": {
+      "title": "The paper",
+      "empty": "No questions yet. Add a section with a rule, and they will appear here.",
+      "summary": "{questions} questions · {marks} marks",
+      "previewNotice": "This is one example draw, not anybody’s paper. Every candidate gets their own questions when they start, so what you see here is the shape and difficulty the rules produce, not what any individual will be asked.",
+      "revision": "rev {n}",
+      "revisionHint": "Which wording of the question was frozen. Analytics group by it so two versions never merge into one statistic.",
+      "marks": "{n} marks",
+      "fallback": {
+        "difficulty_widened": "No question matched the requested difficulty exactly, so a nearby one was used.",
+        "short": "The rule could not be filled completely."
+      }
     }
   },
   "nav": {
