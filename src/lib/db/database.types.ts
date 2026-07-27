@@ -253,6 +253,267 @@ export type Database = {
         }
         Relationships: []
       }
+      "exam_assignments": {
+        Row: {
+          "id": string
+          "exam_id": string
+          "target_kind": Database["public"]["Enums"]["assignment_target"]
+          "target_id": string | null
+          "target_role": string | null
+          "assigned_by": string | null
+          "assigned_at": string
+        }
+        Insert: {
+          "id"?: string
+          "exam_id": string
+          "target_kind": Database["public"]["Enums"]["assignment_target"]
+          "target_id"?: string | null
+          "target_role"?: string | null
+          "assigned_by"?: string | null
+          "assigned_at"?: string
+        }
+        Update: {
+          "id"?: string
+          "exam_id"?: string
+          "target_kind"?: Database["public"]["Enums"]["assignment_target"]
+          "target_id"?: string | null
+          "target_role"?: string | null
+          "assigned_by"?: string | null
+          "assigned_at"?: string
+        }
+        Relationships: []
+      }
+      "exam_questions": {
+        Row: {
+          "exam_id": string
+          "section_id": string
+          "rule_id": string | null
+          "question_id": string
+          "question_revision": number
+          "snapshot": Json
+          "content_version": number
+          "position": number
+          "marks": number
+          "negative_marks": number
+          "fallback_reason": string | null
+          "created_at": string
+        }
+        Insert: {
+          "exam_id": string
+          "section_id": string
+          "rule_id"?: string | null
+          "question_id": string
+          "question_revision": number
+          "snapshot": Json
+          "content_version"?: number
+          "position": number
+          "marks": number
+          "negative_marks"?: number
+          "fallback_reason"?: string | null
+          "created_at"?: string
+        }
+        Update: {
+          "exam_id"?: string
+          "section_id"?: string
+          "rule_id"?: string | null
+          "question_id"?: string
+          "question_revision"?: number
+          "snapshot"?: Json
+          "content_version"?: number
+          "position"?: number
+          "marks"?: number
+          "negative_marks"?: number
+          "fallback_reason"?: string | null
+          "created_at"?: string
+        }
+        Relationships: []
+      }
+      "exam_rules": {
+        Row: {
+          "id": string
+          "section_id": string
+          "sort_order": number
+          "category_id": string | null
+          "include_subcategories": boolean
+          "tag_ids": string[]
+          "question_types": Database["public"]["Enums"]["question_type"][] | null
+          "difficulty_min": number
+          "difficulty_max": number
+          "question_count": number
+          "marks_per_question": number | null
+          "created_at": string
+          "updated_at": string
+        }
+        Insert: {
+          "id"?: string
+          "section_id": string
+          "sort_order"?: number
+          "category_id"?: string | null
+          "include_subcategories"?: boolean
+          "tag_ids"?: string[]
+          "question_types"?: Database["public"]["Enums"]["question_type"][] | null
+          "difficulty_min"?: number
+          "difficulty_max"?: number
+          "question_count": number
+          "marks_per_question"?: number | null
+          "created_at"?: string
+          "updated_at"?: string
+        }
+        Update: {
+          "id"?: string
+          "section_id"?: string
+          "sort_order"?: number
+          "category_id"?: string | null
+          "include_subcategories"?: boolean
+          "tag_ids"?: string[]
+          "question_types"?: Database["public"]["Enums"]["question_type"][] | null
+          "difficulty_min"?: number
+          "difficulty_max"?: number
+          "question_count"?: number
+          "marks_per_question"?: number | null
+          "created_at"?: string
+          "updated_at"?: string
+        }
+        Relationships: []
+      }
+      "exam_sections": {
+        Row: {
+          "id": string
+          "exam_id": string
+          "title": string
+          "description": string | null
+          "instructions": string | null
+          "sort_order": number
+          "duration_minutes": number | null
+          "created_at": string
+          "updated_at": string
+        }
+        Insert: {
+          "id"?: string
+          "exam_id": string
+          "title": string
+          "description"?: string | null
+          "instructions"?: string | null
+          "sort_order"?: number
+          "duration_minutes"?: number | null
+          "created_at"?: string
+          "updated_at"?: string
+        }
+        Update: {
+          "id"?: string
+          "exam_id"?: string
+          "title"?: string
+          "description"?: string | null
+          "instructions"?: string | null
+          "sort_order"?: number
+          "duration_minutes"?: number | null
+          "created_at"?: string
+          "updated_at"?: string
+        }
+        Relationships: []
+      }
+      "exams": {
+        Row: {
+          "id": string
+          "company_id": string
+          "brand_id": string | null
+          "title": string
+          "description": string | null
+          "instructions": string | null
+          "kind": Database["public"]["Enums"]["exam_kind"]
+          "status": Database["public"]["Enums"]["exam_status"]
+          "paper_mode": Database["public"]["Enums"]["paper_mode"]
+          "duration_minutes": number
+          "opens_at": string | null
+          "closes_at": string | null
+          "timezone": string
+          "max_attempts": number
+          "pass_mark_percent": number
+          "shuffle_questions": boolean
+          "shuffle_options": boolean
+          "allow_backtrack": boolean
+          "negative_marking_enabled": boolean
+          "verification_mode": Database["public"]["Enums"]["verification_mode"]
+          "requires_manual_grading": boolean
+          "counts_towards_analytics": boolean
+          "total_marks": number | null
+          "question_count": number | null
+          "created_by": string
+          "updated_by": string | null
+          "published_by": string | null
+          "published_at": string | null
+          "deleted_at": string | null
+          "created_at": string
+          "updated_at": string
+        }
+        Insert: {
+          "id"?: string
+          "company_id": string
+          "brand_id"?: string | null
+          "title": string
+          "description"?: string | null
+          "instructions"?: string | null
+          "kind"?: Database["public"]["Enums"]["exam_kind"]
+          "status"?: Database["public"]["Enums"]["exam_status"]
+          "paper_mode"?: Database["public"]["Enums"]["paper_mode"]
+          "duration_minutes"?: number
+          "opens_at"?: string | null
+          "closes_at"?: string | null
+          "timezone"?: string
+          "max_attempts"?: number
+          "pass_mark_percent"?: number
+          "shuffle_questions"?: boolean
+          "shuffle_options"?: boolean
+          "allow_backtrack"?: boolean
+          "negative_marking_enabled"?: boolean
+          "verification_mode"?: Database["public"]["Enums"]["verification_mode"]
+          "requires_manual_grading"?: boolean
+          "counts_towards_analytics"?: boolean
+          "total_marks"?: number | null
+          "question_count"?: number | null
+          "created_by": string
+          "updated_by"?: string | null
+          "published_by"?: string | null
+          "published_at"?: string | null
+          "deleted_at"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+        }
+        Update: {
+          "id"?: string
+          "company_id"?: string
+          "brand_id"?: string | null
+          "title"?: string
+          "description"?: string | null
+          "instructions"?: string | null
+          "kind"?: Database["public"]["Enums"]["exam_kind"]
+          "status"?: Database["public"]["Enums"]["exam_status"]
+          "paper_mode"?: Database["public"]["Enums"]["paper_mode"]
+          "duration_minutes"?: number
+          "opens_at"?: string | null
+          "closes_at"?: string | null
+          "timezone"?: string
+          "max_attempts"?: number
+          "pass_mark_percent"?: number
+          "shuffle_questions"?: boolean
+          "shuffle_options"?: boolean
+          "allow_backtrack"?: boolean
+          "negative_marking_enabled"?: boolean
+          "verification_mode"?: Database["public"]["Enums"]["verification_mode"]
+          "requires_manual_grading"?: boolean
+          "counts_towards_analytics"?: boolean
+          "total_marks"?: number | null
+          "question_count"?: number | null
+          "created_by"?: string
+          "updated_by"?: string | null
+          "published_by"?: string | null
+          "published_at"?: string | null
+          "deleted_at"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+        }
+        Relationships: []
+      }
       "notifications": {
         Row: {
           "id": string
@@ -823,6 +1084,34 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "draw_paper": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "duplicate_exam": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "enforce_exam_child_immutability": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "enforce_exam_immutability": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "exam_audience": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "exam_health": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "exam_status_transition_allowed": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "get_question_revision": {
         Args: Record<string, unknown>
         Returns: unknown
@@ -840,6 +1129,10 @@ export type Database = {
         Returns: unknown
       }
       "is_approved": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "is_exam_assigned_to_me": {
         Args: Record<string, unknown>
         Returns: unknown
       }
@@ -871,6 +1164,14 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "publish_exam": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "question_snapshot": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "save_question": {
         Args: Record<string, unknown>
         Returns: unknown
@@ -886,10 +1187,12 @@ export type Database = {
     }
     Enums: {
       "approval_status": "pending" | "approved" | "rejected" | "suspended"
+      "assignment_target": "outlet" | "department" | "brand" | "role"
       "attempt_status": "in_progress" | "submitted" | "auto_graded" | "evaluating" | "evaluated" | "verifying" | "verified" | "returned" | "published" | "expired" | "voided"
       "auto_grade_status": "not_applicable" | "pending" | "graded" | "needs_review"
       "exam_kind": "official" | "practice" | "quiz" | "monthly" | "annual" | "practical"
       "exam_status": "draft" | "scheduled" | "active" | "completed" | "archived" | "cancelled"
+      "paper_mode": "fixed" | "per_attempt"
       "question_status": "draft" | "active" | "retired"
       "question_type": "mcq_single" | "mcq_multi" | "true_false" | "fill_blank" | "match" | "sequence" | "short_answer" | "essay" | "image" | "video" | "audio" | "document" | "practical" | "viva"
       "response_format": "choice_single" | "choice_multi" | "boolean" | "blanks" | "pairs" | "order" | "text_short" | "text_long" | "evaluator_only"

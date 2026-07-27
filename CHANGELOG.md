@@ -7,6 +7,115 @@ remembering, and anything left behind as debt.
 
 ---
 
+## M3 — Exam Builder · *in progress*
+
+### Shipped — data layer and the Exam Health engine
+
+Migrations 0014–0016. No UI yet: schema and engine land and are tested first,
+which is why M2's authoring UI went in cleanly afterwards.
+
+**Two paper modes, expressed as a column.** Official, monthly, annual and
+practical exams freeze one paper at publish, so every candidate sits the same
+questions and scores are comparable. Practice and quiz kinds draw fresh per
+attempt, so repeated practice is not repeated memorisation.
+
+`exams.paper_mode` is a column defaulted from `kind`, not a switch on `kind`.
+A switch would scatter the same conditional through the builder, delivery, the
+grader and every report — and it would deny a chef who wants a fixed practice
+exam to compare two cohorts.
+
+**`draw_paper()` — one selector, two writers.** It returns the draw and writes
+nothing; `publish_exam()` inserts `exam_questions` from it, and M4 must insert
+`attempt_questions` from the same function. Two copies of "resolve rules into
+questions" is how the two modes silently diverge.
+
+The fallback strategy is a single `ORDER BY` rather than a widening loop —
+exact difficulty band first, then nearest adjacent, ties broken by
+`md5(id || seed)`. The other two guarantees are structural rather than
+conditional: a paper-wide exclusion list means no duplicates, and widening moves
+along difficulty only, so a section can never borrow another's questions. The
+seed is the exam id at publish and will be the attempt id at attempt start —
+different per candidate with no extra machinery, and reproducible in tests.
+
+**`question_snapshot()` — one place a key could leak.** It builds the
+candidate-visible payload with an explicit column list, never `select *`, and
+never reads `question_answer_keys` or `question_revisions`. Both writers call
+it, so there is exactly one thing to review. A test asserts no stored snapshot
+contains `correct`, `accept`, `rubric`, `keywords` or `modelAnswer`.
+
+**Exam Health validates against the real draw.** Nine checks, six blocking and
+three advisory. It is SQL rather than TypeScript for one reason: two rules can
+match the same question, and deduping makes the second fall short even though
+counting each rule independently says both are satisfiable. A validator that
+counted per-rule would pass and then publish would fail — the exact failure it
+exists to prevent. `publish_exam()` calls the same function, so the screen a
+chef reads and the gate that refuses them cannot disagree.
+
+Blocking: `structure.no_sections`, `structure.no_rules`, `rule.short`,
+`paper.duplicate`, `marks.zero`, `media.missing`.
+Advisory: `difficulty.narrow`, `duration.mismatch`, `translation.missing`.
+A chef may publish over a warning; they may not publish something broken.
+
+**Published exams are immutable**, enforced by a trigger rather than a UI
+convention — the thing it protects is an attempt already in flight, and a
+candidate answering question 7 of a paper somebody just redrew is being graded
+against a paper that no longer exists. The allowlist is written positively, so a
+column added by a future migration is locked by default rather than silently
+editable. `closes_at` and status transitions stay open; extending a window
+because a shift ran late is routine.
+
+`duplicate_exam()` is mandatory rather than a nicety: locking without it means
+correcting one typo requires rebuilding a 40-question exam by hand, which nobody
+will do — they will edit the database instead, and then the lock protects
+nothing.
+
+**M2's outstanding debt discharged**: `questions.usage_count` is now incremented
+at publish.
+
+### Fixed while building
+
+**A `CASE` expression in a trigger compiles every branch.** The shared child
+immutability trigger used `case tg_table_name when 'exam_rules' then
+new.section_id …`, which resolved `section_id` against `exam_sections` too and
+failed every insert with `record "new" has no field "section_id"`. Rewritten as
+`IF/ELSIF`, where only the taken branch is compiled.
+
+### Decisions taken
+
+| Decision | Chosen | Why not the alternative |
+|:--|:--|:--|
+| Paper freeze | Hybrid, per `paper_mode` column | One mode for everything either makes practice memorisable or makes official scores incomparable. |
+| Rule ownership | Sections own rules, `section_id` NOT NULL | Rules hanging off either parent means every paper-assembly query handles two. |
+| Rule shortfall | Blocks publishing, naming the rule and the gap | A silently short paper no longer totals the marks the exam claims. |
+| Candidate fallback | Never refuse at attempt start | An administrator's misconfiguration must not stop somebody sitting an exam. |
+| Validator location | SQL, called by both the UI and the gate | A TypeScript copy would count per-rule and miss overlapping pools. |
+| Post-publish edits | Trigger allowlist | A UI that hides fields is a suggestion; psql, imports and scripts are not bound by it. |
+| Assignment targets | Groups only, role by **key** | A uuid role target forces the visibility policy to join `user_roles` per row — the join the JWT claims model exists to avoid. |
+| Candidate access to `exam_questions` | **None** | Reading the table is reading the whole paper before the timer starts. M4 serves it through a definer route gated on an in-progress attempt. |
+
+### Deferred to M4, deliberately
+
+`attempt_questions` cannot exist yet: it needs a foreign key to `attempts`,
+which M4 owns. Creating `attempts` here would pull M4's core table forward. M3
+ships `paper_mode`, `draw_paper()` and the `fixed` path end to end; M4 adds the
+table and calls the same function. Recorded in the 0014 header alongside the
+other M4 obligations — persisting `fallback_reason` onto attempts, and
+`attempt_answers.question_revision` still outstanding from 0011.
+
+### Known technical debt
+
+- The per-attempt path is written but unexercised: `draw_paper()` is tested
+  directly, and `publish_exam()` handles `paper_mode='per_attempt'` by deriving
+  totals from the rules, but nothing draws for a real attempt until M4.
+- `exam_sections.duration_minutes` is accepted and stored but enforced by
+  nothing until M4 builds the delivery timer.
+- No individual retake mechanism — `max_attempts` applies to the whole cohort.
+  Adding `target_kind = 'user'` is a follow-up the schema accommodates.
+- The exam builder UI does not exist, so exams are currently creatable only
+  through the server actions or psql.
+
+---
+
 ## M2 — Question Bank · *in progress*
 
 ### Shipped
