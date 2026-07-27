@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { requirePermission } from '@/lib/auth/guards'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { dbId } from '@/lib/db/id'
 
 /**
  * Registration approval — the chef's queue.
@@ -54,10 +55,10 @@ export async function listPendingRegistrations(): Promise<PendingRegistration[]>
 }
 
 const approveSchema = z.object({
-  userId: z.string().uuid(),
+  userId: dbId(),
   outletId: z.string().uuid('Select an outlet.'),
   departmentId: z.string().uuid('Select a department.'),
-  brandId: z.string().uuid().optional().nullable(),
+  brandId: dbId().optional().nullable(),
 })
 
 export async function approveRegistration(input: unknown): Promise<MutationResult> {
@@ -137,7 +138,7 @@ export async function approveRegistration(input: unknown): Promise<MutationResul
 }
 
 const rejectSchema = z.object({
-  userId: z.string().uuid(),
+  userId: dbId(),
   reason: z.string().trim().min(3, 'Give a reason so the person knows why.').max(500),
 })
 

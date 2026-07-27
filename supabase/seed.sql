@@ -153,3 +153,41 @@ select '00000000-0000-0000-0000-00000000e004', p.id
    'learning.read'
  )
 on conflict do nothing;
+
+-- ── Question categories — starter taxonomy ───────────────────────────────────
+--
+-- Not placeholder in the way the outlets above are: an empty taxonomy does not
+-- merely look unfinished, it makes the bank unfilterable — and M3's exam builder
+-- selects questions BY CATEGORY, so with none seeded the first exam has nothing
+-- to draw from and the first chef must invent a taxonomy before writing a single
+-- question.
+--
+-- Six areas that apply across all three brands, sub-divided only where the split
+-- is genuinely useful. Chefs add their own from the editor; these exist so the
+-- first one does not start from nothing.
+--
+-- Fixed uuids (f-series, following the c/b/a/e convention above) so the seed
+-- stays idempotent and children can name their parent without a lookup.
+insert into public.categories (id, company_id, parent_id, name, slug, description, sort_order) values
+  ('00000000-0000-0000-0000-00000000f001', '00000000-0000-0000-0000-00000000c001', null,
+   'Food Safety', 'food-safety', 'Temperatures, storage, cross-contamination, HACCP.', 1),
+  ('00000000-0000-0000-0000-00000000f002', '00000000-0000-0000-0000-00000000c001', null,
+   'Hygiene', 'hygiene', 'Personal hygiene, cleaning schedules, pest control.', 2),
+  ('00000000-0000-0000-0000-00000000f003', '00000000-0000-0000-0000-00000000c001', null,
+   'Knife Skills', 'knife-skills', 'Cuts, sharpening, safe handling.', 3),
+  ('00000000-0000-0000-0000-00000000f004', '00000000-0000-0000-0000-00000000c001', null,
+   'Service', 'service', 'Guest interaction, order flow, complaint handling.', 4),
+  ('00000000-0000-0000-0000-00000000f005', '00000000-0000-0000-0000-00000000c001', null,
+   'Bar', 'bar', 'Spirits, cocktails, responsible service.', 5),
+  ('00000000-0000-0000-0000-00000000f006', '00000000-0000-0000-0000-00000000c001', null,
+   'Allergens', 'allergens', 'Declaration, substitution, cross-contact.', 6)
+on conflict do nothing;
+
+insert into public.categories (id, company_id, parent_id, name, slug, sort_order) values
+  ('00000000-0000-0000-0000-00000000fa01', '00000000-0000-0000-0000-00000000c001',
+   '00000000-0000-0000-0000-00000000f001', 'Temperature Control', 'temperature-control', 1),
+  ('00000000-0000-0000-0000-00000000fa02', '00000000-0000-0000-0000-00000000c001',
+   '00000000-0000-0000-0000-00000000f001', 'Storage & Labelling', 'storage-labelling', 2),
+  ('00000000-0000-0000-0000-00000000fa03', '00000000-0000-0000-0000-00000000c001',
+   '00000000-0000-0000-0000-00000000f003', 'Sharpening', 'sharpening', 1)
+on conflict do nothing;

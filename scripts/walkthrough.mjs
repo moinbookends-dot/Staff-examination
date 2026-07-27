@@ -56,6 +56,7 @@ const db = new Client({
 await db.connect()
 
 const created = []
+const createdQuestions = []
 
 async function createUser(label) {
   const email = `wt-${label}-${stamp}@bookends-test.local`
@@ -95,6 +96,16 @@ function claimsOf(token) {
 async function asUser(token, path) {
   const res = await fetch(`${URL_}/rest/v1/${path}`, {
     headers: { apikey: PUB, Authorization: `Bearer ${token}` },
+  })
+  return { status: res.status, body: await res.json().catch(() => null) }
+}
+
+/** Call an RPC the way supabase-js does from a server action. */
+async function rpc(token, name, args) {
+  const res = await fetch(`${URL_}/rest/v1/rpc/${name}`, {
+    method: 'POST',
+    headers: { apikey: PUB, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(args),
   })
   return { status: res.status, body: await res.json().catch(() => null) }
 }
@@ -246,9 +257,130 @@ try {
       'audit stored unchanged columns — storage budget at risk',
     )
   }
+  // ── 7. The question bank ───────────────────────────────────────────────────
+  //
+  // WHY THIS IS HERE AND NOT ONLY IN tests/integration: those tests talk to
+  // Postgres directly and FABRICATE the app claim, so they cannot see a broken
+  // PostgREST grant, a function signature PostgREST refuses to resolve, or an
+  // auth hook that stops minting perms. save_question() is the editor's only
+  // write path and it is reached exactly like this — POST /rest/v1/rpc/… with a
+  // real token. If it 404s here, every RLS test still passes and the editor is
+  // dead on arrival.
+  console.log('\n7. Question bank')
+
+  const questionContent = {
+    format: 'choice_single',
+    choices: [
+      { id: 'a', text: '63°C' },
+      { id: 'b', text: '74°C' },
+    ],
+  }
+
+  const saved = await rpc(chefSession.access_token, 'save_question', {
+    p_id: null,
+    p_type: 'mcq_single',
+    p_response_format: 'choice_single',
+    p_stem: `Walkthrough ${stamp}: minimum safe internal temperature for chicken?`,
+    p_content: questionContent,
+    p_answer_key: { format: 'choice_single', correct: 'b' },
+    p_change_note: 'created by the walkthrough',
+  })
+  check(
+    saved.status === 200 && Array.isArray(saved.body) && saved.body.length === 1,
+    'chef creates a question through save_question over HTTP',
+    `save_question returned ${saved.status}: ${JSON.stringify(saved.body)?.slice(0, 200)}`,
+  )
+
+  const questionId = saved.body?.[0]?.id
+  if (questionId) {
+    createdQuestions.push(questionId)
+    check(saved.body[0].revision === 1, 'new question starts at revision 1', `revision = ${saved.body[0].revision}`)
+    check(saved.body[0].status === 'draft', 'new question starts as a draft', `status = ${saved.body[0].status}`)
+
+    const key = await asUser(chefSession.access_token, `question_answer_keys?select=answer_key&question_id=eq.${questionId}`)
+    check(
+      key.body?.[0]?.answer_key?.correct === 'b',
+      'answer key landed in the same call as the question',
+      `chef read back ${JSON.stringify(key.body)?.slice(0, 120)}`,
+    )
+
+    // The change note only exists because 0013 routes it through a
+    // transaction-local GUC. Over HTTP each request is its own transaction, so
+    // this also proves the GUC survives the trigger and nothing else.
+    const { rows: history } = await db.query(
+      'select revision, change_note from public.question_revisions where question_id = $1 order by revision',
+      [questionId],
+    )
+    check(history.length === 1, 'revision 1 is in the history table', `history had ${history.length} rows`)
+    check(
+      history[0]?.change_note === 'created by the walkthrough',
+      'the change note reached question_revisions',
+      `change_note = ${JSON.stringify(history[0]?.change_note)}`,
+    )
+
+    // ── The leak test, over real HTTP with a real employee token ────────────
+    const empKey = await asUser(refreshedSession.access_token, `question_answer_keys?select=answer_key&question_id=eq.${questionId}`)
+    check(
+      Array.isArray(empKey.body) && empKey.body.length === 0,
+      'EMPLOYEE CANNOT READ THE ANSWER KEY over HTTP',
+      `employee read an answer key: ${JSON.stringify(empKey.body)?.slice(0, 150)}`,
+    )
+
+    const empQuestion = await asUser(refreshedSession.access_token, `questions?select=id&id=eq.${questionId}`)
+    check(
+      Array.isArray(empQuestion.body) && empQuestion.body.length === 0,
+      'employee cannot browse the question bank over HTTP',
+      `employee saw ${empQuestion.body?.length} questions`,
+    )
+
+    const empWrite = await rpc(refreshedSession.access_token, 'save_question', {
+      p_id: null,
+      p_type: 'mcq_single',
+      p_response_format: 'choice_single',
+      p_stem: 'An employee should not be able to write this',
+      p_content: questionContent,
+      p_answer_key: { format: 'choice_single', correct: 'a' },
+    })
+    check(
+      empWrite.status >= 400,
+      'employee is refused by save_question (SECURITY INVOKER holds)',
+      `employee write returned ${empWrite.status} — the RPC is bypassing RLS`,
+    )
+
+    // ── A reword bumps the revision, over HTTP ─────────────────────────────
+    const reworded = await rpc(chefSession.access_token, 'save_question', {
+      p_id: questionId,
+      p_type: 'mcq_single',
+      p_response_format: 'choice_single',
+      p_stem: `Walkthrough ${stamp}: what internal temperature must chicken reach?`,
+      p_content: questionContent,
+      p_answer_key: { format: 'choice_single', correct: 'b' },
+      p_change_note: 'reworded',
+    })
+    check(
+      reworded.body?.[0]?.revision === 2,
+      'rewording bumps the revision',
+      `revision after reword = ${reworded.body?.[0]?.revision}`,
+    )
+
+    const { rows: after } = await db.query(
+      'select revision, stem, change_note from public.question_revisions where question_id = $1 order by revision',
+      [questionId],
+    )
+    check(
+      after.length === 2 && after[0].stem !== after[1].stem,
+      'both wordings are preserved in history',
+      `history = ${JSON.stringify(after.map((r) => r.revision))}`,
+    )
+    check(after[1]?.change_note === 'reworded', 'the second note is stamped on revision 2', `note = ${after[1]?.change_note}`)
+  }
 } catch (e) {
   bad(`walkthrough threw: ${e.message}`)
 } finally {
+  if (createdQuestions.length) {
+    await db.query('delete from public.questions where id = any($1::uuid[])', [createdQuestions])
+    console.log(`  🧹 removed ${createdQuestions.length} test question(s)`)
+  }
   for (const id of created) {
     await fetch(`${URL_}/auth/v1/admin/users/${id}`, { method: 'DELETE', headers: adminHeaders })
   }

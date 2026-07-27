@@ -11,6 +11,100 @@ remembering, and anything left behind as debt.
 
 ### Shipped
 
+**Question authoring UI** — the bank is reachable from the application
+
+Everything before this was headless. `/questions` now lists, filters and
+searches the bank; `/questions/new` and `/questions/[id]` author a question in
+any of the nine formats, preview it exactly as a candidate will see it, publish
+it and read its revision history.
+
+- **UI format registry** (`src/components/questions/registry.tsx`) — the
+  counterpart `src/lib/questions/registry.ts` has described since M2 began.
+  Editors and renderers load through `next/dynamic` thunks, resolved once at
+  module scope: calling `dynamic()` during render mints a new component identity
+  per keystroke, so React unmounts the editor and the cursor leaves the field.
+- **Renderers are the candidate-facing components**, not preview-only mockups.
+  M4's exam delivery mounts the same ones, which is the only way a preview can
+  be trusted. They receive `content` and never the answer key.
+- **Editors take content and key as one `onChange`.** Ticking "correct" beside
+  option c is a key edit made from a content control, and deleting option c must
+  drop it from the key in the same commit. Two callbacks means a render where the
+  key names an option that no longer exists — valid to both schemas, silently
+  wrong for every candidate.
+- **Ordering is up/down buttons, not drag-and-drop.** No dnd dependency, works
+  with a keyboard, and does not fight the scroll gesture on the phones this
+  platform's staff actually use.
+- **Filters live in the URL.** A chef can bookmark and share "active
+  knife-skills questions at difficulty 4", and it is the shape M3's rule-based
+  exam selection will store.
+- **Starter category tree seeded.** An empty taxonomy is not merely unfinished —
+  the M3 exam builder selects *by category*, so the first exam would have nothing
+  to draw from.
+
+**`save_question()` + a reachable change note** — migration 0013
+
+One RPC writes the question, its answer key and its tag set in a single
+transaction. supabase-js has no transactions, so two round trips would leave a
+question with no key when the second failed: ungradeable, invisible until an exam
+runs. `SECURITY INVOKER`, so every policy from 0010 still applies — a
+`SECURITY DEFINER` version would quietly become the one write path with no
+authorisation.
+
+It also makes `question_revisions.change_note` writable for the first time. 0012
+declared the column and promised it in the table comment, but history rows come
+from triggers and a trigger cannot know *why* an edit was made. The reason now
+travels as a transaction-local GUC that both capture triggers read; every other
+writer (seeds, psql, the future importer) still gets a null note.
+
+**The publish gate** — `src/lib/questions/publish.ts`
+
+`publishIssues()` strict-parses content and key, then runs `validateQuestion()`
+across them. Pure, so the editor calls it on every keystroke to decide whether
+Publish is enabled and the server calls it against what is actually *stored*
+before flipping the status. Same code, so an enabled button cannot 403.
+
+### Fixed — the app did not work in a browser
+
+Found by rendering a page with a real session, which nothing had ever done: the
+RLS suite talks to Postgres directly and fabricates the `app` claim, and
+`walkthrough.mjs` drives PostgREST over HTTP. Both were green throughout. Three
+independent bugs, each producing the same symptom — a signed-in, approved user
+bounced to `/pending` forever.
+
+1. **`middleware.ts` never ran.** It sat at the repository root; Next resolves
+   the convention beside `app`, so in a `src/` project it must be `src/`. Next 16
+   also renamed middleware to **proxy**. `next build` prints
+   "ƒ Proxy (Middleware)" either way because the file compiles — it is simply
+   never invoked. Now `src/proxy.ts`, exporting `proxy`. The tell was `/`
+   returning 404 instead of redirecting to `/en`.
+
+2. **The proxy's cookie decoder used `atob()`.** `@supabase/ssr` writes the
+   session cookie as **base64url** by default, and JWT segments are base64url by
+   specification; `atob` throws on the `-` and `_` they use. The function fails
+   closed, so the throw read as "not approved". Chunk reassembly also sorted
+   lexicographically, which scrambles at ten chunks.
+
+3. **`getAppClaims()` never loaded a session.** `createServerClient` sets
+   `skipAutoInitialize: true`, so `getClaims()` calls `getSession()`, finds
+   nothing, and returns `{ data: null }` *with no error* — landing on `DENY_ALL`.
+   It needs an explicit `await supabase.auth.initialize()`. `getUser()`
+   initialises as a side effect, which is why the proxy's `updateSession()`
+   worked and this did not.
+
+4. **Zod 4's `.uuid()` rejects every id in `seed.sql`.** v4 enforces the RFC 4122
+   version and variant nibbles; `00000000-0000-0000-0000-00000000c001` has
+   neither, though Postgres stores it happily. So the `app` claim failed to
+   parse on `company_id` and fell through to `DENY_ALL`. The same latent break
+   sat in `approveRegistration`, where every seeded outlet and department id
+   would have been refused. Added `dbId()` (`src/lib/db/id.ts`) for values that
+   come out of a `uuid` column, with a test that sweeps every id in `seed.sql`.
+
+**`scripts/render-check.mjs`** exists so this class of bug cannot return: it
+drives the real pages with a real session cookie and asserts on the HTML.
+`npm run check:render`, against a running `npm run dev`.
+
+### Shipped earlier in M2
+
 **Zod contract for 9 response formats** — `09c2c45`
 
 Three shapes per format, and the separation is load-bearing:
@@ -83,6 +177,13 @@ validation. `questionContentDraftSchema` now checks shape only and gates
 | Question pools | Rule-based saved filters | Membership tables go stale — questions added later belong to no pool until someone remembers. |
 | Registry | One interface, lazy UI thunks | A registry importing React breaks Node import scripts and bloats the server bundle. |
 | Video | External URLs only | 5 GB monthly egress is 300 staff watching one 15 MB clip, once. |
+| Editor saves | One RPC, one transaction | Two client round trips leave a question with no answer key when the second fails — ungradeable, and invisible until an exam runs. |
+| Save trigger | Explicit button, never autosave | A debounced autosave mints a revision on every typing pause once a question is live, fragmenting the analytics the revision counter exists to protect. |
+| Change note | Transaction-local GUC | The alternative is a column on `questions` (which then bumps the revision it describes) or an UPDATE on the append-only history table. |
+| Reordering | Up/down buttons | Drag-and-drop needs a dependency, has no keyboard path, and fights the scroll gesture on the phones staff actually use. |
+| Preview | The real candidate renderer | A separate preview component can drift from delivery, and the drift is only discovered during an exam. |
+| Filters | URL parameters | Shareable and bookmarkable, survives back-navigation, and is the shape M3's rule-based selection stores. |
+| DB identifiers | `dbId()` / `z.guid()` | Zod 4's `.uuid()` enforces RFC 4122 version bits that Postgres does not, and rejects every fixed id in the seed. |
 
 ### Known debt
 
@@ -91,6 +192,17 @@ validation. `questionContentDraftSchema` now checks shape only and gates
 - Geist ships a Latin subset only; Devanagari and Gujarati fall back to a system
   font. Needs script-appropriate webfonts at M8.
 - `hi` / `gu` / `hi-Latn` message files are stubs falling back to English.
+- **Media attachment is not built.** The type selector offers all 14 types, but
+  the four media ones author without a stimulus: no storage bucket, no upload,
+  no external video URL. Its own slice — a bucket migration, upload security and
+  byte accounting against the 1 GB cap do not belong in a UI commit.
+- **Bulk CSV import is not wired up.** The registry's `serialize`/`deserialize`
+  are written and round-trip-tested; `questions.import` has no screen behind it.
+- No translation UI yet, and no category hierarchy manager — categories are
+  created inline from the editor's picker.
+- Revision history is read-only. No diff view and no rollback.
+- `scripts/render-check.mjs` needs a running dev server, so it is not in CI. Run
+  it before merging anything that touches auth, routing or i18n.
 
 ---
 

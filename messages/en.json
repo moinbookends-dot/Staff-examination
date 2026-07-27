@@ -55,6 +55,92 @@
       "sent": "If that email is registered, a reset link is on its way."
     }
   },
+  "questions": {
+    "title": "Question bank",
+    "subtitle": "Everything an exam can draw from. Only active questions are eligible.",
+    "new": "New question",
+    "empty": "No questions match. Clear the filters, or write the first one.",
+    "search": "Search",
+    "searchPlaceholder": "Search questions…",
+    "previous": "Previous",
+    "next": "Next",
+    "pagination": "Page {page} of {lastPage} · {total} questions",
+    "columns": {
+      "question": "Question",
+      "type": "Type",
+      "category": "Category",
+      "difficulty": "Difficulty",
+      "marks": "Marks",
+      "status": "Status",
+      "revision": "Rev"
+    },
+    "status": {
+      "draft": "Draft",
+      "active": "Active",
+      "retired": "Retired"
+    },
+    "filters": {
+      "anyStatus": "Any status",
+      "anyType": "Any type",
+      "anyCategory": "Any category",
+      "anyDifficulty": "Any difficulty",
+      "clear": "Clear"
+    },
+    "types": {
+      "mcq_single": "Multiple choice — one answer",
+      "mcq_multi": "Multiple choice — several answers",
+      "true_false": "True or false",
+      "fill_blank": "Fill in the blanks",
+      "match": "Match the following",
+      "sequence": "Put in order",
+      "short_answer": "Short answer",
+      "essay": "Essay",
+      "image": "Image-based",
+      "video": "Video-based",
+      "audio": "Audio-based",
+      "document": "Document-based",
+      "practical": "Practical assessment",
+      "viva": "Viva"
+    },
+    "formats": {
+      "choice_single": {
+        "label": "One correct option",
+        "description": "The candidate picks a single option. Marked automatically."
+      },
+      "choice_multi": {
+        "label": "Several correct options",
+        "description": "The candidate ticks every option that applies. Supports partial credit."
+      },
+      "boolean": {
+        "label": "True or false",
+        "description": "A statement the candidate judges true or false."
+      },
+      "blanks": {
+        "label": "Fill in the blanks",
+        "description": "A sentence with gaps to type into. Accepts alternative spellings."
+      },
+      "pairs": {
+        "label": "Match the following",
+        "description": "Each item on the left is paired with one on the right."
+      },
+      "order": {
+        "label": "Put in order",
+        "description": "The candidate arranges steps into the correct sequence."
+      },
+      "text_short": {
+        "label": "Short written answer",
+        "description": "A sentence or two, marked by a chef. Not scored automatically."
+      },
+      "text_long": {
+        "label": "Essay",
+        "description": "A longer written answer, marked by a chef against a rubric."
+      },
+      "evaluator_only": {
+        "label": "Assessed in person",
+        "description": "A practical or viva. The candidate types nothing; a chef scores the rubric."
+      }
+    }
+  },
   "nav": {
     "dashboard": "Dashboard",
     "questions": "Question bank",

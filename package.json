@@ -12,6 +12,8 @@
     "test:unit": "vitest run --project unit",
     "test:rls": "vitest run --project rls",
     "test:watch": "vitest",
+    "check:render": "node scripts/render-check.mjs",
+    "check:walkthrough": "node scripts/walkthrough.mjs",
     "db:seed": "node scripts/apply-seed.mjs",
     "gen:types": "node scripts/gen-types.mjs"
   },

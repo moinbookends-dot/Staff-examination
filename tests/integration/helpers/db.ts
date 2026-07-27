@@ -169,6 +169,15 @@ export function employee(id: string, outlet = OUTLET_AIKO): TestClaims {
   }
 }
 
+/**
+ * Mirrors DEFAULT_ROLE_PERMISSIONS.chef in src/lib/auth/permissions.ts.
+ *
+ * Keep it complete even for keys no test uses yet. A fixture that grants LESS
+ * than the real role turns every allow-case into a false negative that reads
+ * like a policy bug; one that grants MORE turns every deny-case into a false
+ * pass, which is worse and silent. Cf. the M1 approval-queue bug, where a
+ * fixture more convenient than reality hid a policy that filtered out every row.
+ */
 export function chef(id: string, outlet = OUTLET_AIKO): TestClaims {
   return {
     sub: id,
@@ -179,11 +188,13 @@ export function chef(id: string, outlet = OUTLET_AIKO): TestClaims {
       roles: ['chef'],
       perms: [
         'questions.read', 'questions.create', 'questions.update',
-        'exams.read', 'exams.create', 'exams.publish',
+        'questions.retire', 'questions.import', 'questions.translate',
+        'exams.read', 'exams.create', 'exams.update', 'exams.publish',
+        'exams.assign', 'exams.archive',
         'attempts.read_team', 'attempts.read_own',
-        'evaluation.evaluate', 'evaluation.verify',
+        'evaluation.evaluate', 'evaluation.verify', 'evaluation.return', 'evaluation.publish',
         'users.read_team', 'users.approve',
-        'reports.read_team', 'reports.read_own',
+        'reports.read_team', 'reports.read_own', 'reports.export',
         'learning.read', 'learning.manage',
       ],
     },

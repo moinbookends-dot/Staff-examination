@@ -4,7 +4,25 @@ import { routing } from '@/lib/i18n/routing'
 import { updateSession } from '@/lib/supabase/middleware'
 
 /**
- * Middleware: locale resolution → session refresh → route protection.
+ * Proxy: locale resolution → session refresh → route protection.
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ THIS FILE MUST LIVE AT src/proxy.ts, AND THE EXPORT MUST BE `proxy`.      │
+ * │                                                                           │
+ * │ It sat at the repository root as middleware.ts from M0 and NEVER RAN.     │
+ * │ Next resolves this convention beside `app` — so in a src/ project it is   │
+ * │ src/, not the root — and Next 16 renamed middleware to proxy (the codemod │
+ * │ is `npx @next/codemod middleware-to-proxy`). Neither mistake produces a   │
+ * │ warning; `next build` even prints "ƒ Proxy (Middleware)" because the file │
+ * │ is compiled. It is simply never invoked.                                  │
+ * │                                                                           │
+ * │ The tell is that `/` returns 404 instead of redirecting to `/en`.         │
+ * │ Everything else still worked, which is why it went unnoticed for two      │
+ * │ milestones: the (app) layout re-checks approval and each action calls     │
+ * │ requirePermission(), so unauthenticated users were bounced to /pending by │
+ * │ the layout rather than to /login by this file. Wrong destination, right   │
+ * │ outcome — which is exactly the argument for the layered design below.     │
+ * └───────────────────────────────────────────────────────────────────────────┘
  *
  * ORDER MATTERS AND THE COMPOSITION IS FRAGILE. next-intl runs first and may
  * return a redirect (adding a locale prefix). updateSession then writes
@@ -13,10 +31,11 @@ import { updateSession } from '@/lib/supabase/middleware'
  * src/lib/supabase/middleware.ts.
  *
  * WHAT THIS IS AND IS NOT. This is a routing convenience, not the security
- * boundary. Middleware can be bypassed by calling API routes directly, so
- * every server action and route handler re-checks authorisation via
+ * boundary. A proxy can be bypassed by calling API routes directly, so every
+ * server action and route handler re-checks authorisation via
  * requirePermission(), and RLS re-checks it again at the database. Three
- * layers, and only the innermost is authoritative.
+ * layers, and only the innermost is authoritative — proven by the two
+ * milestones this file spent switched off with nothing leaking.
  */
 
 const intlMiddleware = createIntlMiddleware(routing)
@@ -50,7 +69,7 @@ function localeOf(pathname: string): string {
   return routing.defaultLocale
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   // 1 — Locale. May already be a redirect or rewrite.
   const response = intlMiddleware(request) ?? NextResponse.next()
 
@@ -125,11 +144,13 @@ function isApprovedFromToken(request: NextRequest): boolean {
   const projectRef = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).hostname.split('.')[0]
   const cookieName = `sb-${projectRef}-auth-token`
 
-  // Large tokens are split across .0, .1, … chunks by @supabase/ssr.
+  // Large tokens are split across .0, .1, … chunks by @supabase/ssr. Sorted
+  // NUMERICALLY, not lexicographically: with ten or more chunks ".10" sorts
+  // before ".2" as text, and the reassembled JSON is silently scrambled.
   const chunks = request.cookies
     .getAll()
     .filter((c) => c.name === cookieName || c.name.startsWith(`${cookieName}.`))
-    .sort((a, b) => a.name.localeCompare(b.name))
+    .sort((a, b) => chunkIndex(a.name, cookieName) - chunkIndex(b.name, cookieName))
     .map((c) => c.value)
     .join('')
 
@@ -137,22 +158,51 @@ function isApprovedFromToken(request: NextRequest): boolean {
 
   try {
     const raw = chunks.startsWith('base64-')
-      ? atob(chunks.slice('base64-'.length))
+      ? decodeBase64Url(chunks.slice('base64-'.length))
       : chunks
 
     const session = JSON.parse(raw)
     const accessToken: string | undefined = session?.access_token ?? session?.[0]
     if (!accessToken) return false
 
-    const payload = JSON.parse(
-      atob(accessToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')),
-    )
+    const payload = JSON.parse(decodeBase64Url(accessToken.split('.')[1]))
     return payload?.app?.approved === true
   } catch {
     // Unparseable cookie: treat as unapproved. Failing closed is correct — the
     // cost is one redirect to /pending, which self-corrects on refresh.
     return false
   }
+}
+
+function chunkIndex(name: string, base: string): number {
+  if (name === base) return -1
+  return Number(name.slice(base.length + 1)) || 0
+}
+
+/**
+ * base64URL → string. BOTH call sites above need this, and getting it wrong is
+ * invisible until it is catastrophic.
+ *
+ * @supabase/ssr writes the session cookie with cookieEncoding 'base64url' by
+ * DEFAULT, and JWT segments are base64url by specification. Plain atob() throws
+ * on the '-' and '_' that base64url uses in place of '+' and '/'. Since this
+ * function fails closed, that throw reads as "not approved" — so every signed-in
+ * user is redirected to /pending, forever, and the only clue is that the app
+ * works fine for nobody.
+ *
+ * The UTF-8 step matters here too, and not academically: atob yields a latin1
+ * string, so a session carrying a Devanagari or Gujarati display name decodes
+ * to mojibake. JSON.parse survives it, which is exactly why it would go
+ * unnoticed until something read a name.
+ */
+function decodeBase64Url(value: string): string {
+  const base64 = value.replace(/-/g, '+').replace(/_/g, '/')
+  const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=')
+  const binary = atob(padded)
+
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return new TextDecoder().decode(bytes)
 }
 
 export const config = {

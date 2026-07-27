@@ -1,6 +1,7 @@
 import 'server-only'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
+import { dbId } from '@/lib/db/id'
 import type { Permission, RoleKey } from './permissions'
 
 /**
@@ -11,14 +12,21 @@ import type { Permission, RoleKey } from './permissions'
  * verifying the signature — a forged cookie sails straight through. getClaims()
  * verifies against the project's signing keys. Since these claims decide
  * authorisation, verification is the entire point.
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ initialize() IS NOT OPTIONAL. See below, and do not "tidy" it away.       │
+ * └───────────────────────────────────────────────────────────────────────────┘
  */
 
+// dbId(), not z.string().uuid(): these arrive from uuid columns, and Zod 4's
+// strict uuid() rejects the seeded org ids outright. See src/lib/db/id.ts —
+// that mismatch is what made every signed-in user look unapproved.
 const appClaimsSchema = z.object({
   approved: z.boolean().default(false),
-  company_id: z.string().uuid().nullable().default(null),
-  brand_id: z.string().uuid().nullable().default(null),
-  outlet_id: z.string().uuid().nullable().default(null),
-  department_id: z.string().uuid().nullable().default(null),
+  company_id: dbId().nullable().default(null),
+  brand_id: dbId().nullable().default(null),
+  outlet_id: dbId().nullable().default(null),
+  department_id: dbId().nullable().default(null),
   roles: z.array(z.string()).default([]),
   perms: z.array(z.string()).default([]),
 })
@@ -52,6 +60,26 @@ const DENY_ALL: AppClaims = {
  */
 export async function getAppClaims(): Promise<AppClaims> {
   const supabase = await createClient()
+
+  // ╔═════════════════════════════════════════════════════════════════════════╗
+  // ║ THE SERVER CLIENT DOES NOT LOAD ITS SESSION ON ITS OWN.                 ║
+  // ║                                                                         ║
+  // ║ @supabase/ssr constructs createServerClient with skipAutoInitialize:    ║
+  // ║ true, so nothing reads the cookie until initialize() is awaited. Skip   ║
+  // ║ it and getClaims() calls getSession() internally, finds no session, and ║
+  // ║ returns { data: null } WITH NO ERROR — which lands on DENY_ALL below.   ║
+  // ║                                                                         ║
+  // ║ The symptom is not a crash. Every signed-in user is treated as          ║
+  // ║ unapproved: the (app) layout bounces them to /pending and every guard   ║
+  // ║ throws AuthenticationError, while the token in their cookie is          ║
+  // ║ perfectly valid. Nothing in the RLS suite or the HTTP walkthrough can   ║
+  // ║ see it, because neither renders a page.                                 ║
+  // ║                                                                         ║
+  // ║ getUser() happens to initialise as a side effect, which is why the      ║
+  // ║ proxy's updateSession() worked and this did not.                        ║
+  // ╚═════════════════════════════════════════════════════════════════════════╝
+  await supabase.auth.initialize()
+
   const { data, error } = await supabase.auth.getClaims()
 
   if (error || !data?.claims) return DENY_ALL

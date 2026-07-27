@@ -53,6 +53,7 @@ const checks = {
   roles: 'select count(*)::int n from public.roles',
   permissions: 'select count(*)::int n from public.permissions',
   role_permissions: 'select count(*)::int n from public.role_permissions',
+  categories: 'select count(*)::int n from public.categories where deleted_at is null',
 }
 
 console.log('Seeded:')

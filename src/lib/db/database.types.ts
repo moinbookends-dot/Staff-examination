@@ -871,6 +871,10 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "save_question": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "set_updated_at": {
         Args: Record<string, unknown>
         Returns: unknown
