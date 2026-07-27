@@ -91,10 +91,10 @@ export async function asAnon<T>(
 }
 
 /**
- * Run `fn` with RLS bypassed, for arranging fixtures.
+ * Run `fn` with RLS bypassed, for arranging fixtures. ROLLED BACK.
  *
- * Never assert through this — it is the setup path, not the subject. A test
- * that both arranges and asserts as the owner proves nothing about policies.
+ * Never assert policy behaviour through this — it is the setup path, not the
+ * subject. A test that both arranges and asserts as the owner proves nothing.
  */
 export async function asOwner<T>(
   client: Client,
@@ -106,6 +106,33 @@ export async function asOwner<T>(
     return await fn(client)
   } finally {
     await client.query('rollback')
+  }
+}
+
+/**
+ * Like asOwner, but COMMITS.
+ *
+ * Needed when the thing under test is a side effect that must outlive the
+ * transaction — a trigger writing to another table, for instance. Under the
+ * rolled-back asOwner, the write happens and then vanishes, so the assertion
+ * sees nothing and the trigger looks broken when it is fine.
+ *
+ * Use sparingly and clean up in afterAll: anything written here is visible to
+ * every other test in the file.
+ */
+export async function mutateAsOwner<T>(
+  client: Client,
+  fn: (client: Client) => Promise<T>,
+): Promise<T> {
+  await client.query('begin')
+  try {
+    await client.query('reset role')
+    const result = await fn(client)
+    await client.query('commit')
+    return result
+  } catch (err) {
+    await client.query('rollback')
+    throw err
   }
 }
 

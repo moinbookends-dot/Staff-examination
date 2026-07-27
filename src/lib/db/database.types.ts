@@ -508,6 +508,54 @@ export type Database = {
         }
         Relationships: []
       }
+      "question_revisions": {
+        Row: {
+          "question_id": string
+          "revision": number
+          "stem": string
+          "content": Json
+          "answer_key": Json | null
+          "response_format": Database["public"]["Enums"]["response_format"]
+          "question_type": Database["public"]["Enums"]["question_type"]
+          "marks": number
+          "negative_marks": number
+          "content_version": number
+          "edited_by": string | null
+          "edited_at": string
+          "change_note": string | null
+        }
+        Insert: {
+          "question_id": string
+          "revision": number
+          "stem": string
+          "content": Json
+          "answer_key"?: Json | null
+          "response_format": Database["public"]["Enums"]["response_format"]
+          "question_type": Database["public"]["Enums"]["question_type"]
+          "marks": number
+          "negative_marks": number
+          "content_version"?: number
+          "edited_by"?: string | null
+          "edited_at"?: string
+          "change_note"?: string | null
+        }
+        Update: {
+          "question_id"?: string
+          "revision"?: number
+          "stem"?: string
+          "content"?: Json
+          "answer_key"?: Json | null
+          "response_format"?: Database["public"]["Enums"]["response_format"]
+          "question_type"?: Database["public"]["Enums"]["question_type"]
+          "marks"?: number
+          "negative_marks"?: number
+          "content_version"?: number
+          "edited_by"?: string | null
+          "edited_at"?: string
+          "change_note"?: string | null
+        }
+        Relationships: []
+      }
       "question_tags": {
         Row: {
           "question_id": string
@@ -763,7 +811,19 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "capture_answer_key_revision": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "capture_question_revision": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "custom_access_token_hook": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "get_question_revision": {
         Args: Record<string, unknown>
         Returns: unknown
       }

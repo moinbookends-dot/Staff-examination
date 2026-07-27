@@ -180,11 +180,9 @@ try {
     'old token already reflects approval — unexpected',
   )
 
-  const { rows: meStatus } = await db.query(
-    `select approval_status from public.me_status()`,
-  ).catch(() => ({ rows: [] }))
-  // me_status() is auth.uid()-scoped, so it returns nothing from a service
-  // connection; verified through the app instead. Left here as documentation.
+  // NOTE: me_status() cannot be exercised from here — it is scoped to
+  // auth.uid() and this is a service-role connection with no user. The /pending
+  // screen covers it, and tests/integration exercises it under a real claim.
 
   const refreshed = await fetch(`${URL_}/auth/v1/token?grant_type=refresh_token`, {
     method: 'POST',
