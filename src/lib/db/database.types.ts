@@ -97,6 +97,45 @@ export type Database = {
         }
         Relationships: []
       }
+      "categories": {
+        Row: {
+          "id": string
+          "company_id": string
+          "parent_id": string | null
+          "name": string
+          "slug": string
+          "description": string | null
+          "sort_order": number
+          "deleted_at": string | null
+          "created_at": string
+          "updated_at": string
+        }
+        Insert: {
+          "id"?: string
+          "company_id": string
+          "parent_id"?: string | null
+          "name": string
+          "slug": string
+          "description"?: string | null
+          "sort_order"?: number
+          "deleted_at"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+        }
+        Update: {
+          "id"?: string
+          "company_id"?: string
+          "parent_id"?: string | null
+          "name"?: string
+          "slug"?: string
+          "description"?: string | null
+          "sort_order"?: number
+          "deleted_at"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+        }
+        Relationships: []
+      }
       "companies": {
         Row: {
           "id": string
@@ -397,6 +436,214 @@ export type Database = {
         }
         Relationships: []
       }
+      "question_answer_keys": {
+        Row: {
+          "question_id": string
+          "answer_key": Json
+          "created_at": string
+          "updated_at": string
+        }
+        Insert: {
+          "question_id": string
+          "answer_key": Json
+          "created_at"?: string
+          "updated_at"?: string
+        }
+        Update: {
+          "question_id"?: string
+          "answer_key"?: Json
+          "created_at"?: string
+          "updated_at"?: string
+        }
+        Relationships: []
+      }
+      "question_media": {
+        Row: {
+          "id": string
+          "question_id": string
+          "kind": string
+          "provider": string
+          "storage_path": string | null
+          "external_url": string | null
+          "mime_type": string | null
+          "bytes": number | null
+          "width": number | null
+          "height": number | null
+          "duration_seconds": number | null
+          "alt_text": string | null
+          "sort_order": number
+          "created_at": string
+        }
+        Insert: {
+          "id"?: string
+          "question_id": string
+          "kind": string
+          "provider"?: string
+          "storage_path"?: string | null
+          "external_url"?: string | null
+          "mime_type"?: string | null
+          "bytes"?: number | null
+          "width"?: number | null
+          "height"?: number | null
+          "duration_seconds"?: number | null
+          "alt_text"?: string | null
+          "sort_order"?: number
+          "created_at"?: string
+        }
+        Update: {
+          "id"?: string
+          "question_id"?: string
+          "kind"?: string
+          "provider"?: string
+          "storage_path"?: string | null
+          "external_url"?: string | null
+          "mime_type"?: string | null
+          "bytes"?: number | null
+          "width"?: number | null
+          "height"?: number | null
+          "duration_seconds"?: number | null
+          "alt_text"?: string | null
+          "sort_order"?: number
+          "created_at"?: string
+        }
+        Relationships: []
+      }
+      "question_tags": {
+        Row: {
+          "question_id": string
+          "tag_id": string
+        }
+        Insert: {
+          "question_id": string
+          "tag_id": string
+        }
+        Update: {
+          "question_id"?: string
+          "tag_id"?: string
+        }
+        Relationships: []
+      }
+      "question_translations": {
+        Row: {
+          "question_id": string
+          "locale": string
+          "stem": string
+          "content": Json
+          "explanation": string | null
+          "status": string
+          "source": string
+          "translated_by": string | null
+          "reviewed_by": string | null
+          "created_at": string
+          "updated_at": string
+        }
+        Insert: {
+          "question_id": string
+          "locale": string
+          "stem": string
+          "content"?: Json
+          "explanation"?: string | null
+          "status"?: string
+          "source"?: string
+          "translated_by"?: string | null
+          "reviewed_by"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+        }
+        Update: {
+          "question_id"?: string
+          "locale"?: string
+          "stem"?: string
+          "content"?: Json
+          "explanation"?: string | null
+          "status"?: string
+          "source"?: string
+          "translated_by"?: string | null
+          "reviewed_by"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+        }
+        Relationships: []
+      }
+      "questions": {
+        Row: {
+          "id": string
+          "company_id": string
+          "brand_id": string | null
+          "type": Database["public"]["Enums"]["question_type"]
+          "response_format": Database["public"]["Enums"]["response_format"]
+          "content_version": number
+          "stem": string
+          "content": Json
+          "category_id": string | null
+          "difficulty": number
+          "marks": number
+          "negative_marks": number
+          "estimated_seconds": number | null
+          "explanation": string | null
+          "reference_note": string | null
+          "status": Database["public"]["Enums"]["question_status"]
+          "source": string
+          "usage_count": number
+          "created_by": string
+          "updated_by": string | null
+          "deleted_at": string | null
+          "created_at": string
+          "updated_at": string
+          "search_tsv": string | null
+        }
+        Insert: {
+          "id"?: string
+          "company_id": string
+          "brand_id"?: string | null
+          "type": Database["public"]["Enums"]["question_type"]
+          "response_format": Database["public"]["Enums"]["response_format"]
+          "content_version"?: number
+          "stem": string
+          "content"?: Json
+          "category_id"?: string | null
+          "difficulty"?: number
+          "marks"?: number
+          "negative_marks"?: number
+          "estimated_seconds"?: number | null
+          "explanation"?: string | null
+          "reference_note"?: string | null
+          "status"?: Database["public"]["Enums"]["question_status"]
+          "source"?: string
+          "usage_count"?: number
+          "created_by": string
+          "updated_by"?: string | null
+          "deleted_at"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+        }
+        Update: {
+          "id"?: string
+          "company_id"?: string
+          "brand_id"?: string | null
+          "type"?: Database["public"]["Enums"]["question_type"]
+          "response_format"?: Database["public"]["Enums"]["response_format"]
+          "content_version"?: number
+          "stem"?: string
+          "content"?: Json
+          "category_id"?: string | null
+          "difficulty"?: number
+          "marks"?: number
+          "negative_marks"?: number
+          "estimated_seconds"?: number | null
+          "explanation"?: string | null
+          "reference_note"?: string | null
+          "status"?: Database["public"]["Enums"]["question_status"]
+          "source"?: string
+          "usage_count"?: number
+          "created_by"?: string
+          "updated_by"?: string | null
+          "deleted_at"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+        }
+        Relationships: []
+      }
       "role_permissions": {
         Row: {
           "role_id": string
@@ -448,6 +695,30 @@ export type Database = {
           "sort_order"?: number
           "created_at"?: string
           "updated_at"?: string
+        }
+        Relationships: []
+      }
+      "tags": {
+        Row: {
+          "id": string
+          "company_id": string
+          "name": string
+          "slug": string
+          "created_at": string
+        }
+        Insert: {
+          "id"?: string
+          "company_id": string
+          "name": string
+          "slug": string
+          "created_at"?: string
+        }
+        Update: {
+          "id"?: string
+          "company_id"?: string
+          "name"?: string
+          "slug"?: string
+          "created_at"?: string
         }
         Relationships: []
       }
@@ -530,6 +801,10 @@ export type Database = {
         Returns: unknown
       }
       "set_updated_at": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "validate_question_content": {
         Args: Record<string, unknown>
         Returns: unknown
       }
