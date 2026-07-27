@@ -1,13 +1,15 @@
 import { notFound } from 'next/navigation'
 import { getTranslations, getFormatter } from 'next-intl/server'
 import { requirePermission } from '@/lib/auth/guards'
-import { getExam, getRuleCounts } from '@/server/actions/exams'
+import { can } from '@/lib/auth/claims'
+import { getExam, getRuleCounts, getExamHealth } from '@/server/actions/exams'
 import { listCategories } from '@/server/actions/questions'
 import { ExamSettingsForm, type ExamSettings } from '@/components/exams/exam-settings-form'
 import {
   SectionBuilder,
   type SectionDraft,
 } from '@/components/exams/section-builder'
+import { ExamHealthPanel } from '@/components/exams/exam-health-panel'
 import { Badge } from '@/components/ui/badge'
 import { LockIcon } from 'lucide-react'
 
@@ -19,7 +21,7 @@ import { LockIcon } from 'lucide-react'
  * correct answer.
  */
 export default async function ExamPage({ params }: { params: Promise<{ id: string }> }) {
-  await requirePermission('exams.read')
+  const claims = await requirePermission('exams.read')
   const { id } = await params
   const t = await getTranslations('exams')
   const format = await getFormatter()
@@ -28,7 +30,17 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
   if (!data) notFound()
 
   const exam = data.exam
-  const [categories, ruleCounts] = await Promise.all([listCategories(), getRuleCounts(id)])
+  const canEdit = can(claims, 'exams.update')
+  const canPublishExam = can(claims, 'exams.publish')
+
+  const [categories, ruleCounts, health] = await Promise.all([
+    listCategories(),
+    getRuleCounts(id),
+    // Skipped entirely without the permission: the RPC would raise, and
+    // swallowing that would hide a real authorisation failure behind an
+    // empty report.
+    canEdit ? getExamHealth(id) : Promise.resolve([]),
+  ])
 
   // The builder works in drafts keyed by a client-side handle rather than by
   // database id: a rule the chef has just added has no id yet, and React needs
@@ -100,6 +112,18 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
         ruleCounts={ruleCounts}
         readOnly={locked}
       />
+
+      {/* The health report needs exams.update — it returns question ids and
+          stems in its detail payload, so it is as sensitive as the paper. A
+          reader without that permission simply does not see the panel. */}
+      {canEdit && (
+        <ExamHealthPanel
+          examId={exam.id}
+          status={exam.status}
+          initialIssues={health}
+          canPublishExam={canPublishExam}
+        />
+      )}
     </div>
   )
 }

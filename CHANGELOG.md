@@ -9,6 +9,37 @@ remembering, and anything left behind as debt.
 
 ## M3 — Exam Builder · *in progress*
 
+### Shipped — Exam Health dashboard and publish validation
+
+The health report a chef actually reads, on `/exams/[id]`. Blocking issues
+first, then advisories, each paired with a remedy — the database says what is
+wrong, this layer says what to do about it, kept apart so a SQL message can stay
+short and factual.
+
+Nothing is re-derived on the client. Severity, message and detail are the
+database's answer; the panel decides only how to draw them. `publish_exam()`
+calls the same `exam_health()` the panel shows, so the screen and the gate that
+refuses cannot disagree — and when publish does refuse, it raises with its
+blocking rows attached, so the refusal lands back in the panel as the same list
+rather than as an opaque failure.
+
+**Publish is disabled while blocked**, with the reasons listed above it. A button
+that is enabled and then refuses teaches people to click it twice. It also asks
+for confirmation first: publishing freezes the paper and emails everyone
+assigned, and neither is easy to walk back.
+
+Advisories say so explicitly. A warning that looks like an error gets treated
+like one, and then a chef stops publishing perfectly good exams.
+
+The lifecycle controls follow the 0016 transition table — `scheduled` offers
+*Open now* and *Cancel*, `active` offers *Close*, and terminal states offer
+*Archive*. Only transitions the trigger actually permits are shown.
+
+The health panel needs `exams.update`: its detail payload carries question ids
+and stems, so it is as sensitive as the paper. A reader without that permission
+does not see it at all, and the page skips the call rather than swallowing the
+authorisation error into an empty report.
+
 ### Shipped — section and rule builder (0018)
 
 Sections and their selection rules are editable on `/exams/[id]`, each rule

@@ -62,6 +62,23 @@ const check = (c, good, notGood) => { if (c) ok(good); else bad(notGood) }
 
 const adminHeaders = { apikey: SECRET, Authorization: `Bearer ${SECRET}`, 'Content-Type': 'application/json' }
 
+/**
+ * Is the button whose label is `label` rendered, and is it disabled?
+ *
+ * Returns true / false / null-if-absent. Written as a lookback from the text
+ * node rather than one regex over the whole tag because attribute order is not
+ * ours to predict, and because a bare `html.includes('Publish')` matches the
+ * next-intl message bundle that every page serialises for the client provider —
+ * which is exactly how two earlier assertions in this file passed vacuously.
+ */
+function buttonIsDisabled(html, label) {
+  const textAt = html.indexOf(`>${label}<`)
+  if (textAt === -1) return null
+  const openAt = html.lastIndexOf('<button', textAt)
+  if (openAt === -1) return null
+  return html.slice(openAt, textAt).includes('disabled')
+}
+
 // Fail fast with a useful message rather than twenty confusing assertion errors.
 try {
   await fetch(APP, { redirect: 'manual' })
@@ -203,6 +220,7 @@ try {
   const questionId = saved?.[0]?.id
   if (questionId) createdQuestions.push(questionId)
 
+
   // ── 3. The bank ────────────────────────────────────────────────────────────
   console.log('\n2. Question bank')
   const list = await get('/en/questions')
@@ -245,6 +263,15 @@ try {
 
   // ── 5. Exams ───────────────────────────────────────────────────────────────
   console.log('\n4. Exams')
+
+  // ACTIVATED HERE, not at seed time. save_question() creates drafts and
+  // draw_paper() only ever selects status='active' — a draft is not eligible
+  // for an exam, by design — so the exam checks below need an active question.
+  // Doing it earlier would break the question-bank filter assertions above,
+  // which deliberately exercise a DRAFT.
+  if (questionId) {
+    await db.query(`update public.questions set status='active' where id=$1`, [questionId])
+  }
 
   const examList = await get('/en/exams')
   check(examList.status === 200, '/en/exams renders', `status ${examList.status} → ${examList.location}`)
@@ -310,9 +337,9 @@ try {
     'the section did not render',
   )
   check(
-    withSections.html.includes('match this rule'),
-    'each rule shows its match count',
-    'the live rule count is missing',
+    withSections.html.includes('1 match this rule'),
+    'each rule shows a real match count',
+    'the live rule count is missing or zero',
   )
 
   const examDetail = await get(`/en/exams/${examId}`)
@@ -335,13 +362,84 @@ try {
     'the save button is missing from a draft',
   )
 
-  // Publishing locks content — the page must say so rather than offering
-  // fields the database will refuse.
+  // ── Exam Health ────────────────────────────────────────────────────────────
+  // The two rules above each want 3 questions from Food Safety, and the bank
+  // holds exactly the one this script seeded. So the paper is short and the
+  // panel must say so rather than letting publish fail later.
+  console.log('\n5. Exam Health')
+
+  check(/>Exam health</.test(withSections.html), 'the health panel renders', 'the health panel is missing')
+  check(
+    withSections.html.includes('the bank could supply'),
+    'a rule that cannot be satisfied is reported',
+    'rule.short was not surfaced',
+  )
+  check(
+    withSections.html.includes('Widen the rule'),
+    'a blocking issue carries its remedy',
+    'the remedy text is missing',
+  )
+  check(
+    />Some things must be fixed/.test(withSections.html),
+    'the panel says the exam is not ready',
+    'the not-ready description is missing',
+  )
+  check(
+    buttonIsDisabled(withSections.html, 'Publish') === true,
+    'the publish button is disabled while blocked',
+    'a blocked exam still offers an enabled Publish button',
+  )
+
+  // Loosen the rules so the paper can actually be drawn, then re-read.
   await db.query(
-    `update public.exams set status='scheduled', published_at=now(), question_count=1, total_marks=2
-      where id=$1`,
+    `update public.exam_rules set question_count = 1
+      where section_id = $1`,
+    [sectionRows[0].id],
+  )
+  await db.query(`delete from public.exam_rules where section_id = $1 and sort_order = 1`, [
+    sectionRows[0].id,
+  ])
+
+  const healthy = await get(`/en/exams/${examId}`)
+  check(
+    />This exam is ready to publish/.test(healthy.html),
+    'a satisfiable exam reports ready',
+    'the ready state was not reported',
+  )
+  check(
+    !healthy.html.includes('the bank could supply'),
+    'the shortfall disappears once the rule fits',
+    'rule.short is still reported for a satisfiable rule',
+  )
+
+  // ── Publish, through the real RPC ──────────────────────────────────────────
+  const published = await fetch(`${URL_}/rest/v1/rpc/publish_exam`, {
+    method: 'POST',
+    headers: {
+      apikey: PUB,
+      Authorization: `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ p_exam_id: examId }),
+  })
+  const publishBody = await published.json()
+  check(
+    published.status === 200,
+    'publish_exam succeeds for a healthy exam',
+    `publish returned ${published.status}: ${JSON.stringify(publishBody)?.slice(0, 200)}`,
+  )
+
+  const { rows: afterPublish } = await db.query(
+    'select status, question_count from public.exams where id = $1',
     [examId],
   )
+  check(
+    afterPublish[0]?.status === 'scheduled',
+    'the exam moves to scheduled',
+    `status is ${afterPublish[0]?.status}`,
+  )
+  check(afterPublish[0]?.question_count === 1, 'the frozen paper is counted', 'question_count is wrong')
+
   const lockedDetail = await get(`/en/exams/${examId}`)
   check(
     lockedDetail.html.includes('This exam is published'),

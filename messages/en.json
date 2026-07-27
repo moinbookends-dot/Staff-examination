@@ -249,6 +249,28 @@
       "negativeMarkingHint": "Wrong answers lose marks. Skipped questions never do.",
       "create": "Create exam",
       "save": "Save settings"
+    },
+    "health": {
+      "title": "Exam health",
+      "readyToPublish": "This exam is ready to publish.",
+      "notReady": "Some things must be fixed before this can be published.",
+      "publishedDescription": "Checks run against the paper this exam drew.",
+      "noIssues": "Nothing to report.",
+      "blockingCount": "{count} must be fixed",
+      "advisoryCount": "{count} worth a look",
+      "advisoryHint": "These do not stop you publishing.",
+      "recheck": "Re-check",
+      "publish": "Publish",
+      "published": "Published. The audience has been notified.",
+      "fixBlockersFirst": "Fix the blocking issues first",
+      "openNow": "Open now",
+      "close": "Close exam",
+      "cancel": "Cancel exam",
+      "archive": "Archive",
+      "confirmTitle": "Publish this exam?",
+      "confirmBody": "The paper is drawn and frozen now, and everyone assigned is notified. Published exams cannot be edited — you would have to duplicate it to make changes.",
+      "confirmCancel": "Not yet",
+      "confirmPublish": "Publish"
     }
   },
   "nav": {
