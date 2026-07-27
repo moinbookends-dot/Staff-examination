@@ -95,6 +95,20 @@ jobs:
             psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"
           done
 
+      # Re-grant after migrations. bootstrap.sql sets ALTER DEFAULT PRIVILEGES,
+      # which covers tables created afterwards — but this is belt-and-braces for
+      # anything created with an explicit owner or via a path that bypasses the
+      # default. A missing GRANT surfaces as "permission denied", raised BEFORE
+      # RLS is evaluated, which makes every policy test fail for a reason that
+      # has nothing to do with policies.
+      - name: Grant table privileges to Supabase roles
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "
+            grant all on all tables    in schema public to anon, authenticated, service_role;
+            grant all on all sequences in schema public to anon, authenticated, service_role;
+            grant execute on all functions in schema public to anon, authenticated, service_role;
+          "
+
       - name: Seed
         run: |
           if [ -f supabase/seed.sql ]; then
@@ -151,14 +165,21 @@ jobs:
             psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"
           done
 
+      # Uses OUR generator (scripts/gen-types.mjs), not `supabase gen types`.
+      # Two reasons: that command needs a Docker container we cannot rely on,
+      # and comparing output from a different generator would fail on formatting
+      # rather than on real schema drift — a permanently red check that teaches
+      # people to ignore it.
       - name: Regenerate and diff
         run: |
           if [ ! -f src/lib/db/database.types.ts ]; then
             echo "No committed types yet — skipping drift check."
             exit 0
           fi
-          npx supabase gen types typescript --db-url "$DATABASE_URL" > /tmp/generated.types.ts
-          if ! diff -u src/lib/db/database.types.ts /tmp/generated.types.ts; then
-            echo "::error::database.types.ts is stale. Run 'npm run gen:types' and commit."
+          cp src/lib/db/database.types.ts /tmp/committed.types.ts
+          node scripts/gen-types.mjs
+          if ! diff -u /tmp/committed.types.ts src/lib/db/database.types.ts; then
+            echo "::error::database.types.ts is stale. Run 'npm run gen:types' and commit the result."
             exit 1
           fi
+          echo "Types match the schema."

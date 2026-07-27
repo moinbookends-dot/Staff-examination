@@ -20,6 +20,18 @@ import { fileURLToPath } from 'node:url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = resolve(__dirname, '..')
 
+/**
+ * Two connection modes:
+ *
+ *   DATABASE_URL set  — used verbatim. This is the CI path, pointing at the
+ *                       ephemeral Postgres service container.
+ *   otherwise         — read .env.local and connect to the Supabase pooler.
+ *                       The local developer path.
+ *
+ * Both must exist. CI has no .env.local, and locally there is no plain
+ * DATABASE_URL — but the type-drift check is only meaningful if CI regenerates
+ * with the SAME generator the developer used.
+ */
 function readEnvLocal() {
   const raw = readFileSync(resolve(root, '.env.local'), 'utf-8')
   const out = {}
@@ -30,17 +42,23 @@ function readEnvLocal() {
   return out
 }
 
-const env = readEnvLocal()
-const ref = new URL(env.NEXT_PUBLIC_SUPABASE_URL).hostname.split('.')[0]
+function makeClient() {
+  if (process.env.DATABASE_URL) {
+    return new Client({ connectionString: process.env.DATABASE_URL })
+  }
+  const env = readEnvLocal()
+  const ref = new URL(env.NEXT_PUBLIC_SUPABASE_URL).hostname.split('.')[0]
+  return new Client({
+    host: process.env.SUPABASE_DB_HOST ?? 'aws-0-ap-southeast-1.pooler.supabase.com',
+    port: 5432,
+    user: `postgres.${ref}`,
+    password: env.SUPABASE_DB_PASSWORD,
+    database: 'postgres',
+    ssl: { rejectUnauthorized: false },
+  })
+}
 
-const client = new Client({
-  host: process.env.SUPABASE_DB_HOST ?? 'aws-0-ap-southeast-1.pooler.supabase.com',
-  port: 5432,
-  user: `postgres.${ref}`,
-  password: env.SUPABASE_DB_PASSWORD,
-  database: 'postgres',
-  ssl: { rejectUnauthorized: false },
-})
+const client = makeClient()
 
 await client.connect()
 

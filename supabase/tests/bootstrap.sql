@@ -80,3 +80,32 @@ $$;
 grant execute on function auth.jwt(), auth.uid(), auth.role(), auth.email()
   to anon, authenticated, service_role;
 grant select on auth.users to service_role, supabase_auth_admin;
+
+-- ── Table privileges ─────────────────────────────────────────────────────────
+--
+-- EASY TO MISS AND IT BREAKS EVERYTHING: a hosted Supabase project grants
+-- anon/authenticated/service_role table-level privileges on `public` at project
+-- creation. A bare postgres container does not.
+--
+-- Without these, `set role authenticated; select … from profiles` fails with
+-- "permission denied for table" — a PRIVILEGE error raised BEFORE RLS is ever
+-- consulted. Every policy test then errors instead of returning rows, so the
+-- suite fails wholesale in CI while passing against the real project. The two
+-- environments diverge silently and the error message points nowhere near the
+-- actual cause.
+--
+-- ALTER DEFAULT PRIVILEGES covers tables created LATER by this same role —
+-- which is every table, since migrations run after this file.
+grant usage on schema public to anon, authenticated, service_role;
+
+alter default privileges in schema public
+  grant all on tables to anon, authenticated, service_role;
+alter default privileges in schema public
+  grant all on sequences to anon, authenticated, service_role;
+alter default privileges in schema public
+  grant execute on functions to anon, authenticated, service_role;
+
+-- Anything that already exists (nothing on a fresh container, but this file is
+-- re-runnable and may be applied to a partially-built database).
+grant all on all tables    in schema public to anon, authenticated, service_role;
+grant all on all sequences in schema public to anon, authenticated, service_role;
