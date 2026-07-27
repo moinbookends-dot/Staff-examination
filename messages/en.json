@@ -141,6 +141,95 @@
       }
     }
   },
+  "exams": {
+    "title": "Exams",
+    "subtitle": "Papers drawn from the question bank, scheduled and assigned to staff.",
+    "new": "New exam",
+    "empty": "No exams match. Clear the filters, or build the first one.",
+    "previous": "Previous",
+    "next": "Next",
+    "pagination": "Page {page} of {lastPage} · {total} exams",
+    "minutes": "{count} min",
+    "noWindow": "Not scheduled",
+    "manualGrading": "Needs marking",
+    "columns": {
+      "exam": "Exam",
+      "kind": "Type",
+      "status": "Status",
+      "questions": "Questions",
+      "marks": "Marks",
+      "duration": "Time",
+      "window": "Opens"
+    },
+    "status": {
+      "draft": "Draft",
+      "scheduled": "Scheduled",
+      "active": "Running",
+      "completed": "Completed",
+      "archived": "Archived",
+      "cancelled": "Cancelled"
+    },
+    "kinds": {
+      "official": "Official",
+      "practice": "Practice",
+      "quiz": "Quiz",
+      "monthly": "Monthly",
+      "annual": "Annual",
+      "practical": "Practical"
+    },
+    "paperMode": {
+      "fixed": "One paper for everyone",
+      "per_attempt": "New paper each attempt"
+    },
+    "filters": {
+      "anyStatus": "Any status",
+      "anyKind": "Any type",
+      "clear": "Clear"
+    },
+    "created": "Exam created.",
+    "saved": "Saved.",
+    "publishedOn": "Published {date}",
+    "lockedNotice": "This exam is published, so its content is fixed. Duplicate it to make changes — the closing time and who it is assigned to can still be edited.",
+    "sections": {
+      "title": "Sections",
+      "none": "No sections yet. The section and rule builder arrives in the next slice.",
+      "ruleCount": "{count} rule(s)"
+    },
+    "form": {
+      "newTitle": "New exam",
+      "newSubtitle": "Settings first. Sections and questions are added once it exists.",
+      "basics": "Basics",
+      "title": "Title",
+      "titlePlaceholder": "Food Safety — Level 1",
+      "description": "Description",
+      "instructions": "Instructions for candidates",
+      "instructionsPlaceholder": "Read each question carefully. You cannot return to a section once you leave it.",
+      "kind": "Type",
+      "paperMode": "Paper",
+      "paperModeFixedHint": "One paper is drawn when you publish, and every candidate sits the same questions. Scores are comparable.",
+      "paperModePerAttemptHint": "A fresh paper is drawn each time somebody starts. Repeated practice is not repeated memorisation, but scores are not strictly comparable.",
+      "rules": "Rules and scoring",
+      "rulesHint": "How the exam is taken and how it is marked.",
+      "duration": "Time limit (min)",
+      "maxAttempts": "Attempts allowed",
+      "passMark": "Pass mark (%)",
+      "verification": "Who signs off results",
+      "verificationDual": "Two chefs must agree",
+      "verificationSingle": "One chef",
+      "verificationAuto": "Automatic, where possible",
+      "verificationHint": "Choose one chef if your outlet only has one — requiring two where only one exists leaves every result stuck forever.",
+      "shuffleQuestions": "Shuffle the question order",
+      "shuffleQuestionsHint": "Each candidate sees the questions in a different order.",
+      "shuffleOptions": "Shuffle the options",
+      "shuffleOptionsHint": "Multiple-choice options are reordered per candidate.",
+      "allowBacktrack": "Allow going back",
+      "allowBacktrackHint": "Candidates can return to earlier questions before submitting.",
+      "negativeMarking": "Negative marking",
+      "negativeMarkingHint": "Wrong answers lose marks. Skipped questions never do.",
+      "create": "Create exam",
+      "save": "Save settings"
+    }
+  },
   "nav": {
     "dashboard": "Dashboard",
     "questions": "Question bank",

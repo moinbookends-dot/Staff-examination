@@ -29,23 +29,3 @@ export const questionFiltersSchema = z.object({
 export type QuestionFilters = z.infer<typeof questionFiltersSchema>
 
 export const QUESTIONS_PAGE_SIZE = 25
-
-/**
- * Filters → query string, dropping empties.
- *
- * Empty values are omitted rather than serialised as `status=`, so the URL
- * stays readable and a bookmark does not accumulate dead parameters every time
- * someone clears a filter.
- */
-export function filtersToSearchParams(
-  filters: Partial<Record<keyof QuestionFilters, string | number | undefined>>,
-): string {
-  const params = new URLSearchParams()
-  for (const [key, value] of Object.entries(filters)) {
-    if (value === undefined || value === null || value === '') continue
-    // page=1 is the default; carrying it makes every URL look filtered.
-    if (key === 'page' && Number(value) <= 1) continue
-    params.set(key, String(value))
-  }
-  return params.toString()
-}

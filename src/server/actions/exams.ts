@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { requirePermission } from '@/lib/auth/guards'
 import { createClient } from '@/lib/supabase/server'
 import { dbId } from '@/lib/db/id'
+import { examFiltersSchema, EXAMS_PAGE_SIZE } from '@/lib/exams/filters'
 import {
   examSchema,
   examSectionSchema,
@@ -47,28 +48,18 @@ export interface ExamListItem {
   updated_at: string
 }
 
-const PAGE_SIZE = 25
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Reads
 // ─────────────────────────────────────────────────────────────────────────────
-
-const listFiltersSchema = z.object({
-  status: z.enum(['draft', 'scheduled', 'active', 'completed', 'archived', 'cancelled']).optional(),
-  kind: z
-    .enum(['official', 'practice', 'quiz', 'monthly', 'annual', 'practical'])
-    .optional(),
-  page: z.coerce.number().int().min(1).default(1),
-})
 
 export async function listExams(
   input: unknown,
 ): Promise<{ items: ExamListItem[]; total: number; page: number; pageSize: number }> {
   await requirePermission('exams.read')
 
-  const parsed = listFiltersSchema.safeParse(input ?? {})
+  const parsed = examFiltersSchema.safeParse(input ?? {})
   const filters = parsed.success ? parsed.data : { page: 1 }
-  const from = (filters.page - 1) * PAGE_SIZE
+  const from = (filters.page - 1) * EXAMS_PAGE_SIZE
 
   const supabase = await createClient()
   let query = supabase
@@ -84,14 +75,14 @@ export async function listExams(
 
   const { data, error, count } = await query
     .order('updated_at', { ascending: false })
-    .range(from, from + PAGE_SIZE - 1)
+    .range(from, from + EXAMS_PAGE_SIZE - 1)
 
-  if (error) return { items: [], total: 0, page: filters.page, pageSize: PAGE_SIZE }
+  if (error) return { items: [], total: 0, page: filters.page, pageSize: EXAMS_PAGE_SIZE }
   return {
     items: (data ?? []) as ExamListItem[],
     total: count ?? 0,
     page: filters.page,
-    pageSize: PAGE_SIZE,
+    pageSize: EXAMS_PAGE_SIZE,
   }
 }
 
@@ -133,8 +124,19 @@ export async function getExamHealth(id: string): Promise<HealthIssue[]> {
 // Writes
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * `sections` is OPTIONAL, and the distinction matters.
+ *
+ * Omitted  → the section tree is left exactly as it is.
+ * Provided → it is replaced wholesale, empty array included.
+ *
+ * Without that split, the settings form — which knows nothing about sections —
+ * would delete the entire paper structure every time somebody corrected a
+ * typo in the title. Defaulting to `[]` would make silent data loss the
+ * default behaviour.
+ */
 const saveExamSchema = examSchema.extend({
-  sections: z.array(examSectionSchema).default([]),
+  sections: z.array(examSectionSchema).optional(),
 })
 
 export async function saveExam(
@@ -189,6 +191,13 @@ export async function saveExam(
       .single()
     if (error || !data) return { ok: false, error: friendlyWriteError(error) }
     examId = data.id
+  }
+
+  // Nothing further to do for a caller that only touched the settings.
+  if (v.sections === undefined) {
+    revalidatePath('/exams')
+    revalidatePath(`/exams/${examId}`)
+    return { ok: true, id: examId }
   }
 
   // Sections and rules are a replace-set: the builder sends the whole tree, so

@@ -9,6 +9,30 @@ remembering, and anything left behind as debt.
 
 ## M3 — Exam Builder · *in progress*
 
+### Shipped — exam list and settings
+
+`/exams` lists, filters and paginates; `/exams/new` and `/exams/[id]` create and
+edit an exam's settings. Same URL-state pattern as the question bank, so a
+filtered list is bookmarkable and survives back-navigation.
+
+No search box, unlike the bank: an outlet runs tens of exams, not thousands of
+questions, so status and kind narrow it far enough and a full-text index would
+answer a question nobody has.
+
+**A published exam renders read-only**, with the reason stated. The 0016 trigger
+refuses content edits once an exam leaves draft, so offering fields the database
+will reject would be a lie the user only discovers on save.
+
+**`saveExam` now treats an omitted `sections` as "leave the structure alone".**
+It previously defaulted to `[]` and replaced the tree on every call — so the
+settings form, which knows nothing about sections, would have deleted an exam's
+entire paper structure every time somebody fixed a typo in the title. Omitted
+means untouched; provided means replaced, empty array included.
+
+`filtersToSearchParams` moved from `questions/filters.ts` to
+`src/lib/search-params.ts` now that it has a second caller. A copy is how the
+two lists drift into serialising `page=1` differently.
+
 ### Shipped — individual assignment (0017)
 
 An exam can now be assigned to one person, not only to a group.

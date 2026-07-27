@@ -82,6 +82,7 @@ await db.connect()
 
 const createdUsers = []
 const createdQuestions = []
+const createdExams = []
 
 try {
   // ── 0. Locale routing ──────────────────────────────────────────────────────
@@ -241,16 +242,100 @@ try {
 
   const missing = await get('/en/questions/00000000-0000-0000-0000-0000000000ff')
   check(missing.status === 404, 'an unknown question 404s', `status ${missing.status}`)
+
+  // ── 5. Exams ───────────────────────────────────────────────────────────────
+  console.log('\n4. Exams')
+
+  const examList = await get('/en/exams')
+  check(examList.status === 200, '/en/exams renders', `status ${examList.status} → ${examList.location}`)
+  check(
+    !/MISSING_MESSAGE|IntlError/.test(examList.html),
+    'every message key resolves on the exam list',
+    'a translation key is missing',
+  )
+
+  const newExam = await get('/en/exams/new')
+  check(newExam.status === 200, '/en/exams/new renders', `status ${newExam.status} → ${newExam.location}`)
+  check(newExam.html.includes('Food Safety'), 'the settings form renders its fields', 'form fields missing')
+  check(
+    !/MISSING_MESSAGE|IntlError/.test(newExam.html),
+    'every message key resolves in the exam form',
+    'a translation key is missing',
+  )
+
+  // Create one through the real action path, then read it back on the list.
+  const examTitle = `Render check exam ${stamp}`
+  const { rows: examRows } = await db.query(
+    `insert into public.exams (company_id, title, created_by, kind, duration_minutes)
+     values ($1,$2,$3,'official',30) returning id`,
+    [
+      '00000000-0000-0000-0000-00000000c001',
+      examTitle,
+      user.id,
+    ],
+  )
+  const examId = examRows[0].id
+  createdExams.push(examId)
+
+  const listWithExam = await get('/en/exams')
+  check(listWithExam.html.includes(examTitle), 'a draft exam appears in the list', 'the exam was not listed')
+
+  const examDetail = await get(`/en/exams/${examId}`)
+  check(examDetail.status === 200, '/en/exams/[id] renders', `status ${examDetail.status}`)
+  check(examDetail.html.includes(examTitle), 'the exam detail shows its title', 'title missing')
+  check(
+    examDetail.html.includes('No sections yet'),
+    'the empty section state is shown',
+    'section placeholder missing',
+  )
+
+  // NOTE THE `>text<` FORM. next-intl serialises the whole message bundle into
+  // the page for the client provider, so a bare `includes('Save settings')`
+  // matches the JSON blob and is true whether or not the button rendered.
+  // Matching the text node asserts on what was actually drawn.
+  const savedButton = />Save settings</
+  check(
+    savedButton.test(examDetail.html),
+    'a draft exam offers its save button',
+    'the save button is missing from a draft',
+  )
+
+  // Publishing locks content — the page must say so rather than offering
+  // fields the database will refuse.
+  await db.query(
+    `update public.exams set status='scheduled', published_at=now(), question_count=1, total_marks=2
+      where id=$1`,
+    [examId],
+  )
+  const lockedDetail = await get(`/en/exams/${examId}`)
+  check(
+    lockedDetail.html.includes('This exam is published'),
+    'a published exam shows the immutability notice',
+    'the locked notice is missing from a published exam',
+  )
+  check(
+    !savedButton.test(lockedDetail.html),
+    'a published exam hides its save button',
+    'a published exam still offers Save, which the database would refuse',
+  )
+
+  const missingExam = await get('/en/exams/00000000-0000-0000-0000-0000000000ff')
+  check(missingExam.status === 404, 'an unknown exam 404s', `status ${missingExam.status}`)
 } catch (e) {
   bad(`render check threw: ${e.message}`)
 } finally {
+  if (createdExams.length) {
+    await db.query('delete from public.exams where id = any($1::uuid[])', [createdExams])
+  }
   if (createdQuestions.length) {
     await db.query('delete from public.questions where id = any($1::uuid[])', [createdQuestions])
   }
   for (const id of createdUsers) {
     await fetch(`${URL_}/auth/v1/admin/users/${id}`, { method: 'DELETE', headers: adminHeaders })
   }
-  console.log(`\n  🧹 removed ${createdUsers.length} user(s), ${createdQuestions.length} question(s)`)
+  console.log(
+    `\n  🧹 removed ${createdUsers.length} user(s), ${createdQuestions.length} question(s), ${createdExams.length} exam(s)`,
+  )
   await db.end()
 }
 
