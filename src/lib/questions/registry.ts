@@ -12,7 +12,6 @@ import {
   type AnswerPayload,
   type ValidationIssue,
 } from './schemas'
-import { gradeAnswer, type GradeOptions, type GradeResult } from './grading'
 
 /**
  * ╔═══════════════════════════════════════════════════════════════════════════╗
@@ -594,7 +593,6 @@ export {
   answerPayloadSchema,
   validateQuestion,
   isAutoGradable,
-  gradeAnswer,
 }
 export type {
   ResponseFormat,
@@ -602,7 +600,5 @@ export type {
   AnswerKey,
   AnswerPayload,
   ValidationIssue,
-  GradeOptions,
-  GradeResult,
   ZodType,
 }

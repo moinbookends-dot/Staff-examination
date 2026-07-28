@@ -420,6 +420,31 @@ try {
         p_difficulty_max: 5,
       },
     ],
+    // 0022 — the answer key at a given revision. The single most damaging one
+    // on this list: reachable, it hands over the key for any question.
+    [
+      'answer_key_at_revision',
+      { p_question_id: '00000000-0000-0000-0000-000000000001', p_revision: 1 },
+    ],
+    // 0027 — the grader and its primitives. It takes the key as an argument so
+    // it is not an oracle, but it is internal machinery all the same.
+    [
+      'grade_answer',
+      { p_content: {}, p_key: {}, p_answer: {}, p_max: 1, p_negative: 0 },
+    ],
+    ['grade_normalise', { v: 'x' }],
+    ['grade_edit_distance', { a: 'x', b: 'y' }],
+    [
+      'grade_match_blank',
+      { p_submitted: 'x', p_accept: [], p_mode: 'ci', p_tolerance: 1 },
+    ],
+    // 0027 — closes and grades an attempt with NO authorisation check of its
+    // own. Reachable, it would let anyone submit anyone's paper.
+    [
+      'grade_and_close_attempt',
+      { p_attempt_id: '00000000-0000-0000-0000-000000000001', p_reason: 'user' },
+    ],
+    ['expire_attempts', {}],
   ]
 
   const callRpc = (name, body, token) =>

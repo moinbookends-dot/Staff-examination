@@ -15,7 +15,6 @@ import {
   validateQuestion,
   isAutoGradable,
 } from '@/lib/questions/schemas'
-import { gradeAnswer } from '@/lib/questions/grading'
 
 /**
  * Registry conformance.
@@ -149,56 +148,7 @@ describe.each(RESPONSE_FORMATS)('format: %s', (format) => {
     }
   })
 
-  it('grades its own sample as fully correct', () => {
-    // End-to-end through the registry: sample → grade. Catches a sample whose
-    // key does not actually match its content, which every other test would
-    // pass.
-    const { content, key } = def.sample()
-    if (!def.autoGradable) {
-      const r = gradeAnswer(content, key, def.emptyAnswer(), { maxScore: 10 })
-      expect(r.status).toBe('not_applicable')
-      return
-    }
-
-    const correctAnswer = buildCorrectAnswer(format, content, key)
-    const result = gradeAnswer(content, key, correctAnswer, { maxScore: 10, negativeMarks: 2 })
-    expect(result.score, `${format} sample did not self-grade to full marks`).toBe(10)
-  })
-
-  it('grades an empty answer at zero without penalty', () => {
-    const { content, key } = def.sample()
-    const r = gradeAnswer(content, key, def.emptyAnswer(), { maxScore: 10, negativeMarks: 2 })
-    expect(r.score).toBe(0)
-  })
 })
-
-/** Builds the fully-correct answer for a sample, per format. */
-function buildCorrectAnswer(
-  format: string,
-  content: ReturnType<(typeof FORMAT_REGISTRY)[keyof typeof FORMAT_REGISTRY]['sample']>['content'],
-  key: ReturnType<(typeof FORMAT_REGISTRY)[keyof typeof FORMAT_REGISTRY]['sample']>['key'],
-) {
-  switch (format) {
-    case 'choice_single':
-      return { format, choice: (key as { correct: string }).correct } as never
-    case 'choice_multi':
-      return { format, choices: (key as { correct: string[] }).correct } as never
-    case 'boolean':
-      return { format, value: (key as { correct: boolean }).correct } as never
-    case 'blanks': {
-      const k = key as { blanks: { id: string; accept: string[] }[] }
-      const values: Record<string, string> = {}
-      for (const b of k.blanks) values[b.id] = b.accept[0]
-      return { format, values } as never
-    }
-    case 'pairs':
-      return { format, mapping: (key as { correct: Record<string, string> }).correct } as never
-    case 'order':
-      return { format, order: (key as { correct: string[] }).correct } as never
-    default:
-      return null as never
-  }
-}
 
 describe('CSV template', () => {
   it('lists the columns each format uses', () => {

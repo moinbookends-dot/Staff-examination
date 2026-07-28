@@ -31,6 +31,7 @@ export type Database = {
           "grader_note": string | null
           "answered_at": string
           "updated_at": string
+          "grade_detail": Json | null
         }
         Insert: {
           "attempt_id": string
@@ -43,6 +44,7 @@ export type Database = {
           "grader_note"?: string | null
           "answered_at"?: string
           "updated_at"?: string
+          "grade_detail"?: Json | null
         }
         Update: {
           "attempt_id"?: string
@@ -55,6 +57,7 @@ export type Database = {
           "grader_note"?: string | null
           "answered_at"?: string
           "updated_at"?: string
+          "grade_detail"?: Json | null
         }
         Relationships: []
       }
@@ -1279,7 +1282,31 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "expire_attempts": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "get_question_revision": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "grade_and_close_attempt": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "grade_answer": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "grade_edit_distance": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "grade_match_blank": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "grade_normalise": {
         Args: Record<string, unknown>
         Returns: unknown
       }
@@ -1351,6 +1378,10 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "save_answer": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "save_question": {
         Args: Record<string, unknown>
         Returns: unknown
@@ -1360,6 +1391,10 @@ export type Database = {
         Returns: unknown
       }
       "start_attempt": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "submit_attempt": {
         Args: Record<string, unknown>
         Returns: unknown
       }

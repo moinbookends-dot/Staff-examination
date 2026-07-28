@@ -50,7 +50,90 @@ contains `correct`, `accept`, `rubric`, `keywords` or `modelAnswer`; and a
 candidate cannot read `attempt_questions` directly, ask for another candidate's
 paper, or edit their own attempt row.
 
+### Shipped — answering, submitting and the auto-grader (0027)
+
+`save_answer()`, `submit_attempt()`, `expire_attempts()`, and the grader itself.
+A candidate can now sit an exam end to end and get a mark.
+
+**The grader moved into the database, and the TypeScript engine was deleted.**
+This is the decision of the slice and it went the way the security model
+demanded rather than the way the codebase's language would have preferred.
+
+`answer_key_at_revision()` is granted to nobody (0022) and is reachable only
+from inside another SECURITY DEFINER function. For the M2 grading engine to see
+a key, the app would have needed a service-role client — the first RLS-bypassing
+connection in the codebase, introduced for precisely the operation where key
+exposure is most costly. The alternative considered was keeping both engines and
+proving them equal in CI; that was rejected as a standing liability, since two
+graders with nothing forcing them to agree is how a scoring rule changes in one
+and not the other and nobody notices until a candidate disputes a mark.
+
+So `src/lib/questions/grading.ts` is gone and migration 0027 is the only grader.
+Every semantic it encoded was carried across unchanged: a skip scores 0 and never
+incurs negative marks, multi-select partial credit subtracts wrong picks, fuzzy
+blanks are refused under four characters, regex blanks are anchored, and
+normalisation applies NFKC before case-folding.
+
+**The port was proven, not reviewed.** A temporary differential harness ran 49
+cases through both engines and asserted identical results — score, status,
+review flag and the per-part detail blob. It was checked against a negative
+control (perturbing one input failed 23 of the 49) so that "they agree" could not
+be a vacuous pass, which this codebase has now seen three times. The harness was
+deleted with the engine; `tests/integration/grading.test.ts` keeps the corpus as
+explicit expectations, plus the registry conformance cases that moved out of the
+unit suite when the grader left TypeScript.
+
+**One behavioural change, stated rather than discovered later.** Regex blanks are
+now evaluated by Postgres ARE instead of JavaScript. Anchoring, alternation,
+character classes and quantifiers behave identically; exotic patterns
+(lookbehind, `\p{...}`) would not. Blank keys use the former.
+
+**Levenshtein is hand-rolled rather than taken from `fuzzystrmatch`.** The
+extension exists on both Supabase and the `postgres:17` image CI runs, but
+installs into a different schema on each, so the qualified name that works in
+production would not resolve in CI. Twenty lines of PL/pgSQL is cheaper than
+another round of the bug class that hid an anon-reachable `draw_paper()` for a
+whole milestone.
+
+**The deadline is enforced on every write, not once at submit.** `save_answer()`
+refuses past `expires_at`, which is why 0026 gave `attempt_answers` no write
+policy for anybody: a row-level policy cannot express "and the clock has not run
+out" without re-reading the parent on every write, and a candidate who could
+UPDATE directly would simply keep answering.
+
+**A skip is the absence of a row.** Grading iterates `attempt_answers`, not
+`attempt_questions`, so an unanswered question contributes nothing and can incur
+no penalty — true by construction rather than by a branch somebody could later
+remove.
+
+**A candidate cannot claim the server's submit reasons.** `submit_attempt()`
+accepts `user`, `timer` and `tab_switch` only; `sweeper` and `admin` are the
+server's to assert, and accepting them would hand the candidate the audit trail.
+`grade_and_close_attempt()` holds the shared closing logic with no authorisation
+check of its own, so the sweeper and the candidate's submit cannot drift into
+scoring the same paper differently.
+
+**A paper needing a human gets no verdict.** Any essay, or any fuzzy near-miss
+the grader flagged, sends the attempt to `evaluating` with `passed` left NULL —
+not false. Recording a fail no evaluator agreed to would publish a result the
+system cannot defend. M5 owns releasing it.
+
+**`attempt_answers.grade_detail`** stores the per-part breakdown, and carries
+what the candidate submitted and whether each part was right — never the
+expected value. A breakdown destined for a results screen that quoted the
+accepted answers would hand over the key for every question they got wrong.
+
 ### Fixed while building
+
+**`render-check.mjs` asserted a shortfall by depending on an empty database.**
+Its rule checks ask for more questions than exist, to prove the shortfall is
+reported and blocks publishing — but they pointed at the seeded Food Safety
+category and relied on nobody having put anything in it. Seeding twelve demo
+questions flipped seven checks at once. The check now creates and owns its own
+category, so the pool is exactly what the script put there. Worth noting the
+failure mode: the script was not wrong about the app, it was wrong about the
+world, and any real deployment with real Food Safety questions would have broken
+it the same way.
 
 **`email_outbox` rows outlive the exam that queued them.** `publish_exam` writes
 one per assignee under a UNIQUE dedupe key, and `email_outbox` has no foreign key
