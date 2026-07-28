@@ -59,6 +59,32 @@ appear with a zero rather than vanishing.
 `WHERE`. A `group by` is much easier to get wrong than a row policy, and RLS is
 not doing the work here — these are definer functions doing their own scoping.
 
+### Shipped — team, exam and question reporting
+
+The chef and HR half of `/reports`, on the same page as their own record rather
+than on new routes: who has sat what (including who has not started), how each
+exam is going, and how questions actually behave against how they were rated.
+
+**The sample size is part of the number, not a footnote.** 0030 returns NULL
+discrimination below ten responses; this renders that absence as "not enough
+responses" rather than as a blank cell or a dash. A blank invites the reader to
+assume zero and a dash invites them to assume the feature is broken — and the
+person reading it is the one deciding whether to retire a question.
+
+**Two revisions of a question appear as two rows**, each labelled with its
+revision, because otherwise they read as duplicates and the reason 0011 exists
+becomes invisible at exactly the moment it matters.
+
+**Which sections to draw is decided in TypeScript; how far each may look is
+decided by the database.** `analytics_scope()` is internal, so rather than open
+it up the page derives display scope from claims — the same rule `nav.ts`
+already states, where hiding is presentation and every destination re-checks.
+The functions scope themselves regardless of what the page asks for.
+
+**Not started is a state, not a blank.** Somebody who has sat nothing appears in
+the team table with a badge saying so, since "who still needs to do this" is the
+question the report exists to answer.
+
 ### Shipped — /reports for a candidate
 
 The "own" half of the reporting page: exams taken, pass rate, average and best
@@ -131,6 +157,22 @@ the exam now carries an essay and lands there on its own.
 immediately after the fixture that had aborted in `beforeAll`, which left
 committed users and questions behind. Three consecutive clean runs since, and
 the fixtures verify absent from the database afterwards.
+
+**A render assertion that was right about the intent and wrong about the
+scope.** The check "somebody with no attempts is not shown 0%" scanned the whole
+reports page. Once the team sections landed, a legitimate 0% appeared there — an
+exam with one attempt and no passes really does have a zero pass rate — and the
+check called correct output a leak. It now asserts the summary is not rendered
+at all for somebody with no data, which is the actual property. Second time this
+milestone that a page-wide negative has had to be narrowed; the pattern to watch
+is a negative assertion over a document that grows.
+
+**Two RLS runs failed on `Client has encountered a connection error`,** not on
+any assertion. `fileParallelism: false` is already set, so this is not suites
+competing — it is a transient drop during an eight-minute run against a database
+in another region. CI runs against a local container and does not have that
+exposure, and the same suite is green there. Recorded rather than "fixed",
+because a config change that appeared to help would only have hidden it.
 
 ---
 

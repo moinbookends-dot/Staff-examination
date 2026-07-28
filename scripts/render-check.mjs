@@ -1219,12 +1219,50 @@ try {
     'somebody who has sat nothing sees an empty state',
     'the empty state is missing on reports',
   )
-  // The assertion this section exists for. A null pass rate must never render
-  // as 0% — that is a claim about the person, not an absence of data.
+  // The assertion this section exists for: somebody with no attempts gets the
+  // empty state INSTEAD OF a summary, so there is no figure to misread as a
+  // score of zero.
+  //
+  // Deliberately not `!/>0%</` over the whole page. Once the team sections
+  // render, a legitimate 0% appears there — an exam with one attempt and no
+  // passes really does have a zero pass rate — and a page-wide check would
+  // call that correct output a leak. Same error as scoping the released-result
+  // check to the whole document.
   check(
-    !/>0%</.test(emptyReports.html),
-    'no data is not reported as a zero pass rate',
-    'REPORTS SHOWED 0% FOR SOMEBODY WITH NO ATTEMPTS',
+    !/>Exams taken</.test(emptyReports.html),
+    'somebody with no attempts is shown no summary figures at all',
+    'a summary was rendered for somebody with no attempts',
+  )
+
+  // The team sections, and who may see them. Asserted as a pair against the
+  // same string so neither direction can pass vacuously.
+  check(
+    />The team</.test(emptyReports.html),
+    'a chef sees the team section',
+    'the team section is missing for a chef',
+  )
+  check(
+    !/>The team</.test(reports.html),
+    'a candidate does not see the team section',
+    'A CANDIDATE WAS SHOWN THE TEAM REPORT',
+  )
+  check(
+    />Question calibration</.test(emptyReports.html),
+    'the question calibration section renders',
+    'the question calibration section is missing',
+  )
+  // The sample-size discipline, visible rather than merely enforced. Every
+  // question in this run has one or two responses, so discrimination must be
+  // reported as absent rather than as a number.
+  check(
+    />Not enough responses</.test(emptyReports.html),
+    'a thin sample is named rather than left blank',
+    'discrimination was shown for a question with too few responses',
+  )
+  check(
+    />Not started</.test(emptyReports.html),
+    'somebody who has sat nothing is listed as not started',
+    'the not-started state is missing from the team table',
   )
 
   // ── The release notice ───────────────────────────────────────────────────

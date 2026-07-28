@@ -1,6 +1,8 @@
 import { getTranslations, getFormatter } from 'next-intl/server'
 import { requirePermission } from '@/lib/auth/guards'
+import { can } from '@/lib/auth/claims'
 import { getCandidateStats, getCandidateCategoryStats } from '@/server/actions/reports'
+import { TeamSections } from './team-sections'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { BarChart3Icon } from 'lucide-react'
 
@@ -23,9 +25,14 @@ import { BarChart3Icon } from 'lucide-react'
  * same page rather than on new routes, so nobody has to learn where to look.
  */
 export default async function ReportsPage() {
-  await requirePermission('reports.read_own')
+  const claims = await requirePermission('reports.read_own')
   const t = await getTranslations('reports')
   const format = await getFormatter()
+
+  // Presentation only — the same rule nav.ts states. Which sections to draw is
+  // decided here; how far each one may actually look is decided by the database
+  // functions, which do their own scoping and would refuse regardless.
+  const seesTeam = can(claims, 'reports.read_team') || can(claims, 'reports.read_all')
 
   const [stats, categories] = await Promise.all([
     getCandidateStats(),
@@ -131,6 +138,10 @@ export default async function ReportsPage() {
           </Card>
         </>
       )}
+
+      {/* Rendered whether or not the viewer has a record of their own: a chef
+          who has sat nothing still needs to see who on their team has. */}
+      {seesTeam && <TeamSections />}
     </div>
   )
 }
