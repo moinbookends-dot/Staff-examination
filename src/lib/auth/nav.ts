@@ -23,6 +23,10 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { href: '/dashboard', labelKey: 'dashboard', permissions: [] }, // always visible
+  // Where a candidate lives. Separate from /exams, which is the authoring side
+  // and gated on exams.read — an employee holds attempts.take and no more, so
+  // the two audiences never share a screen.
+  { href: '/my-exams', labelKey: 'myExams', permissions: ['attempts.take'] },
   { href: '/questions', labelKey: 'questions', permissions: ['questions.read'] },
   { href: '/exams', labelKey: 'exams', permissions: ['exams.read'] },
   { href: '/evaluate', labelKey: 'evaluate', permissions: ['evaluation.evaluate'] },

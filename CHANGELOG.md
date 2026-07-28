@@ -123,6 +123,58 @@ what the candidate submitted and whether each part was right — never the
 expected value. A breakdown destined for a results screen that quoted the
 accepted answers would hand over the key for every question they got wrong.
 
+### Shipped — the candidate delivery UI
+
+`/my-exams` and `/attempt/[id]`. A candidate can now see what they have been
+assigned, sit it, and get a mark, entirely in the browser.
+
+**Nothing here decides who may see an exam.** `listMyExams()` filters by
+nothing: 0015's policy on `exams` matches the assignment against the outlet,
+department, brand and role already in the JWT. A second definition of "assigned
+to me" in TypeScript would be a thing to drift, and the one that governs is in
+the database.
+
+**The countdown decides nothing either.** It renders `expiresAt - now`. The
+deadline was stamped by `start_attempt`, every save is refused against it by
+`save_answer`, and `expire_attempts` closes the paper whether the browser is
+running or not — so putting the machine clock back, pausing JavaScript, or
+closing the tab all achieve nothing. Auto-submit at zero is a courtesy that
+saves the sweeper a job, not the thing that enforces the limit. Every save
+returns the server's `expires_at` and the display re-anchors on it, so a phone
+that slept through a question corrects itself rather than drifting until submit.
+
+**Autosave is debounced per question, not globally.** Typing into question 3
+must not postpone the save of the choice just made on question 2 — on outlet
+wifi that is the difference between losing a keystroke and losing an answer.
+Pending saves are flushed before submit and on unmount.
+
+**Route is `/attempt/[id]`, not `/exams/[id]/take`.** What a candidate works
+through is the attempt: under `per_attempt` two attempts at one exam are
+different papers, and a URL naming only the exam could not tell them apart. The
+same page shows the result once the attempt closes, rather than redirecting —
+a redirect races the submit, and its back button lands on a paper that no longer
+accepts answers.
+
+**The renderers are the ones M2 built.** `FormatRendererProps` was typed as the
+candidate-facing contract back then, with `onAnswerChange` documented as
+"supplied by exam delivery in M4". Delivery supplied it and needed no changes to
+any of the nine — the answer key was never in the props, so it cannot be read
+out of devtools.
+
+**`render-check.mjs` now sits an exam.** Fourteen new assertions cover the
+candidate path end to end, and four of them are the reason the section exists:
+the live paper contains no `"correct"`, `modelAnswer`, `"rubric"` or
+`"accept"`. Every check before it renders the authoring side, where the person
+looking is allowed to know the answers; this is the one screen where a leak is
+a scored exam thrown away. It also asserts a foreign attempt 404s and that a
+candidate cannot open the authoring exam list.
+
+**Known gaps, stated rather than discovered later.** `shuffle_questions` and
+`shuffle_options` are stored and not yet honoured at delivery — the paper renders
+in `paper_position` order. `allow_backtrack` *is* honoured. Results are shown to
+the candidate immediately on submit; M5 owns deciding when a result is released,
+and will move that behind its gate.
+
 ### Fixed while building
 
 **`render-check.mjs` asserted a shortfall by depending on an empty database.**

@@ -621,10 +621,160 @@ try {
 
   const missingExam = await get('/en/exams/00000000-0000-0000-0000-0000000000ff')
   check(missingExam.status === 404, 'an unknown exam 404s', `status ${missingExam.status}`)
+
+  // ── 8. Sitting the exam, as a candidate ────────────────────────────────────
+  // ┌─────────────────────────────────────────────────────────────────────────┐
+  // │ THE ONE THAT MATTERS. Everything before this renders the AUTHORING side, │
+  // │ where the person looking is allowed to know the answers. This renders    │
+  // │ the live paper to the person being tested — the only screen in the       │
+  // │ product where a leaked key is a scored exam thrown away.                 │
+  // └─────────────────────────────────────────────────────────────────────────┘
+  console.log('\n8. Candidate delivery')
+
+  const candEmail = `render-cand-${stamp}@bookends-test.local`
+  const candMade = await fetch(`${URL_}/auth/v1/admin/users`, {
+    method: 'POST',
+    headers: adminHeaders,
+    body: JSON.stringify({
+      email: candEmail,
+      password: PASSWORD,
+      email_confirm: true,
+      user_metadata: { full_name: 'Render Candidate', locale: 'en' },
+    }),
+  })
+  if (!candMade.ok) throw new Error(`create candidate: ${candMade.status} ${await candMade.text()}`)
+  const candUser = await candMade.json()
+  createdUsers.push(candUser.id)
+
+  // Approved, in the outlet the exam was assigned to, and left on the default
+  // employee role — no chef permissions anywhere in this section.
+  await db.query(
+    `update public.profiles
+        set approval_status='approved',
+            outlet_id='00000000-0000-0000-0000-00000000a001',
+            department_id=(select id from public.departments where slug='kitchen' limit 1)
+      where id=$1`,
+    [candUser.id],
+  )
+
+  const candSession = await (
+    await fetch(`${URL_}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: { apikey: PUB, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: candEmail, password: PASSWORD }),
+    })
+  ).json()
+
+  const candEncoded =
+    'base64-' + Buffer.from(JSON.stringify(candSession)).toString('base64url')
+  const candParts = []
+  for (let i = 0; i < candEncoded.length; i += 3180) candParts.push(candEncoded.slice(i, i + 3180))
+  const candCookie =
+    candParts.length === 1
+      ? `${cookieName}=${candParts[0]}`
+      : candParts.map((p, i) => `${cookieName}.${i}=${p}`).join('; ')
+
+  const candGet = async (path) => {
+    const res = await fetch(`${APP}${path}`, { headers: { cookie: candCookie }, redirect: 'manual' })
+    return { status: res.status, location: res.headers.get('location'), html: await res.text() }
+  }
+
+  const myExams = await candGet('/en/my-exams')
+  check(
+    myExams.status === 200,
+    '/en/my-exams renders for a candidate',
+    `status ${myExams.status} → ${myExams.location}`,
+  )
+  check(
+    myExams.html.includes(examTitle),
+    'the assigned exam appears on the candidate list',
+    'the assigned exam was not listed for the candidate',
+  )
+  check(
+    !/MISSING_MESSAGE|IntlError/.test(myExams.html),
+    'every message key resolves on the candidate list',
+    'a translation key is missing',
+  )
+
+  // Start through the real RPC with the candidate's own token — the same call
+  // the Start button makes.
+  const startRes = await fetch(`${URL_}/rest/v1/rpc/start_attempt`, {
+    method: 'POST',
+    headers: {
+      apikey: PUB,
+      Authorization: `Bearer ${candSession.access_token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ p_exam_id: examId }),
+  })
+  const startBody = await startRes.json()
+  const attemptId = Array.isArray(startBody) ? startBody[0]?.attempt_id : null
+  check(
+    Boolean(attemptId),
+    'a candidate can start an attempt on an assigned exam',
+    `start_attempt returned ${startRes.status}: ${JSON.stringify(startBody)?.slice(0, 200)}`,
+  )
+
+  if (attemptId) {
+    const paper = await candGet(`/en/attempt/${attemptId}`)
+    check(
+      paper.status === 200,
+      '/en/attempt/[id] renders the live paper',
+      `status ${paper.status} → ${paper.location}`,
+    )
+    check(
+      paper.html.includes(stem),
+      'the candidate sees the question they were served',
+      'the question did not render on the live paper',
+    )
+    check(
+      paper.html.includes('Rice bran'),
+      'the answer controls are mounted, options and all',
+      'the options did not render on the live paper',
+    )
+    // role="timer" is produced only by the countdown component actually
+    // mounting — unlike a label, it cannot come from the message bundle.
+    check(
+      /role="timer"/.test(paper.html),
+      'the countdown is mounted',
+      'the countdown did not render',
+    )
+
+    // THE ASSERTION THIS SECTION EXISTS FOR.
+    for (const forbidden of ['"correct"', 'modelAnswer', '"rubric"', '"accept"']) {
+      check(
+        !paper.html.includes(forbidden),
+        `the live paper contains no ${forbidden}`,
+        `THE LIVE PAPER LEAKED ${forbidden} TO THE CANDIDATE`,
+      )
+    }
+
+    // A candidate must not reach an attempt that is not theirs, and "not yours"
+    // and "does not exist" must look identical from outside.
+    const notMine = await candGet('/en/attempt/00000000-0000-0000-0000-0000000000ff')
+    check(
+      notMine.status === 404,
+      'an attempt that is not yours 404s',
+      `status ${notMine.status} for a foreign attempt`,
+    )
+  }
+
+  // The authoring list must stay closed to them, or the separation of the two
+  // sides is cosmetic.
+  const candExams = await candGet('/en/exams')
+  check(
+    candExams.status !== 200,
+    'a candidate cannot open the authoring exam list',
+    `a candidate got ${candExams.status} on /en/exams`,
+  )
 } catch (e) {
   bad(`render check threw: ${e.message}`)
 } finally {
   if (createdExams.length) {
+    // Attempts first. attempts.exam_id is ON DELETE RESTRICT by design — a sat
+    // paper must not disappear because somebody tidied up the exam — so the
+    // exam cannot go until the attempts made against it have.
+    await db.query('delete from public.attempts where exam_id = any($1::uuid[])', [createdExams])
     await db.query('delete from public.exams where id = any($1::uuid[])', [createdExams])
   }
   if (createdQuestions.length) {
