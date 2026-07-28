@@ -19,10 +19,10 @@ import { connect, hasDatabase, chef, employee, fixtures, type TestClaims } from 
 
 const describeDb = hasDatabase ? describe : describe.skip
 
-const EVAL = 'aaaa9999-9999-9999-9999-999999999999'
-const VER1 = 'bbbb9999-9999-9999-9999-999999999999'
-const VER2 = 'cccc9999-9999-9999-9999-999999999999'
-const CAND = 'dddd9999-9999-9999-9999-999999999999'
+const EVAL = 'aaaa5555-5555-5555-5555-555555555555'
+const VER1 = 'bbbb5555-5555-5555-5555-555555555555'
+const VER2 = 'cccc5555-5555-5555-5555-555555555555'
+const CAND = 'dddd5555-5555-5555-5555-555555555555'
 
 const CAT = '00000000-0000-0000-0000-00000000ca99'
 const Q_MCQ = '00000000-0000-0000-0000-0000000ee091'
@@ -141,8 +141,8 @@ describeDb('evaluation, verification and release', () => {
 
     await db.query(
       `insert into auth.users (id, email) values
-         ($1,'eval9@test.local'), ($2,'ver9a@test.local'),
-         ($3,'ver9b@test.local'), ($4,'cand9@test.local')`,
+         ($1,'eval5@test.local'), ($2,'ver5a@test.local'),
+         ($3,'ver5b@test.local'), ($4,'cand5@test.local')`,
       [EVAL, VER1, VER2, CAND],
     )
     await db.query(

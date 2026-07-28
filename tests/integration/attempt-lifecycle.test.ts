@@ -24,9 +24,9 @@ import { connect, hasDatabase, chef, employee, fixtures, type TestClaims } from 
 
 const describeDb = hasDatabase ? describe : describe.skip
 
-const CHEF = 'aaaa8888-8888-8888-8888-888888888888'
-const CAND = 'bbbb8888-8888-8888-8888-888888888888'
-const OTHER = 'cccc8888-8888-8888-8888-888888888888'
+const CHEF = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+const CAND = 'bbbbaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+const OTHER = 'ccccaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
 
 // Plain hex. 'p' and 't' are not hex digits and the last group is exactly 12.
 const CAT = '00000000-0000-0000-0000-00000000ca88'

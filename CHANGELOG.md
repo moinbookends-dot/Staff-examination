@@ -123,6 +123,53 @@ what the candidate submitted and whether each part was right — never the
 expected value. A breakdown destined for a results screen that quoted the
 accepted answers would hand over the key for every question they got wrong.
 
+### Shipped — the evaluation and verification queues
+
+`/evaluate`, `/evaluate/[id]` and `/verify`. M4 is now operable in the browser
+from end to end, and the nav entries M1 defined for `/evaluate` and `/verify`
+finally lead somewhere.
+
+**Queues are ordered oldest first.** Any other order lets the awkward paper sit
+at the bottom while a candidate waits on a result.
+
+**Verification and release share one screen.** They are the same job to the
+person doing it — papers a human marked and papers the machine marked, both
+waiting for somebody to say the results may go out. Two pages would mean
+checking two places to learn whether anyone is waiting.
+
+**The evaluator sees the rubric, and nothing else does.** It reaches them
+through `attempt_evaluation_items()` under four conditions at once — the caller
+holds `evaluation.evaluate`, the attempt is in their company, it is awaiting
+evaluation, and the question is one a machine could not mark. An evaluator
+cannot use it to read the key for a multiple-choice question.
+
+**The approve button is hidden from whoever marked the paper, and that is
+presentation only.** `verify_attempt()` refuses them by name and the tests
+assert the refusal, not the hidden button. Hiding it just spares somebody
+discovering the rule via an error message.
+
+**No bound is re-stated in TypeScript.** The score field has no meaningful max,
+the finish button is never pre-emptively disabled: `save_evaluation()` refuses a
+score above the question's marks and `complete_evaluation()` refuses while
+anything is unmarked. The UI reports those refusals rather than trying to
+prevent them, so each rule has one home.
+
+**`render-check.mjs` now runs the whole loop.** Sit, submit, mark, sign off,
+publish, and the candidate sees a verdict — 21 assertions across two staff
+sessions and a candidate, with the verifier a second chef because the database
+refuses the evaluator's own signature.
+
+**A fourth vacuous assertion, caught by its own negative.** The new checks
+asserted `html.includes('has not been released')`, which every page satisfies:
+next-intl serialises the entire message bundle for the client provider. The two
+positive checks were passing against the bundle and would have passed against a
+blank page; only the negative — *absence* of that string after publication —
+failed and exposed all three. They now match rendered text nodes (`>Your result
+has not been released`), which the JSON bundle cannot produce. Same failure mode
+as the `Save settings`, `No sections yet` and `disabled` assertions before it;
+the lesson that keeps having to be relearned is that a passing assertion about a
+message string proves nothing in this app.
+
 ### Shipped — evaluation, verification and release (0028)
 
 Closes the lifecycle 0001 drew and every migration since has been walking toward:
@@ -235,6 +282,21 @@ the candidate immediately on submit; M5 owns deciding when a result is released,
 and will move that behind its gate.
 
 ### Fixed while building
+
+**Three integration suites were quietly fighting over the same fixture ids.**
+`evaluation.test.ts` was written with `aaaa9999-…`, which `exam-draw` had
+already claimed. Every suite's `beforeAll` deletes the users it is about to
+create, so whichever ran second destroyed the other's chef. The symptom was a
+foreign key violation in *exam-draw's teardown* — in a suite whose forty
+assertions all passed, in a file the change had never touched, pointing at
+nothing. `attempt-lifecycle` and `grading` turned out to be colliding with
+`rls-exams` and `tenancy` the same way, latent since M4 slice 2.
+
+Suites share one database, so ids are a namespace. `tests/unit/fixture-ids.test.ts`
+is now the registry: it fails if any id appears in two suites, naming both. The
+seeded org is exempt because it is meant to be shared, and so is the
+`…0000ff` "no such row" sentinel — collisions matter because two suites create
+and delete the same row, and nobody creates that one.
 
 **`render-check.mjs` asserted a shortfall by depending on an empty database.**
 Its rule checks ask for more questions than exist, to prove the shortfall is

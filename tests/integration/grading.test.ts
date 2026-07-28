@@ -368,7 +368,7 @@ describeDb('auto-grading', () => {
       // it is internal machinery and nothing outside the database should be
       // able to invoke it. Same rule as every other internal function (0020).
       await expect(
-        asUser(db, employee('aaaa7777-7777-7777-7777-777777777777'), () =>
+        asUser(db, employee('aaaaeeee-eeee-eeee-eeee-eeeeeeeeeeee'), () =>
           db.query(
             "select * from public.grade_answer('{}'::jsonb, '{}'::jsonb, '{}'::jsonb, 1, 0)",
           ),

@@ -765,7 +765,7 @@ try {
 
     const held = await candGet(`/en/attempt/${attemptId}`)
     check(
-      held.html.includes('has not been released'),
+      />Your result has not been released/.test(held.html),
       'an unreleased result tells the candidate it is pending',
       'the pending message is missing after submitting',
     )
@@ -794,6 +794,299 @@ try {
     candExams.status !== 200,
     'a candidate cannot open the authoring exam list',
     `a candidate got ${candExams.status} on /en/exams`,
+  )
+
+  // ── 9. The whole loop ─────────────────────────────────────────────────────
+  // ┌─────────────────────────────────────────────────────────────────────────┐
+  // │ M4 END TO END, THROUGH THE BROWSER.                                     │
+  // │                                                                         │
+  // │ sit → submit → evaluate → verify → publish → the candidate sees a mark. │
+  // │ Every earlier section proves one screen; this proves they join up, and  │
+  // │ that the result stays invisible until the last step in the chain says   │
+  // │ otherwise.                                                              │
+  // └─────────────────────────────────────────────────────────────────────────┘
+  console.log('\n9. Evaluation, verification and release')
+
+  // A second chef, so the verifier is not the evaluator. The database refuses
+  // that combination and this is how the check gets an honest signature.
+  const verEmail = `render-ver-${stamp}@bookends-test.local`
+  const verMade = await fetch(`${URL_}/auth/v1/admin/users`, {
+    method: 'POST',
+    headers: adminHeaders,
+    body: JSON.stringify({
+      email: verEmail,
+      password: PASSWORD,
+      email_confirm: true,
+      user_metadata: { full_name: 'Render Verifier', locale: 'en' },
+    }),
+  })
+  if (!verMade.ok) throw new Error(`create verifier: ${verMade.status} ${await verMade.text()}`)
+  const verUser = await verMade.json()
+  createdUsers.push(verUser.id)
+
+  await db.query(
+    `update public.profiles
+        set approval_status='approved',
+            outlet_id='00000000-0000-0000-0000-00000000a001',
+            department_id=(select id from public.departments where slug='kitchen' limit 1)
+      where id=$1`,
+    [verUser.id],
+  )
+  await db.query(
+    `insert into public.user_roles (user_id, role_id)
+     select $1, id from public.roles where key='chef' on conflict do nothing`,
+    [verUser.id],
+  )
+  await db.query(
+    `delete from public.user_roles
+      where user_id=$1 and role_id=(select id from public.roles where key='employee')`,
+    [verUser.id],
+  )
+
+  const verSession = await (
+    await fetch(`${URL_}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: { apikey: PUB, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: verEmail, password: PASSWORD }),
+    })
+  ).json()
+  const verEncoded = 'base64-' + Buffer.from(JSON.stringify(verSession)).toString('base64url')
+  const verParts = []
+  for (let i = 0; i < verEncoded.length; i += 3180) verParts.push(verEncoded.slice(i, i + 3180))
+  const verCookie =
+    verParts.length === 1
+      ? `${cookieName}=${verParts[0]}`
+      : verParts.map((p, i) => `${cookieName}.${i}=${p}`).join('; ')
+  const verGet = async (path) => {
+    const res = await fetch(`${APP}${path}`, { headers: { cookie: verCookie }, redirect: 'manual' })
+    return { status: res.status, location: res.headers.get('location'), html: await res.text() }
+  }
+
+  // An essay, so the paper needs a person.
+  const essayStem = `Render check ${stamp}: describe the danger zone.`
+  const rubricLabel = `Names 5 to 63 degrees ${stamp}`
+  const { rows: essayRows } = await db.query(
+    `insert into public.questions
+       (company_id, type, response_format, stem, content, category_id,
+        difficulty, marks, status, created_by)
+     values ($1,'essay','text_long',$2,$3::jsonb,$4,3,5,'active',$5)
+     returning id`,
+    [
+      '00000000-0000-0000-0000-00000000c001',
+      essayStem,
+      JSON.stringify({ format: 'text_long', maxWords: 100 }),
+      RENDER_CAT,
+      user.id,
+    ],
+  )
+  const essayId = essayRows[0].id
+  createdQuestions.push(essayId)
+  await db.query(
+    `insert into public.question_answer_keys (question_id, answer_key) values ($1,$2::jsonb)`,
+    [essayId, JSON.stringify({ format: 'text_long', rubric: [{ id: 'r1', label: rubricLabel, max: 5 }] })],
+  )
+
+  // 'single' so one signature completes it — the two-signature path is covered
+  // exhaustively in the integration suite.
+  const { rows: essayExamRows } = await db.query(
+    `insert into public.exams
+       (company_id, title, created_by, kind, duration_minutes, paper_mode,
+        max_attempts, pass_mark_percent, verification_mode, closes_at)
+     values ($1,$2,$3,'official',30,'fixed',3,50,'single', now() + interval '1 day')
+     returning id`,
+    ['00000000-0000-0000-0000-00000000c001', `Render check essay exam ${stamp}`, user.id],
+  )
+  const essayExamId = essayExamRows[0].id
+  createdExams.push(essayExamId)
+
+  const { rows: essaySection } = await db.query(
+    `insert into public.exam_sections (exam_id, title, sort_order)
+     values ($1,'Essay section',0) returning id`,
+    [essayExamId],
+  )
+  await db.query(
+    `insert into public.exam_rules
+       (section_id, category_id, question_count, difficulty_min, difficulty_max, question_types)
+     values ($1,$2,1,1,5,$3::public.question_type[])`,
+    [essaySection[0].id, RENDER_CAT, ['essay']],
+  )
+  await db.query(
+    `insert into public.exam_assignments (exam_id, target_kind, target_id)
+     values ($1,'outlet','00000000-0000-0000-0000-00000000a001')`,
+    [essayExamId],
+  )
+
+  const essayPublished = await fetch(`${URL_}/rest/v1/rpc/publish_exam`, {
+    method: 'POST',
+    headers: {
+      apikey: PUB,
+      Authorization: `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ p_exam_id: essayExamId }),
+  })
+  check(
+    essayPublished.status === 200,
+    'the essay exam publishes',
+    `publish returned ${essayPublished.status}`,
+  )
+
+  const candRpc = (name, body) =>
+    fetch(`${URL_}/rest/v1/rpc/${name}`, {
+      method: 'POST',
+      headers: {
+        apikey: PUB,
+        Authorization: `Bearer ${candSession.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    })
+
+  const essayStart = await (await candRpc('start_attempt', { p_exam_id: essayExamId })).json()
+  const essayAttempt = Array.isArray(essayStart) ? essayStart[0]?.attempt_id : null
+  check(Boolean(essayAttempt), 'the candidate starts the essay exam', 'start_attempt failed')
+
+  await candRpc('save_answer', {
+    p_attempt_id: essayAttempt,
+    p_question_id: essayId,
+    p_answer: { format: 'text_long', text: 'Between 5 and 63 degrees celsius.' },
+  })
+  await candRpc('submit_attempt', { p_attempt_id: essayAttempt, p_reason: 'user' })
+
+  const { rows: afterSubmit } = await db.query(
+    'select status from public.attempts where id=$1',
+    [essayAttempt],
+  )
+  check(
+    afterSubmit[0]?.status === 'evaluating',
+    'a paper with an essay goes to evaluation',
+    `status is ${afterSubmit[0]?.status}`,
+  )
+
+  // ── The evaluator's screens ──────────────────────────────────────────────
+  const queue = await get('/en/evaluate')
+  check(queue.status === 200, '/en/evaluate renders', `status ${queue.status} → ${queue.location}`)
+  check(
+    queue.html.includes('Render Candidate'),
+    'the paper appears in the marking queue',
+    'the submitted paper is not in the queue',
+  )
+  check(
+    !/MISSING_MESSAGE|IntlError/.test(queue.html),
+    'every message key resolves on the marking queue',
+    'a translation key is missing',
+  )
+
+  const marking = await get(`/en/evaluate/${essayAttempt}`)
+  check(marking.status === 200, '/en/evaluate/[id] renders', `status ${marking.status}`)
+  check(
+    marking.html.includes(essayStem),
+    'the marking screen shows the question',
+    'the question did not render on the marking screen',
+  )
+  check(
+    marking.html.includes('Between 5 and 63 degrees celsius.'),
+    'the marking screen shows what the candidate wrote',
+    'the candidate answer did not render',
+  )
+  // The evaluator is the ONE role allowed to see this, and only for a question
+  // no machine could mark.
+  check(
+    marking.html.includes(rubricLabel),
+    'the evaluator is given the marking guide',
+    'the rubric did not reach the evaluator',
+  )
+
+  // A candidate must not reach any of it.
+  const candEvaluate = await candGet('/en/evaluate')
+  check(
+    candEvaluate.status !== 200,
+    'a candidate cannot open the marking queue',
+    `a candidate got ${candEvaluate.status} on /en/evaluate`,
+  )
+
+  // ── Mark it, then verify it ──────────────────────────────────────────────
+  const chefRpc = (name, body, token = session.access_token) =>
+    fetch(`${URL_}/rest/v1/rpc/${name}`, {
+      method: 'POST',
+      headers: {
+        apikey: PUB,
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    })
+
+  await chefRpc('save_evaluation', {
+    p_attempt_id: essayAttempt,
+    p_question_id: essayId,
+    p_score: 4,
+    p_note: 'Good.',
+  })
+  const completed = await chefRpc('complete_evaluation', { p_attempt_id: essayAttempt })
+  check(
+    completed.status === 200,
+    'evaluation completes',
+    `complete_evaluation returned ${completed.status}: ${(await completed.text()).slice(0, 160)}`,
+  )
+
+  // Still not the candidate's to see.
+  const midway = await candGet(`/en/attempt/${essayAttempt}`)
+  check(
+    />Your result has not been released/.test(midway.html),
+    'a marked but unverified result stays hidden from the candidate',
+    'A MARKED RESULT LEAKED BEFORE VERIFICATION',
+  )
+
+  const verifyQueue = await verGet('/en/verify')
+  check(verifyQueue.status === 200, '/en/verify renders', `status ${verifyQueue.status}`)
+  check(
+    verifyQueue.html.includes('Render Candidate'),
+    'the marked paper appears in the verification queue',
+    'the marked paper is not awaiting verification',
+  )
+  check(
+    !/MISSING_MESSAGE|IntlError/.test(verifyQueue.html),
+    'every message key resolves on the verification queue',
+    'a translation key is missing',
+  )
+
+  // The evaluator sees it too, but is told it is not theirs to sign.
+  const ownWork = await get('/en/verify')
+  check(
+    ownWork.html.includes('You marked this paper'),
+    'the evaluator is told they cannot sign off their own marking',
+    'the separation-of-duties notice is missing',
+  )
+
+  const signed = await chefRpc(
+    'verify_attempt',
+    { p_attempt_id: essayAttempt, p_decision: 'verified', p_note: 'Agreed.' },
+    verSession.access_token,
+  )
+  check(signed.status === 200, 'the verifier signs it off', `verify returned ${signed.status}`)
+
+  const { rows: finalRow } = await db.query(
+    'select status, published_at from public.attempts where id=$1',
+    [essayAttempt],
+  )
+  check(
+    finalRow[0]?.status === 'published',
+    'a single sign-off publishes the result',
+    `status is ${finalRow[0]?.status}`,
+  )
+
+  // ── And now, at last, the candidate sees it ──────────────────────────────
+  const released = await candGet(`/en/attempt/${essayAttempt}`)
+  check(
+    !/>Your result has not been released/.test(released.html),
+    'the published result is no longer pending for the candidate',
+    'the result still reads as pending after publication',
+  )
+  check(
+    />Passed</.test(released.html) || />Not passed</.test(released.html),
+    'the candidate is shown the verdict once it is published',
+    'no verdict rendered after publication',
   )
 } catch (e) {
   bad(`render check threw: ${e.message}`)
