@@ -19,6 +19,150 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      "attempt_answers": {
+        Row: {
+          "attempt_id": string
+          "question_id": string
+          "question_revision": number
+          "answer": Json
+          "auto_grade_status": Database["public"]["Enums"]["auto_grade_status"]
+          "score": number | null
+          "needs_review": boolean
+          "grader_note": string | null
+          "answered_at": string
+          "updated_at": string
+        }
+        Insert: {
+          "attempt_id": string
+          "question_id": string
+          "question_revision": number
+          "answer": Json
+          "auto_grade_status"?: Database["public"]["Enums"]["auto_grade_status"]
+          "score"?: number | null
+          "needs_review"?: boolean
+          "grader_note"?: string | null
+          "answered_at"?: string
+          "updated_at"?: string
+        }
+        Update: {
+          "attempt_id"?: string
+          "question_id"?: string
+          "question_revision"?: number
+          "answer"?: Json
+          "auto_grade_status"?: Database["public"]["Enums"]["auto_grade_status"]
+          "score"?: number | null
+          "needs_review"?: boolean
+          "grader_note"?: string | null
+          "answered_at"?: string
+          "updated_at"?: string
+        }
+        Relationships: []
+      }
+      "attempt_questions": {
+        Row: {
+          "attempt_id": string
+          "section_id": string | null
+          "question_id": string
+          "question_revision": number
+          "snapshot": Json
+          "content_version": number
+          "position": number
+          "marks": number
+          "negative_marks": number
+          "fallback_reason": string | null
+          "created_at": string
+        }
+        Insert: {
+          "attempt_id": string
+          "section_id"?: string | null
+          "question_id": string
+          "question_revision": number
+          "snapshot": Json
+          "content_version"?: number
+          "position": number
+          "marks": number
+          "negative_marks"?: number
+          "fallback_reason"?: string | null
+          "created_at"?: string
+        }
+        Update: {
+          "attempt_id"?: string
+          "section_id"?: string | null
+          "question_id"?: string
+          "question_revision"?: number
+          "snapshot"?: Json
+          "content_version"?: number
+          "position"?: number
+          "marks"?: number
+          "negative_marks"?: number
+          "fallback_reason"?: string | null
+          "created_at"?: string
+        }
+        Relationships: []
+      }
+      "attempts": {
+        Row: {
+          "id": string
+          "exam_id": string
+          "candidate_id": string
+          "company_id": string
+          "status": Database["public"]["Enums"]["attempt_status"]
+          "attempt_number": number
+          "started_at": string
+          "expires_at": string
+          "submitted_at": string | null
+          "submit_reason": Database["public"]["Enums"]["submit_reason"] | null
+          "score": number | null
+          "max_score": number | null
+          "passed": boolean | null
+          "auto_graded_at": string | null
+          "requires_manual_grading": boolean
+          "violation_count": number
+          "created_at": string
+          "updated_at": string
+        }
+        Insert: {
+          "id"?: string
+          "exam_id": string
+          "candidate_id": string
+          "company_id": string
+          "status"?: Database["public"]["Enums"]["attempt_status"]
+          "attempt_number": number
+          "started_at"?: string
+          "expires_at": string
+          "submitted_at"?: string | null
+          "submit_reason"?: Database["public"]["Enums"]["submit_reason"] | null
+          "score"?: number | null
+          "max_score"?: number | null
+          "passed"?: boolean | null
+          "auto_graded_at"?: string | null
+          "requires_manual_grading"?: boolean
+          "violation_count"?: number
+          "created_at"?: string
+          "updated_at"?: string
+        }
+        Update: {
+          "id"?: string
+          "exam_id"?: string
+          "candidate_id"?: string
+          "company_id"?: string
+          "status"?: Database["public"]["Enums"]["attempt_status"]
+          "attempt_number"?: number
+          "started_at"?: string
+          "expires_at"?: string
+          "submitted_at"?: string | null
+          "submit_reason"?: Database["public"]["Enums"]["submit_reason"] | null
+          "score"?: number | null
+          "max_score"?: number | null
+          "passed"?: boolean | null
+          "auto_graded_at"?: string | null
+          "requires_manual_grading"?: boolean
+          "violation_count"?: number
+          "created_at"?: string
+          "updated_at"?: string
+        }
+        Relationships: []
+      }
       "audit_logs": {
         Row: {
           "id": number
@@ -1071,6 +1215,10 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "attempt_paper": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "audit_row": {
         Args: Record<string, unknown>
         Returns: unknown
@@ -1208,6 +1356,10 @@ export type Database = {
         Returns: unknown
       }
       "set_updated_at": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "start_attempt": {
         Args: Record<string, unknown>
         Returns: unknown
       }

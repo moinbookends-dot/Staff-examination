@@ -7,6 +7,61 @@ remembering, and anything left behind as debt.
 
 ---
 
+## M4 — Exam Delivery · *in progress*
+
+### Shipped — attempts, the frozen candidate paper, and the clock (0025, 0026)
+
+The data layer for sitting an exam. No UI yet; schema and functions land and are
+tested first, which is what made both earlier milestones' screens go in cleanly.
+
+**Four obligations recorded in earlier migrations are discharged here.**
+`attempt_questions` exists and is populated by `draw_paper()` rather than a
+second selector (0014). `fallback_reason` travels onto the attempt, so a
+substituted question is still explainable months later (0014).
+`attempt_answers.question_revision` is NOT NULL, which is what lets slice 2 grade
+against the key that was served (0011, 0022). And `attempt_paper()` is the
+sanitising delivery route 0015 promised — candidates hold no policy on
+`exam_questions` *or* `attempt_questions`, so this function is the entire surface
+by which they ever see a question.
+
+**The clock is the server's.** `expires_at` is stamped at start as
+`min(now() + duration, exam.closes_at)` and every later write is checked against
+it; the browser counts down for display only. A client-owned timer is not a
+timer — changing the system clock, pausing JavaScript or reloading would each buy
+unlimited time on a scored exam, and none of it would leave a trace. Taking the
+earlier of the two bounds also stops an attempt outliving its exam and accepting
+answers after everyone else has stopped.
+
+**Answers autosave per question.** One row per question, upserted as the
+candidate works. Restaurant staff sit these on phones on outlet wifi; losing
+signal should cost the question being typed, not the paper.
+
+**Starting again resumes.** A reload returns the existing attempt rather than
+creating a second — otherwise answers split across two rows and `max_attempts`
+counts wrong. A partial unique index enforces one in-flight attempt per
+candidate per exam regardless.
+
+**No table here has an insert or update policy for anyone.** `start_attempt()`
+is the only writer, and slice 2 adds the other two. A client able to write
+`attempts` directly would choose its own deadline, attempt number and score.
+
+17 integration tests, including the two that matter: an attempt paper never
+contains `correct`, `accept`, `rubric`, `keywords` or `modelAnswer`; and a
+candidate cannot read `attempt_questions` directly, ask for another candidate's
+paper, or edit their own attempt row.
+
+### Fixed while building
+
+**`email_outbox` rows outlive the exam that queued them.** `publish_exam` writes
+one per assignee under a UNIQUE dedupe key, and `email_outbox` has no foreign key
+to `exams` — so deleting an exam leaves the row, and any later publish with the
+same ids collides. Harmless in production, where immutability means an exam
+publishes once; fatal for a test suite with fixed ids, where it made the whole
+attempts suite fail in setup on every run after the first. The audit had flagged
+the same leak in `render-check.mjs`.
+
+---
+
 ## M3 — Exam Builder · *in progress*
 
 ### Architectural debt closed before M4 (0022–0024)
