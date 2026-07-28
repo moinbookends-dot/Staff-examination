@@ -1038,6 +1038,39 @@ try {
     'A MARKED RESULT LEAKED BEFORE VERIFICATION',
   )
 
+  // ── /results before release ──────────────────────────────────────────────
+  // Marked, not yet signed off. The result must be listed as pending, carry no
+  // number, and its detail page must 404 — "not yours" and "not released" are
+  // deliberately indistinguishable from outside.
+  const resultsPending = await candGet('/en/results')
+  check(
+    resultsPending.status === 200,
+    '/en/results renders for a candidate',
+    `status ${resultsPending.status} → ${resultsPending.location}`,
+  )
+  check(
+    resultsPending.html.includes(`Render check essay exam ${stamp}`),
+    'an unreleased attempt is listed on /en/results',
+    'the attempt is missing from the results list',
+  )
+  check(
+    />Awaiting release</.test(resultsPending.html),
+    'an unreleased result is marked as pending',
+    'the pending state is missing on the results list',
+  )
+  check(
+    !/>Passed</.test(resultsPending.html) && !/>Not passed</.test(resultsPending.html),
+    'no verdict appears on the results list before release',
+    'A VERDICT LEAKED ONTO THE RESULTS LIST BEFORE RELEASE',
+  )
+
+  const detailBefore = await candGet(`/en/results/${essayAttempt}`)
+  check(
+    detailBefore.status === 404,
+    'the result detail 404s before release',
+    `status ${detailBefore.status} for an unreleased result`,
+  )
+
   const verifyQueue = await verGet('/en/verify')
   check(verifyQueue.status === 200, '/en/verify renders', `status ${verifyQueue.status}`)
   check(
@@ -1088,11 +1121,118 @@ try {
     'the candidate is shown the verdict once it is published',
     'no verdict rendered after publication',
   )
+
+  // ── /results after release ───────────────────────────────────────────────
+  const resultsReleased = await candGet('/en/results')
+
+  // Scoped to the essay card, not the whole page. This candidate also sat the
+  // mcq exam in section 8, which defaults to dual verification and is still
+  // held — so 'Awaiting release' is legitimately on this page, for that row.
+  // Asserting over the whole document would call a correct page broken.
+  const essayCardStart = resultsReleased.html.indexOf(`Render check essay exam ${stamp}`)
+  const nextCardStart = resultsReleased.html.indexOf(`Render check exam ${stamp}`, essayCardStart)
+  const essayCard = resultsReleased.html.slice(
+    essayCardStart,
+    nextCardStart > essayCardStart ? nextCardStart : undefined,
+  )
+
+  check(
+    essayCardStart !== -1,
+    'the released result is listed',
+    'the released result is missing from /en/results',
+  )
+  check(
+    !/>Awaiting release</.test(essayCard),
+    'the released result no longer reads as pending',
+    'the released result still shows as awaiting release',
+  )
+  check(
+    />Passed</.test(essayCard),
+    'the verdict appears on the results list once released',
+    'the verdict is missing from the released result',
+  )
+
+  const detailAfter = await candGet(`/en/results/${essayAttempt}`)
+  check(detailAfter.status === 200, 'the result detail renders once released', `status ${detailAfter.status}`)
+  check(
+    detailAfter.html.includes(essayStem),
+    'the breakdown names the question',
+    'the per-question breakdown did not render',
+  )
+  check(
+    detailAfter.html.includes('Between 5 and 63 degrees celsius.'),
+    'the breakdown shows what the candidate wrote',
+    'the answer is missing from the breakdown',
+  )
+  check(
+    detailAfter.html.includes('Render Chef'),
+    'the result names who marked it',
+    'the evaluator is not named on the result',
+  )
+  check(
+    detailAfter.html.includes('Render Verifier'),
+    'the result names who signed it off',
+    'the verifier is not named on the result',
+  )
+  // The verifier's note is an internal conversation. 0028 kept it away from
+  // candidates and the results page must not hand it back.
+  check(
+    !detailAfter.html.includes('Agreed.'),
+    'the verifier note is not shown to the candidate',
+    'THE VERIFIER NOTE LEAKED TO THE CANDIDATE',
+  )
+  // And still no answer key, on the one page that shows a marked paper back.
+  for (const forbidden of ['"correct"', 'modelAnswer', '"rubric"', '"accept"', rubricLabel]) {
+    check(
+      !detailAfter.html.includes(forbidden),
+      `the result page contains no ${forbidden === rubricLabel ? 'rubric text' : forbidden}`,
+      `THE RESULT PAGE LEAKED ${forbidden}`,
+    )
+  }
+
+  // ── The release notice ───────────────────────────────────────────────────
+  const { rows: notices } = await db.query(
+    `select kind, link from public.notifications where data ->> 'attempt_id' = $1`,
+    [essayAttempt],
+  )
+  check(
+    notices.length === 1 && notices[0].kind === 'result.published',
+    'publishing notifies the candidate exactly once',
+    `expected one result.published notification, found ${notices.length}`,
+  )
+  check(
+    notices[0]?.link === `/results/${essayAttempt}`,
+    'the notification links to the result',
+    `notification link is ${notices[0]?.link}`,
+  )
+  const { rows: mails } = await db.query(
+    `select template, priority from public.email_outbox where payload ->> 'attempt_id' = $1`,
+    [essayAttempt],
+  )
+  check(
+    mails.length === 1 && mails[0].template === 'result-published',
+    'publishing queues exactly one email',
+    `expected one queued email, found ${mails.length}`,
+  )
 } catch (e) {
   bad(`render check threw: ${e.message}`)
 } finally {
   if (createdExams.length) {
-    // Attempts first. attempts.exam_id is ON DELETE RESTRICT by design — a sat
+    // Release notices first: email_outbox.to_user_id is ON DELETE SET NULL, so
+    // these outlive both the attempt and the candidate unless named directly.
+    await db.query(
+      `delete from public.email_outbox
+        where payload ->> 'attempt_id' in (
+          select a.id::text from public.attempts a where a.exam_id = any($1::uuid[]))`,
+      [createdExams],
+    )
+    await db.query(
+      `delete from public.notifications
+        where data ->> 'attempt_id' in (
+          select a.id::text from public.attempts a where a.exam_id = any($1::uuid[]))`,
+      [createdExams],
+    )
+    // Attempts next. attempts.exam_id is ON DELETE RESTRICT by design — a sat
     // paper must not disappear because somebody tidied up the exam — so the
     // exam cannot go until the attempts made against it have.
     await db.query('delete from public.attempts where exam_id = any($1::uuid[])', [createdExams])

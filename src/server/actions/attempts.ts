@@ -272,6 +272,77 @@ export async function getAttemptResult(attemptId: string): Promise<AttemptResult
   return rows.find((r) => r.attempt_id === parsed.data) ?? null
 }
 
+export interface CandidateResult {
+  attempt_id: string
+  exam_id: string
+  exam_title: string
+  exam_kind: string
+  status: string
+  started_at: string
+  submitted_at: string | null
+  /** Everything below is null until `published` is true. */
+  published_at: string | null
+  score: number | null
+  max_score: number | null
+  percent: number | null
+  passed: boolean | null
+  pass_mark_percent: number
+  published: boolean
+}
+
+export interface ResultDetail {
+  attempt_id: string
+  exam_title: string
+  started_at: string
+  submitted_at: string | null
+  published_at: string | null
+  score: number | null
+  max_score: number | null
+  percent: number | null
+  passed: boolean | null
+  pass_mark_percent: number
+  /** Who marked it, where a human did. */
+  evaluator_name: string | null
+  /** Who signed it off. Names only — never what they wrote to each other. */
+  verifier_names: string[]
+}
+
+/**
+ * Every finished attempt, with the score withheld until publication.
+ *
+ * Papers still being sat are absent — those live on /my-exams — and so are
+ * voided ones, which 0025 excluded from reporting.
+ */
+export async function listMyResults(): Promise<CandidateResult[]> {
+  await requirePermission('attempts.read_own')
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('my_results')
+
+  if (error) return []
+  return (data ?? []) as unknown as CandidateResult[]
+}
+
+/**
+ * The header of one result.
+ *
+ * Returns null rather than throwing when the database refuses: it raises both
+ * for an attempt that is not theirs and for one not yet released, and the page
+ * turns either into a 404 rather than explaining which.
+ */
+export async function getResultDetail(attemptId: string): Promise<ResultDetail | null> {
+  await requirePermission('attempts.read_own')
+
+  const parsed = dbId().safeParse(attemptId)
+  if (!parsed.success) return null
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('my_result_detail', { p_attempt_id: parsed.data })
+
+  if (error) return null
+  return ((data as unknown as ResultDetail[] | null)?.[0]) ?? null
+}
+
 /** The per-question breakdown. Raises in the database unless published. */
 export async function getAttemptReview(attemptId: string): Promise<AttemptReviewItem[]> {
   await requirePermission('attempts.read_own')

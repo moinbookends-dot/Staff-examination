@@ -7,7 +7,67 @@ remembering, and anything left behind as debt.
 
 ---
 
-## M4 — Exam Delivery · *in progress*
+## M5 — Candidate Results · *in progress*
+
+### Shipped — results and the release notice (0029)
+
+M4 left a published result sitting in the database with nobody told and nowhere
+to look at it. `/results`, `/results/[id]` and the notification close both
+halves.
+
+**The notification is a trigger, not a call in each publisher.** Four functions
+can move an attempt to `published` — `grade_and_close_attempt` (auto-graded, no
+sign-off wanted), `complete_evaluation` (`verification_mode = 'auto'`),
+`verify_attempt` (the last signature), and `publish_attempt` (a held paper
+released). Writing the notification into all four is how three of them keep it
+and the fourth quietly loses it. Firing on the *transition* covers every path by
+construction, including any fifth added later.
+
+**Idempotency comes from two independent places on purpose.** The status graph
+(0028) already lets an attempt enter `published` at most once in its life: the
+only move out is to `voided`, and `voided` goes nowhere. A unique index on
+`(user_id, kind, data->>'dedupe_key')` makes it impossible a second time, so
+widening the graph later cannot silently start double-sending. That index also
+gives `publish_exam`'s `on conflict do nothing` — written in 0014 against no
+unique index at all, and therefore doing nothing — something to actually
+conflict on.
+
+**Re-publishing is a no-op, not an error**, which is where the test initially
+had it wrong. The transition trigger returns early when the status has not
+changed, so a repeated write succeeds silently; what stops a second email is the
+notification trigger's `WHEN old.status is distinct from 'published'`. The test
+now exercises that path rather than expecting a raise that never comes.
+
+**Opting out of email is not opting out of the product.** `email_opt_in`
+suppresses the queued email; the in-app notification is written regardless.
+
+**The result names who marked and who verified, and never what they wrote.**
+0028 gave candidates no policy on `attempt_verifications` because the notes
+verifiers exchange are an internal conversation. Who signed off is a different
+thing — it is the accountability that makes a disputed mark answerable — so
+`my_result_detail()` returns the names and the render check asserts the note
+does not appear. Only the round that stands counts: approvals discarded by a
+return are history, not signatories.
+
+**Scores are absent from the data, not hidden by the page.** `my_results()`
+returns null for score, percent and passed until publication, so a rendering
+mistake on `/results` cannot leak a mark — there is none in the payload to leak.
+`/results/[id]` 404s for both "not yours" and "not released", because telling
+somebody their result exists but is being held is the leak the gate exists to
+prevent.
+
+### Fixed while building
+
+**A render assertion that called a correct page broken.** The check for "no
+longer awaiting release" scanned the whole results page, but the candidate also
+had a held attempt from an earlier section legitimately showing that state. It
+now scopes to the card under test. Worth recording as the mirror image of the
+vacuous-assertion problem: an assertion can be too broad as well as too weak,
+and this one would have failed on any candidate with more than one exam.
+
+---
+
+## M4 — Exam Delivery · *complete*
 
 ### Shipped — attempts, the frozen candidate paper, and the clock (0025, 0026)
 

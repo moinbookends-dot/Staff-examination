@@ -1433,6 +1433,18 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "my_result_detail": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "my_results": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "notify_attempt_published": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "preview_rule_count": {
         Args: Record<string, unknown>
         Returns: unknown
