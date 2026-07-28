@@ -7,7 +7,74 @@ remembering, and anything left behind as debt.
 
 ---
 
-## M5 — Candidate Results · *in progress*
+## M6 — Reports & Analytics · *in progress*
+
+### Shipped — the analytics data layer (0030)
+
+Every number M6 reports is derived. Nothing new is recorded: the columns that
+make this possible were added milestones ago, each for a reason that only pays
+off now — `attempt_answers.question_revision` (0011), `counts_towards_analytics`
+(0014), and the per-paper `marks` frozen in 0025 that gives every item its
+denominator.
+
+**No statistic without its sample size.** Every function returns `n` beside the
+number, and discrimination — the one that is worthless on a small sample and
+looks authoritative regardless — is NULL below ten responses rather than rounded
+into a confident decimal. The grading engine's warning transfers word for word:
+a wrong number that looks plausible is worse than none, because somebody will
+act on it. A chef retiring a question on a discrimination index computed from
+four attempts is precisely that failure.
+
+**One definition of which attempts count.** `analytics_attempts` is the single
+predicate — marking settled, exam flagged as calibrating, exam and candidate not
+deleted — and every report reads it rather than restating the condition. Two
+copies of "which attempts count" is how two reports quietly disagree about the
+same number.
+
+**Publication is deliberately not the test.** A marked-but-unreleased paper is a
+real measurement; whether the *candidate* may see it is a separate question,
+answered in 0028. Conflating them would make a chef's analytics jump around as
+results were released.
+
+**Statistics key on `(question_id, revision)`.** This is the whole reason 0011
+exists — its header warned that merging two wordings produces a difficulty
+describing neither and a discrimination index that actively misleads. The test
+reworders a question and asserts two rows of one response each, not one row of
+two.
+
+**The report is about the author, not the question.** `questions.difficulty` is
+an author's 1–5 *estimate*; there is no observed-difficulty column and none was
+added. `question_stats()` returns both the estimate and the observed band, and
+flags a question only when they differ by two bands *and* there are enough
+responses to say so. The interesting artefact is "you called this a 2 and 78% get
+it wrong", not the facility on its own.
+
+**No data must not read as zero.** A candidate with no attempts gets a null pass
+rate, not 0% — the latter states that everybody failed, which is a different and
+far more alarming claim. `team_stats()` LEFT JOINs for the same reason: somebody
+who has sat nothing is the answer to "who still needs to do this", so they
+appear with a zero rather than vanishing.
+
+**Cross-company scoping is asserted over the output**, not assumed from the
+`WHERE`. A `group by` is much easier to get wrong than a row policy, and RLS is
+not doing the work here — these are definer functions doing their own scoping.
+
+### Fixed while building
+
+**`max_attempts` caps at 10, so twelve responses cannot come from one person.**
+The first fixture tried, and the constraint was right. Spread across three
+candidates instead. A related test had tried to force an attempt into
+`evaluating` by demoting a published one; 0028's graph refused, also rightly, so
+the exam now carries an essay and lands there on its own.
+
+**One flaky run, diagnosed rather than shrugged at.** A run failed two cases
+immediately after the fixture that had aborted in `beforeAll`, which left
+committed users and questions behind. Three consecutive clean runs since, and
+the fixtures verify absent from the database afterwards.
+
+---
+
+## M5 — Candidate Results · *complete*
 
 ### Shipped — results and the release notice (0029)
 

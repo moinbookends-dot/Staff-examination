@@ -1258,9 +1258,31 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      "analytics_attempts": {
+        Row: {
+          "attempt_id": string | null
+          "exam_id": string | null
+          "candidate_id": string | null
+          "company_id": string | null
+          "score": number | null
+          "max_score": number | null
+          "passed": boolean | null
+          "started_at": string | null
+          "submitted_at": string | null
+          "percent": number | null
+          "outlet_id": string | null
+          "department_id": string | null
+          "exam_kind": Database["public"]["Enums"]["exam_kind"] | null
+          "pass_mark_percent": number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      "analytics_scope": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "answer_key_at_revision": {
         Args: Record<string, unknown>
         Returns: unknown
@@ -1290,6 +1312,14 @@ export type Database = {
         Returns: unknown
       }
       "bump_revision_from_answer_key": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "candidate_category_stats": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "candidate_stats": {
         Args: Record<string, unknown>
         Returns: unknown
       }
@@ -1342,6 +1372,10 @@ export type Database = {
         Returns: unknown
       }
       "exam_rule_counts": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "exam_stats": {
         Args: Record<string, unknown>
         Returns: unknown
       }
@@ -1469,6 +1503,10 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "question_stats": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "save_answer": {
         Args: Record<string, unknown>
         Returns: unknown
@@ -1490,6 +1528,10 @@ export type Database = {
         Returns: unknown
       }
       "submit_attempt": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "team_stats": {
         Args: Record<string, unknown>
         Returns: unknown
       }
