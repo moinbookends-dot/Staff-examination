@@ -471,5 +471,24 @@
     "blankWrong": "Wrong",
     "back": "Back to results",
     "notReleased": "This result has not been released yet."
+  },
+  "reports": {
+    "title": "Reports",
+    "subtitle": "How you are doing.",
+    "noData": "Nothing to report yet.",
+    "noDataHint": "Once you have sat an exam and the result is released, your record appears here.",
+    "attempts": "Exams taken",
+    "passed": "Passed",
+    "passRate": "Pass rate",
+    "average": "Average score",
+    "best": "Best score",
+    "lastAttempt": "Last taken {date}",
+    "percentValue": "{value}%",
+    "ofAttempts": "{passed} of {total}",
+    "strengths": "By topic",
+    "strengthsHint": "Weakest first — the top of this list is what to revise.",
+    "noCategories": "Not enough answers yet to break this down by topic.",
+    "questionsAnswered": "{count, plural, one {# question} other {# questions}}",
+    "correctShare": "{percent}% of marks"
   }
 }

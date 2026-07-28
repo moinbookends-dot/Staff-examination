@@ -59,6 +59,33 @@ appear with a zero rather than vanishing.
 `WHERE`. A `group by` is much easier to get wrong than a row policy, and RLS is
 not doing the work here — these are definer functions doing their own scoping.
 
+### Shipped — /reports for a candidate
+
+The "own" half of the reporting page: exams taken, pass rate, average and best
+score, and a topic breakdown ordered weakest first — so the answer to "what
+should I revise" is the top of the list rather than something the reader has to
+work out.
+
+**One route, three audiences.** The nav has a single `/reports` entry gated on
+`read_own`, `read_team` and `read_all` together, so the team and question views
+land on this page rather than on new routes. `analytics_scope()` is the single
+discriminator; the page never tests three permissions and gets their precedence
+wrong.
+
+**No data renders as an empty state, never as 0%.** `candidate_stats()` returns
+a null pass rate for somebody who has sat nothing, and "0% pass rate" is a claim
+that they failed everything — a different and much more alarming statement,
+which lands on the person it is about. The render check asserts both directions:
+the empty state appears for the verifier, who has sat nothing, and is absent for
+the candidate, who has a released result.
+
+**A fifth vacuous assertion, and the pair caught it.** Both checks used
+`/>Nothing to report yet</`, which can never match: the message ends in a full
+stop, so the rendered node is `>Nothing to report yet.<`. The positive check
+failed loudly; the negative one had been passing against nothing at all. Writing
+the two directions together is what exposed it — a single assertion in either
+direction would have looked fine.
+
 ### Fixed — CI re-granted an internal view, and disagreed with production again
 
 The analytics data layer went in green locally and failed CI on the one

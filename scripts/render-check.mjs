@@ -1190,6 +1190,43 @@ try {
     )
   }
 
+  // ── /reports ─────────────────────────────────────────────────────────────
+  // The candidate has one released result by now, so this exercises the
+  // populated path. The empty path is checked against the verifier, who has
+  // sat nothing — and getting THAT wrong is the more damaging failure, because
+  // "0% pass rate" tells somebody they failed everything.
+  const reports = await candGet('/en/reports')
+  check(reports.status === 200, '/en/reports renders', `status ${reports.status} → ${reports.location}`)
+  check(
+    !/MISSING_MESSAGE|IntlError/.test(reports.html),
+    'every message key resolves on reports',
+    'a translation key is missing',
+  )
+  check(
+    />Exams taken</.test(reports.html),
+    'the summary renders for somebody with results',
+    'the reports summary did not render',
+  )
+  check(
+    !/>Nothing to report yet/.test(reports.html),
+    'somebody with a result does not see the empty state',
+    'a candidate with a released result was told there is nothing to report',
+  )
+
+  const emptyReports = await verGet('/en/reports')
+  check(
+    />Nothing to report yet/.test(emptyReports.html),
+    'somebody who has sat nothing sees an empty state',
+    'the empty state is missing on reports',
+  )
+  // The assertion this section exists for. A null pass rate must never render
+  // as 0% — that is a claim about the person, not an absence of data.
+  check(
+    !/>0%</.test(emptyReports.html),
+    'no data is not reported as a zero pass rate',
+    'REPORTS SHOWED 0% FOR SOMEBODY WITH NO ATTEMPTS',
+  )
+
   // ── The release notice ───────────────────────────────────────────────────
   const { rows: notices } = await db.query(
     `select kind, link from public.notifications where data ->> 'attempt_id' = $1`,
