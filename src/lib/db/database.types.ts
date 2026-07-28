@@ -32,6 +32,8 @@ export type Database = {
           "answered_at": string
           "updated_at": string
           "grade_detail": Json | null
+          "evaluated_by": string | null
+          "evaluated_at": string | null
         }
         Insert: {
           "attempt_id": string
@@ -45,6 +47,8 @@ export type Database = {
           "answered_at"?: string
           "updated_at"?: string
           "grade_detail"?: Json | null
+          "evaluated_by"?: string | null
+          "evaluated_at"?: string | null
         }
         Update: {
           "attempt_id"?: string
@@ -58,6 +62,8 @@ export type Database = {
           "answered_at"?: string
           "updated_at"?: string
           "grade_detail"?: Json | null
+          "evaluated_by"?: string | null
+          "evaluated_at"?: string | null
         }
         Relationships: []
       }
@@ -103,6 +109,36 @@ export type Database = {
         }
         Relationships: []
       }
+      "attempt_verifications": {
+        Row: {
+          "id": string
+          "attempt_id": string
+          "verifier_id": string
+          "decision": string
+          "note": string | null
+          "round": number
+          "created_at": string
+        }
+        Insert: {
+          "id"?: string
+          "attempt_id": string
+          "verifier_id": string
+          "decision": string
+          "note"?: string | null
+          "round": number
+          "created_at"?: string
+        }
+        Update: {
+          "id"?: string
+          "attempt_id"?: string
+          "verifier_id"?: string
+          "decision"?: string
+          "note"?: string | null
+          "round"?: number
+          "created_at"?: string
+        }
+        Relationships: []
+      }
       "attempts": {
         Row: {
           "id": string
@@ -123,6 +159,11 @@ export type Database = {
           "violation_count": number
           "created_at": string
           "updated_at": string
+          "evaluated_by": string | null
+          "evaluated_at": string | null
+          "verified_at": string | null
+          "published_at": string | null
+          "returned_count": number
         }
         Insert: {
           "id"?: string
@@ -143,6 +184,11 @@ export type Database = {
           "violation_count"?: number
           "created_at"?: string
           "updated_at"?: string
+          "evaluated_by"?: string | null
+          "evaluated_at"?: string | null
+          "verified_at"?: string | null
+          "published_at"?: string | null
+          "returned_count"?: number
         }
         Update: {
           "id"?: string
@@ -163,6 +209,11 @@ export type Database = {
           "violation_count"?: number
           "created_at"?: string
           "updated_at"?: string
+          "evaluated_by"?: string | null
+          "evaluated_at"?: string | null
+          "verified_at"?: string | null
+          "published_at"?: string | null
+          "returned_count"?: number
         }
         Relationships: []
       }
@@ -1218,7 +1269,15 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "attempt_evaluation_items": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "attempt_paper": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "attempt_review": {
         Args: Record<string, unknown>
         Returns: unknown
       }
@@ -1242,6 +1301,10 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "complete_evaluation": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "custom_access_token_hook": {
         Args: Record<string, unknown>
         Returns: unknown
@@ -1251,6 +1314,10 @@ export type Database = {
         Returns: unknown
       }
       "duplicate_exam": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "enforce_attempt_status_transition": {
         Args: Record<string, unknown>
         Returns: unknown
       }
@@ -1342,6 +1409,14 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "my_attempt_state": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "my_attempts": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "my_brand": {
         Args: Record<string, unknown>
         Returns: unknown
@@ -1366,6 +1441,10 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "publish_attempt": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "publish_exam": {
         Args: Record<string, unknown>
         Returns: unknown
@@ -1379,6 +1458,10 @@ export type Database = {
         Returns: unknown
       }
       "save_answer": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "save_evaluation": {
         Args: Record<string, unknown>
         Returns: unknown
       }
@@ -1399,6 +1482,10 @@ export type Database = {
         Returns: unknown
       }
       "validate_question_content": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "verify_attempt": {
         Args: Record<string, unknown>
         Returns: unknown
       }

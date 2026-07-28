@@ -44,8 +44,10 @@ export interface CandidateExam {
   open_attempt_id: string | null
   /** The most recent finished attempt, for the "last result" line. */
   last_status: string | null
+  /** Null until the attempt is published — the database withholds it, not the UI. */
   last_score: number | null
   last_passed: boolean | null
+  last_published: boolean
 }
 
 export interface AttemptQuestion {
@@ -61,7 +63,7 @@ export interface AttemptQuestion {
 }
 
 export interface AttemptState {
-  id: string
+  attempt_id: string
   status: string
   /** THE SERVER'S deadline. The browser counts down toward it for display only. */
   expires_at: string
@@ -78,6 +80,20 @@ export interface AttemptResult {
   score: number | null
   max_score: number | null
   passed: boolean | null
+  /** False until the result is released. Everything above is null while it is. */
+  published: boolean
+}
+
+export interface AttemptReviewItem {
+  question_id: string
+  paper_position: number
+  stem: string
+  marks: number
+  score: number | null
+  answer: AnswerPayload | null
+  /** What they submitted and whether it was right — never the expected value. */
+  grade_detail: Record<string, unknown> | null
+  grader_note: string | null
 }
 
 export type ActionResult<T = undefined> =
@@ -129,18 +145,24 @@ export async function listMyExams(): Promise<CandidateExam[]> {
 
   if (error || !exams?.length) return []
 
-  // Their own attempts, which attempts_read_own already narrows to them.
-  const { data: attempts } = await supabase
-    .from('attempts')
-    .select('id, exam_id, status, score, passed, started_at')
-    .in(
-      'exam_id',
-      exams.map((e) => e.id),
-    )
-    .order('started_at', { ascending: false })
+  // Through my_attempts(), not the table. 0028 dropped the candidate's read
+  // policy on `attempts` precisely because a policy cannot withhold a column,
+  // and score must stay invisible until the attempt is published. This function
+  // returns status always and the score only once it is theirs to see.
+  const { data: attempts } = await supabase.rpc('my_attempts')
 
-  const byExam = new Map<string, typeof attempts>()
-  for (const a of attempts ?? []) {
+  const rows = (attempts ?? []) as unknown as Array<{
+    attempt_id: string
+    exam_id: string
+    status: string
+    score: number | null
+    passed: boolean | null
+    started_at: string
+    published: boolean
+  }>
+
+  const byExam = new Map<string, typeof rows>()
+  for (const a of [...rows].sort((x, y) => y.started_at.localeCompare(x.started_at))) {
     const list = byExam.get(a.exam_id) ?? []
     list.push(a)
     byExam.set(a.exam_id, list)
@@ -161,6 +183,7 @@ export async function listMyExams(): Promise<CandidateExam[]> {
       const mine = byExam.get(e.id) ?? []
       const open = mine.find((a) => a.status === 'in_progress')
       const finished = mine.filter((a) => a.status !== 'in_progress' && a.status !== 'voided')
+      const latest = finished[0]
 
       return {
         id: e.id,
@@ -175,10 +198,13 @@ export async function listMyExams(): Promise<CandidateExam[]> {
         max_attempts: e.max_attempts,
         // Mirrors start_attempt's own count, which excludes voided attempts.
         attempts_used: mine.filter((a) => a.status !== 'voided').length,
-        open_attempt_id: open?.id ?? null,
-        last_status: finished[0]?.status ?? null,
-        last_score: finished[0]?.score ?? null,
-        last_passed: finished[0]?.passed ?? null,
+        open_attempt_id: open?.attempt_id ?? null,
+        last_status: latest?.status ?? null,
+        // Null unless published — my_attempts() has already withheld it, and
+        // this is not a second place to decide that.
+        last_score: latest?.score ?? null,
+        last_passed: latest?.passed ?? null,
+        last_published: latest?.published ?? false,
       } satisfies CandidateExam
     })
 }
@@ -216,33 +242,22 @@ export async function getAttemptState(attemptId: string): Promise<AttemptState |
   if (!parsed.success) return null
 
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('attempts')
-    .select('id, status, expires_at, submitted_at, exams(title, allow_backtrack)')
-    .eq('id', parsed.data)
-    .maybeSingle()
+  // my_attempt_state() carries no score at all. A paper being sat has no result
+  // worth withholding, and a function that cannot read one cannot leak one.
+  const { data, error } = await supabase.rpc('my_attempt_state', { p_attempt_id: parsed.data })
 
-  if (error || !data) return null
-
-  const { count } = await supabase
-    .from('attempt_answers')
-    .select('question_id', { count: 'exact', head: true })
-    .eq('attempt_id', parsed.data)
-
-  const exam = data.exams as unknown as { title: string; allow_backtrack: boolean } | null
-
-  return {
-    id: data.id,
-    status: data.status,
-    expires_at: data.expires_at,
-    submitted_at: data.submitted_at,
-    answered_count: count ?? 0,
-    exam_title: exam?.title ?? '',
-    allow_backtrack: exam?.allow_backtrack ?? true,
-  }
+  const row = (data as unknown as AttemptState[] | null)?.[0]
+  if (error || !row) return null
+  return row
 }
 
-/** The outcome, for the page shown after submitting. */
+/**
+ * The outcome, for the page shown after submitting.
+ *
+ * `published` is the whole point: score, max_score and passed come back null
+ * for anything the database has not released, so a page that forgot to check
+ * still has nothing to show.
+ */
 export async function getAttemptResult(attemptId: string): Promise<AttemptResult | null> {
   await requirePermission('attempts.read_own')
 
@@ -250,14 +265,25 @@ export async function getAttemptResult(attemptId: string): Promise<AttemptResult
   if (!parsed.success) return null
 
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('attempts')
-    .select('status, score, max_score, passed')
-    .eq('id', parsed.data)
-    .maybeSingle()
+  const { data, error } = await supabase.rpc('my_attempts')
+  if (error) return null
 
-  if (error || !data) return null
-  return data as AttemptResult
+  const rows = (data ?? []) as unknown as Array<AttemptResult & { attempt_id: string }>
+  return rows.find((r) => r.attempt_id === parsed.data) ?? null
+}
+
+/** The per-question breakdown. Raises in the database unless published. */
+export async function getAttemptReview(attemptId: string): Promise<AttemptReviewItem[]> {
+  await requirePermission('attempts.read_own')
+
+  const parsed = dbId().safeParse(attemptId)
+  if (!parsed.success) return []
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('attempt_review', { p_attempt_id: parsed.data })
+
+  if (error) return []
+  return (data ?? []) as unknown as AttemptReviewItem[]
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

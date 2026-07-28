@@ -89,7 +89,7 @@ export function AttemptRunner({
   const flush = useCallback(
     async (questionId: string, answer: AnswerPayload) => {
       setSaveState('saving')
-      const result = await saveAnswer({ attemptId: attempt.id, questionId, answer })
+      const result = await saveAnswer({ attemptId: attempt.attempt_id, questionId, answer })
 
       if (result.ok) {
         setSaveState('saved')
@@ -99,7 +99,7 @@ export function AttemptRunner({
         setSaveState('failed')
       }
     },
-    [attempt.id],
+    [attempt.attempt_id],
   )
 
   const onAnswerChange = useCallback(
@@ -142,11 +142,11 @@ export function AttemptRunner({
       for (const [questionId, timer] of timers.current) {
         clearTimeout(timer)
         const answer = answers[questionId]
-        if (answer) await saveAnswer({ attemptId: attempt.id, questionId, answer })
+        if (answer) await saveAnswer({ attemptId: attempt.attempt_id, questionId, answer })
       }
       timers.current.clear()
 
-      const result = await submitAttempt({ attemptId: attempt.id, reason })
+      const result = await submitAttempt({ attemptId: attempt.attempt_id, reason })
       setSubmitting(false)
 
       if (result.ok) {
@@ -159,7 +159,7 @@ export function AttemptRunner({
         startNavigation(() => router.refresh())
       }
     },
-    [answers, attempt.id, router, startNavigation],
+    [answers, attempt.attempt_id, router, startNavigation],
   )
 
   useEffect(() => {

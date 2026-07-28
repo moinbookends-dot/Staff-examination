@@ -38,24 +38,27 @@ export default async function AttemptPage({
 
   if (attempt.status !== 'in_progress') {
     const result = await getAttemptResult(id)
-    const needsHuman = result?.status === 'evaluating' || result?.passed === null
+
+    // `published` is the ONLY thing that opens this up, and it is the database's
+    // answer, not a status this page interprets. my_attempts() returns score,
+    // max_score and passed as null for anything unreleased, so even if this
+    // branch were wrong there would be nothing here to show.
+    const released = result?.published === true
 
     return (
       <div className="mx-auto max-w-xl space-y-6">
         <Card>
           <CardHeader className="items-center gap-2 text-center">
-            {needsHuman ? (
-              <ClockIcon className="size-8 text-muted-foreground" />
-            ) : (
+            {released ? (
               <CheckCircle2Icon className="size-8 text-muted-foreground" />
+            ) : (
+              <ClockIcon className="size-8 text-muted-foreground" />
             )}
             <CardTitle>{t('resultTitle')}</CardTitle>
             <CardDescription>{attempt.exam_title}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 text-center">
-            {needsHuman ? (
-              <p className="text-sm text-muted-foreground">{t('resultPending')}</p>
-            ) : (
+            {released ? (
               <>
                 <p className="text-3xl font-semibold tabular-nums">
                   {result?.score ?? 0}
@@ -68,6 +71,8 @@ export default async function AttemptPage({
                   {result?.passed ? t('passed') : t('failed')}
                 </p>
               </>
+            ) : (
+              <p className="text-sm text-muted-foreground">{t('resultPending')}</p>
             )}
 
             <Link href="/my-exams" className={buttonVariants({ variant: 'outline' })}>

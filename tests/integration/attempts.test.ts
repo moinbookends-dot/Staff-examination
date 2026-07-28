@@ -191,10 +191,15 @@ describeDb('attempts', () => {
     const ids = await asUser(db, employee(CAND), async (c) => {
       const first = await start(c, EXAM_FIXED)
       const second = await start(c, EXAM_FIXED)
+      // Counted as the owner: 0028 dropped the candidate's read on attempts so
+      // that a score cannot be seen before it is published, and this assertion
+      // is about internal state rather than about what a candidate may see.
+      await c.query('reset role')
       const count = await c.query(
         `select count(*)::int n from public.attempts where exam_id=$1 and candidate_id=$2`,
         [EXAM_FIXED, CAND],
       )
+      await c.query('set local role authenticated')
       return {
         a: first.rows[0].attempt_id,
         b: second.rows[0].attempt_id,
@@ -369,8 +374,12 @@ describeDb('attempts', () => {
       // max_attempts is 2. Submit each so the next can start.
       for (let i = 0; i < 2; i++) {
         const started = await c.query('select * from public.start_attempt($1)', [EXAM_FIXED])
+        // 'auto_graded', not 'submitted'. 0028's transition trigger permits
+        // only the moves the product actually makes, and nothing ever goes
+        // from in_progress to submitted — grade_and_close_attempt closes
+        // straight into auto_graded, evaluating or published.
         await c.query(
-          `update public.attempts set status='submitted', submitted_at=now(), submit_reason='user'
+          `update public.attempts set status='auto_graded', submitted_at=now(), submit_reason='user'
             where id=$1`,
           [started.rows[0].attempt_id],
         )
@@ -426,11 +435,14 @@ describeDb('attempts', () => {
   it('stamps max_score from the frozen paper', async () => {
     const row = await asUser(db, employee(CAND), async (c) => {
       const started = await start(c, EXAM_FIXED)
-      return (
-        await c.query('select max_score, attempt_number from public.attempts where id=$1', [
-          started.rows[0].attempt_id,
-        ])
-      ).rows[0]
+      // As the owner — see the note above on 0028.
+      await c.query('reset role')
+      const read = await c.query(
+        'select max_score, attempt_number from public.attempts where id=$1',
+        [started.rows[0].attempt_id],
+      )
+      await c.query('set local role authenticated')
+      return read.rows[0]
     })
     expect(Number(row.max_score)).toBe(4) // 2 questions × 2 marks
     expect(row.attempt_number).toBe(1)

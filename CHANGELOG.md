@@ -123,6 +123,65 @@ what the candidate submitted and whether each part was right — never the
 expected value. A breakdown destined for a results screen that quoted the
 accepted answers would hand over the key for every question they got wrong.
 
+### Shipped — evaluation, verification and release (0028)
+
+Closes the lifecycle 0001 drew and every migration since has been walking toward:
+
+```
+auto_graded (fully auto-gradable) ─────────────────→ published
+evaluating → evaluated → verifying ─┬─ verified ───→ published
+                  ▲                 └─ returned ─┘
+```
+
+**A result is visible when, and only when, it is `published` — and RLS could not
+do it.** A policy chooses rows, and a candidate legitimately needs their attempt
+row long before a result exists: to know the paper arrived, that it is being
+marked, that it came back for rework. Leaving `attempts_read_own` in place would
+have handed them `score`, `max_score` and `passed` over PostgREST the moment the
+grader wrote them — hours before an evaluator agreed to anything. So the
+candidate's read policies on `attempts` and `attempt_answers` are dropped, and
+`my_attempts()`, `my_attempt_state()` and `attempt_review()` replace them.
+A column cannot be hidden by a policy; it can be hidden by a function that never
+selects it. `my_attempt_state()` carries no score at all, so the function
+serving a live paper could not leak one even if the release rule changed.
+
+**`verification_mode` decides whether an auto-graded paper publishes itself.**
+`auto` releases it at submit, so a practice quiz still shows a score instantly;
+`single` and `dual` hold it at `auto_graded` for someone holding
+`evaluation.publish`. That uses the column 0014 already had rather than
+inventing a second setting.
+
+**Dual verification is a unique constraint, not a count.** Sign-offs are rows in
+`attempt_verifications`, unique on `(attempt_id, verifier_id, round)`. Two
+approvals therefore *cannot* come from one person, and a concurrent second
+request cannot slip past a `count(*)` check that application code performed a
+moment earlier.
+
+**A return discards the approvals it invalidates.** Decisions are recorded
+against `returned_count + 1`, so sending a paper back starts a new round and the
+signature somebody gave to the old marks does not carry onto the revised ones.
+The whole history stays — two rounds, four decisions, both notes.
+
+**A verifier may not be the evaluator.** A chef holds `evaluation.evaluate` and
+`evaluation.verify` both, because in a two-manager restaurant the same people do
+both jobs on different papers. Signing off your own marking is the one
+combination that defeats the point, and it is refused by name.
+
+**The status graph is a trigger, written as data.** One `CASE` lists the legal
+moves out of each state; everything else raises. It holds against psql, an
+import and any future function that forgets — the tests assert it *as the table
+owner*, with RLS off and every function bypassed, because that is the caller it
+has to stop. A published result is corrected by voiding it and saying so, never
+by editing it back into an earlier state.
+
+**Found by the tests, worth recording.** The first "is anything still unmarked?"
+check asked whether `score is null`, and never fired: 0027's grader had already
+written `score = 0, auto_grade_status = 'not_applicable'` against every essay,
+so an unread paper looked finished. What marks a manual question done is a human
+moving it to `'graded'`, which is what `save_evaluation()` does. An attempt could
+otherwise have reached `evaluated` with an unmarked essay and a total that was
+simply wrong, with nothing downstream any the wiser.
+
 ### Shipped — the candidate delivery UI
 
 `/my-exams` and `/attempt/[id]`. A candidate can now see what they have been

@@ -91,12 +91,14 @@ export default async function MyExamsPage() {
                     )}
                     {exam.last_status && !exam.open_attempt_id && (
                       <div>
-                        {exam.last_passed === null
-                          ? t('awaitingResult')
-                          : t('lastScore', {
+                        {/* Released or not — the database decided, and an
+                            unreleased attempt has no score to print anyway. */}
+                        {exam.last_published
+                          ? t('lastScore', {
                               score: exam.last_score ?? 0,
                               max: exam.total_marks ?? 0,
-                            })}
+                            })
+                          : t('awaitingResult')}
                       </div>
                     )}
                   </dl>

@@ -749,6 +749,34 @@ try {
       )
     }
 
+    // ── The release gate, in the browser ────────────────────────────────────
+    // This exam carries the default verification_mode of 'dual', so submitting
+    // it leaves the paper at 'auto_graded' — marked, and deliberately not
+    // released. The candidate must be told it is pending and shown no verdict.
+    await fetch(`${URL_}/rest/v1/rpc/submit_attempt`, {
+      method: 'POST',
+      headers: {
+        apikey: PUB,
+        Authorization: `Bearer ${candSession.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ p_attempt_id: attemptId, p_reason: 'user' }),
+    })
+
+    const held = await candGet(`/en/attempt/${attemptId}`)
+    check(
+      held.html.includes('has not been released'),
+      'an unreleased result tells the candidate it is pending',
+      'the pending message is missing after submitting',
+    )
+    // Text nodes, not includes(): every page serialises the whole next-intl
+    // bundle, so `includes('Passed')` is true even on a blank page.
+    check(
+      !/>Passed</.test(held.html) && !/>Not passed</.test(held.html),
+      'no verdict is shown before the result is released',
+      'A VERDICT LEAKED BEFORE PUBLICATION',
+    )
+
     // A candidate must not reach an attempt that is not theirs, and "not yours"
     // and "does not exist" must look identical from outside.
     const notMine = await candGet('/en/attempt/00000000-0000-0000-0000-0000000000ff')

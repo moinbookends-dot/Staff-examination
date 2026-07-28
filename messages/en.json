@@ -381,7 +381,7 @@
     "submitting": "Submitting…",
     "resultTitle": "Exam submitted",
     "resultScore": "You scored {score} of {max}.",
-    "resultPending": "Your paper needs a human evaluator. You will be notified when the result is ready.",
+    "resultPending": "Your result has not been released yet. You will be notified when it is ready.",
     "backToExams": "Back to my exams",
     "answered": "Answered",
     "startFailed": "This exam could not be started."
