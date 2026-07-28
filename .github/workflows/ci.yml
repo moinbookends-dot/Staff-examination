@@ -114,10 +114,28 @@ jobs:
       # nothing here needs a blanket grant. If a policy test starts failing with
       # "permission denied for function", the missing GRANT belongs in the
       # migration, not in this step.
+      #
+      # VIEWS ARE EXCLUDED FOR THE SAME REASON, and it is not a theoretical one.
+      # In Postgres "ALL TABLES" includes views, so the previous blanket grant
+      # re-granted every view after the migrations had run — including internal
+      # ones a migration had just revoked. That matters more for a view than for
+      # a table: a view runs with its OWNER's rights, so it does not merely skip
+      # a policy, it bypasses RLS entirely. A reachable analytics_attempts would
+      # have exposed every candidate's score in every company, and CI would have
+      # reported it green while production was fine — the same disagreement that
+      # let an anon-callable draw_paper() through for six commits.
+      #
+      # relkind 'r' and 'p' are ordinary and partitioned tables. Anything else
+      # gets whatever privileges its migration says it gets.
       - name: Grant table privileges to Supabase roles
         run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "
+            select format('grant all on public.%I to anon, authenticated, service_role;', c.relname)
+              from pg_class c
+              join pg_namespace n on n.oid = c.relnamespace
+             where n.nspname = 'public' and c.relkind in ('r', 'p')
+          " | psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f -
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "
-            grant all on all tables    in schema public to anon, authenticated, service_role;
             grant all on all sequences in schema public to anon, authenticated, service_role;
           "
 

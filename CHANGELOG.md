@@ -59,6 +59,39 @@ appear with a zero rather than vanishing.
 `WHERE`. A `group by` is much easier to get wrong than a row policy, and RLS is
 not doing the work here — these are definer functions doing their own scoping.
 
+### Fixed — CI re-granted an internal view, and disagreed with production again
+
+The analytics data layer went in green locally and failed CI on the one
+assertion that says `analytics_attempts` is unreachable. The cause was the
+post-migration grant step:
+
+```
+grant all on all tables in schema public to anon, authenticated, service_role;
+```
+
+**In Postgres, "ALL TABLES" includes views.** So CI re-granted the internal view
+after migration 0030 had revoked it, and the test correctly failed there while
+passing against production.
+
+This matters more for a view than for a table. A view executes with its
+*owner's* rights, so a reachable `analytics_attempts` would not merely skip a
+policy — it bypasses RLS altogether, exposing every candidate's score in every
+company. The exposure was never real, because the revoke holds in production;
+what was real is that CI could not have told us either way.
+
+This is the second time this exact step has made CI disagree with production
+about who can reach what. The first was the blanket `grant execute on all
+functions`, which hid an anon-callable `draw_paper()` for six commits and was
+removed in M3. Functions were fixed then; views were not, because no view
+existed yet. The step now grants only `relkind in ('r','p')` — ordinary and
+partitioned tables — and everything else keeps whatever privileges its migration
+gave it.
+
+Diagnosed by asserting the mechanism rather than guessing at it:
+`has_table_privilege('authenticated', 'public.analytics_attempts', 'select')`
+returns false in production, true after the old grant, and false again after the
+new one, each measured inside a rolled-back transaction.
+
 ### Fixed while building
 
 **`max_attempts` caps at 10, so twelve responses cannot come from one person.**
