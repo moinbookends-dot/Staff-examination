@@ -113,7 +113,28 @@ const createdUsers = []
 const createdQuestions = []
 const createdExams = []
 
+/**
+ * This run's own category.
+ *
+ * The rule checks below deliberately ask for more questions than exist, to prove
+ * the shortfall is reported and blocks publishing. They used to point at the
+ * seeded Food Safety category and depend on it being empty — which made every
+ * shortfall assertion a hostage to whatever else happened to be in the database.
+ * Seeding twelve demo questions flipped seven checks at once, and a real
+ * deployment with real Food Safety questions would have done the same.
+ *
+ * Owning the category makes the pool exactly what this script put in it.
+ */
+const RENDER_CAT = '00000000-0000-0000-0000-0000000cc001'
+
 try {
+  await db.query(
+    `insert into public.categories (id, company_id, name, slug)
+     values ($1,$2,'Render Check','render-check')
+     on conflict (id) do nothing`,
+    [RENDER_CAT, '00000000-0000-0000-0000-00000000c001'],
+  )
+
   // ── 0. Locale routing ──────────────────────────────────────────────────────
   // The canary for "is the proxy running at all". Without it `/` has no route
   // and 404s, which is precisely how the dead middleware.ts went unnoticed.
@@ -224,7 +245,7 @@ try {
           ],
         },
         p_answer_key: { format: 'choice_single', correct: 'a' },
-        p_category_id: '00000000-0000-0000-0000-00000000f001',
+        p_category_id: RENDER_CAT,
         p_change_note: 'seeded by the render check',
       }),
     })
@@ -360,7 +381,7 @@ try {
   await db.query(
     `insert into public.exam_rules (section_id, category_id, question_count, difficulty_min, difficulty_max, sort_order)
      values ($1,$2,3,1,5,0), ($1,$2,3,1,5,1)`,
-    [sectionRows[0].id, '00000000-0000-0000-0000-00000000f001'],
+    [sectionRows[0].id, RENDER_CAT],
   )
 
   const withSections = await get(`/en/exams/${examId}`)
@@ -609,6 +630,14 @@ try {
   if (createdQuestions.length) {
     await db.query('delete from public.questions where id = any($1::uuid[])', [createdQuestions])
   }
+  // After the questions that reference it, and only if nothing else has since
+  // been filed under it.
+  await db.query(
+    `delete from public.categories c
+      where c.id = $1
+        and not exists (select 1 from public.questions q where q.category_id = c.id)`,
+    [RENDER_CAT],
+  )
   for (const id of createdUsers) {
     await fetch(`${URL_}/auth/v1/admin/users/${id}`, { method: 'DELETE', headers: adminHeaders })
   }
