@@ -1265,6 +1265,54 @@ try {
     'the not-started state is missing from the team table',
   )
 
+  // ── CSV export ───────────────────────────────────────────────────────────
+  // /api sits outside the proxy's matcher, so nothing has checked the session
+  // before the handler runs. Its own requirePermission() is the entire gate,
+  // which makes the anonymous and candidate cases the ones that matter.
+  const exportRes = await fetch(`${APP}/api/reports/export?dataset=team`, {
+    headers: { cookie: verCookie },
+    redirect: 'manual',
+  })
+  const exportBody = await exportRes.text()
+  check(exportRes.status === 200, 'a chef can export the team CSV', `status ${exportRes.status}`)
+  check(
+    (exportRes.headers.get('content-type') ?? '').includes('text/csv'),
+    'the export is served as CSV',
+    `content-type was ${exportRes.headers.get('content-type')}`,
+  )
+  check(
+    (exportRes.headers.get('content-disposition') ?? '').includes('attachment; filename="bookends-team-'),
+    'the export downloads with a dated filename',
+    `content-disposition was ${exportRes.headers.get('content-disposition')}`,
+  )
+  check(
+    exportBody.startsWith('Name,Exams taken,Passed,Pass rate %,Average %,Last taken'),
+    'the CSV carries a header row',
+    `CSV began: ${exportBody.slice(0, 60)}`,
+  )
+  check(
+    exportBody.includes('Render Candidate'),
+    'the CSV contains the team rows',
+    'the exported CSV has no data rows',
+  )
+
+  const candExport = await fetch(`${APP}/api/reports/export?dataset=team`, {
+    headers: { cookie: candCookie },
+    redirect: 'manual',
+  })
+  check(
+    candExport.status === 403,
+    'a candidate is refused the export with 403',
+    `expected 403 for a candidate, got ${candExport.status}`,
+  )
+
+  const anonExport = await fetch(`${APP}/api/reports/export?dataset=team`, { redirect: 'manual' })
+  check(
+    anonExport.status === 401,
+    'an anonymous request is refused the export with 401',
+    `expected 401 for an anonymous request, got ${anonExport.status}`,
+  )
+
   // ── The release notice ───────────────────────────────────────────────────
   const { rows: notices } = await db.query(
     `select kind, link from public.notifications where data ->> 'attempt_id' = $1`,

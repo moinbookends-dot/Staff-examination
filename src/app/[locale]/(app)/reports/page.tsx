@@ -33,6 +33,7 @@ export default async function ReportsPage() {
   // decided here; how far each one may actually look is decided by the database
   // functions, which do their own scoping and would refuse regardless.
   const seesTeam = can(claims, 'reports.read_team') || can(claims, 'reports.read_all')
+  const canExport = can(claims, 'reports.export')
 
   const [stats, categories] = await Promise.all([
     getCandidateStats(),
@@ -141,7 +142,7 @@ export default async function ReportsPage() {
 
       {/* Rendered whether or not the viewer has a record of their own: a chef
           who has sat nothing still needs to see who on their team has. */}
-      {seesTeam && <TeamSections />}
+      {seesTeam && <TeamSections canExport={canExport} />}
     </div>
   )
 }

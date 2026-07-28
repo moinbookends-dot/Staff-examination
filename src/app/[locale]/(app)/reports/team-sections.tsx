@@ -10,7 +10,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { AlertTriangleIcon } from 'lucide-react'
+import { AlertTriangleIcon, DownloadIcon } from 'lucide-react'
+import { buttonVariants } from '@/components/ui/button'
 
 /**
  * The sections a chef or HR sees, on the same page as their own record.
@@ -28,7 +29,7 @@ import { AlertTriangleIcon } from 'lucide-react'
  * │ confident-looking statistic computed from four attempts.                   │
  * └───────────────────────────────────────────────────────────────────────────┘
  */
-export async function TeamSections() {
+export async function TeamSections({ canExport }: { canExport: boolean }) {
   const t = await getTranslations('reports')
   const format = await getFormatter()
 
@@ -45,8 +46,13 @@ export async function TeamSections() {
       {/* ── People ── */}
       <Card>
         <CardHeader className="gap-1">
-          <CardTitle className="text-base">{t('team')}</CardTitle>
-          <p className="text-sm text-muted-foreground">{t('teamHint')}</p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle className="text-base">{t('team')}</CardTitle>
+              <p className="text-sm text-muted-foreground">{t('teamHint')}</p>
+            </div>
+            {canExport && <ExportLink dataset="team" label={t('exportCsv')} />}
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {team.length === 0 ? (
@@ -93,8 +99,13 @@ export async function TeamSections() {
       {/* ── Exams ── */}
       <Card>
         <CardHeader className="gap-1">
-          <CardTitle className="text-base">{t('exams')}</CardTitle>
-          <p className="text-sm text-muted-foreground">{t('examsHint')}</p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle className="text-base">{t('exams')}</CardTitle>
+              <p className="text-sm text-muted-foreground">{t('examsHint')}</p>
+            </div>
+            {canExport && <ExportLink dataset="exams" label={t('exportCsv')} />}
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {sat.length === 0 ? (
@@ -139,8 +150,13 @@ export async function TeamSections() {
       {/* ── Questions ── */}
       <Card>
         <CardHeader className="gap-1">
-          <CardTitle className="text-base">{t('questions')}</CardTitle>
-          <p className="text-sm text-muted-foreground">{t('questionsHint')}</p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle className="text-base">{t('questions')}</CardTitle>
+              <p className="text-sm text-muted-foreground">{t('questionsHint')}</p>
+            </div>
+            {canExport && <ExportLink dataset="questions" label={t('exportCsv')} />}
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {questions.length === 0 ? (
@@ -205,5 +221,25 @@ export async function TeamSections() {
         </CardContent>
       </Card>
     </>
+  )
+}
+
+/**
+ * A download link, not a Link.
+ *
+ * The i18n Link prefixes the locale, and /api sits outside locale routing on
+ * purpose — src/proxy.ts excludes it so a download is never redirected on its
+ * way out. A plain anchor is also all this needs: the Content-Disposition
+ * header does the work, with no client JavaScript.
+ */
+function ExportLink({ dataset, label }: { dataset: string; label: string }) {
+  return (
+    <a
+      href={`/api/reports/export?dataset=${dataset}`}
+      className={buttonVariants({ variant: 'outline', size: 'sm' })}
+    >
+      <DownloadIcon className="size-4" />
+      {label}
+    </a>
   )
 }

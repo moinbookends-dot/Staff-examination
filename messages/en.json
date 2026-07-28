@@ -519,6 +519,7 @@
     "candidates": "People",
     "median": "Median",
     "duration": "Average time",
-    "minutes": "{value} min"
+    "minutes": "{value} min",
+    "exportCsv": "Export CSV"
   }
 }

