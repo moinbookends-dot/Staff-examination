@@ -1046,6 +1046,8 @@ export type Database = {
           "reviewed_by": string | null
           "created_at": string
           "updated_at": string
+          "response_format": Database["public"]["Enums"]["response_format"]
+          "base_revision": number
         }
         Insert: {
           "question_id": string
@@ -1059,6 +1061,8 @@ export type Database = {
           "reviewed_by"?: string | null
           "created_at"?: string
           "updated_at"?: string
+          "response_format": Database["public"]["Enums"]["response_format"]
+          "base_revision": number
         }
         Update: {
           "question_id"?: string
@@ -1072,6 +1076,8 @@ export type Database = {
           "reviewed_by"?: string | null
           "created_at"?: string
           "updated_at"?: string
+          "response_format"?: Database["public"]["Enums"]["response_format"]
+          "base_revision"?: number
         }
         Relationships: []
       }
@@ -1507,6 +1513,10 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "question_translation_stamp": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "save_answer": {
         Args: Record<string, unknown>
         Returns: unknown
@@ -1516,6 +1526,10 @@ export type Database = {
         Returns: unknown
       }
       "save_question": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "save_question_translation": {
         Args: Record<string, unknown>
         Returns: unknown
       }
@@ -1536,6 +1550,14 @@ export type Database = {
         Returns: unknown
       }
       "validate_question_content": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "validate_translation_against_base": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "validate_translation_shape": {
         Args: Record<string, unknown>
         Returns: unknown
       }

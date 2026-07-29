@@ -9,6 +9,58 @@ remembering, and anything left behind as debt.
 
 ## M7 — Localization · *in progress*
 
+### Shipped — the translation write path (0032)
+
+`question_translations` has existed since 0009 with RLS, a draft/review/
+published workflow and a partial index, and nothing had ever written to it.
+This is the write path; the workbench UI follows.
+
+**0009's invariant is now a constraint rather than a comment.** That migration
+said a translation holds "display strings keyed by the base row's ids — never
+correct answers", so "a bad or malicious translation cannot change what is
+correct". `validate_translation_shape()` makes it enforceable: keys drawn only
+from those legal for the format, and **every leaf a string**. A structure whose
+leaves are all display strings has nowhere to put "and this one is right".
+
+It is a CHECK, not a step in the RPC, because the RPC is not the only writer —
+psql, seeds, bulk import and AI generation all reach the table directly. Testing
+it therefore means bypassing the RPC too: those cases run **as the table owner**,
+with RLS off, which is the caller the constraint exists to stop.
+
+Carrying `response_format` on the row is what makes that possible at all: a
+CHECK cannot subquery, so the format has to be present to be checked against.
+
+**A blanks template cannot lose a placeholder.** `{{low}}` and `{{high}}` become
+input boxes; a translation that drops one renders fewer inputs than the key
+grades, so the candidate cannot answer something they are marked on and 0027
+scores it wrong in silence. Blocking, not advisory — the highest-value check
+here.
+
+**`base_revision` records the wording a translation was made from.** Reword an
+English stem and the published Hindi now describes text that no longer exists,
+delivered with more confidence than the English. The column makes that gap
+visible; without it, translations rot silently.
+
+**"Published" means a human approved *this* text.** A new row cannot start
+published, a draft cannot skip review, and editing a published translation
+demotes it back to review with the reviewer cleared. Without that last rule the
+status is decoration: a reviewer approves text, the translator rewrites it, and
+the row stays green while candidates read strings nobody approved.
+
+Reviewer ≠ translator is deliberately **not** enforced. A two-person outlet
+could never publish, and the workaround is a second fake account — a worse
+record than an honest self-review.
+
+**Two corrections while building.** The validator was first written SECURITY
+DEFINER and revoked, which the invoker RPC could not then call — and the fix was
+not to grant it but to make it invoker as well, so it reads the question under
+the caller's own RLS and a question they cannot see is simply "not found".
+Second, a test asserted the CHECK would reject `{choices: {correct: "…"}}`; it
+does not, and should not. That is a display string keyed by an id spelled
+"correct", structurally identical to any other id and harmless because grading
+never reads translation content. Catching it is tier two's job, against the base
+row — which is where the test moved.
+
 ### Security — five policies checked a permission and not whose (0031)
 
 Found while planning question translation, and it has nothing to do with
