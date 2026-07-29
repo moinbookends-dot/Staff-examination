@@ -643,6 +643,57 @@ describeDb('exam draw and health', () => {
       expect(rows.every((r) => r.is_preview === false)).toBe(true)
     })
 
+    /**
+     * 0035. A published translation of wording that has since changed is worse
+     * than no translation: it reads as finished, so nobody looks at it again —
+     * and it is delivered to that reader with more confidence than the English.
+     */
+    it('warns when a translation is older than the question it translates', async () => {
+      const rows = await asUser(db, chef(CHEF), async (c) => {
+        const examId = await buildExam(c, [{ category: CAT_A, count: 1, min: 1, max: 1 }], {
+          duration: 1,
+        })
+        // Publishing to learn which question was drawn, rather than calling
+        // draw_paper — that is internal and granted to nobody (0020), and a
+        // chef reaching it directly is exactly what this suite's header warns
+        // about. The draw is seeded on the exam id, so the frozen row names the
+        // same question exam_health will draw.
+        await c.query('select * from public.publish_exam($1)', [examId])
+        const drawn = (
+          await c.query('select question_id from public.exam_questions where exam_id = $1', [examId])
+        ).rows[0].question_id
+
+        await c.query(
+          `insert into public.question_translations
+             (question_id, locale, stem, content, status)
+           values ($1,'hi','अनुवादित प्रश्न','{}'::jsonb,'published')
+           on conflict (question_id, locale) do update set status = 'published'`,
+          [drawn],
+        )
+
+        // Clean before the reword: a translation written against the CURRENT
+        // wording must not warn, or the check would fire on every exam.
+        const quiet = (await health(c, examId)).rows.filter(
+          (r) => r.code === 'translation.stale',
+        )
+
+        await c.query(
+          `update public.questions set stem = 'Reworded after translation',
+                                       revision = revision + 1 where id = $1`,
+          [drawn],
+        )
+
+        return { quiet, noisy: (await health(c, examId)).rows }
+      })
+
+      expect(rows.quiet).toHaveLength(0)
+
+      const stale = rows.noisy.filter((r) => r.code === 'translation.stale')
+      expect(stale).toHaveLength(1)
+      expect(stale[0].severity).toBe('advisory')
+      expect(stale[0].detail.locale).toBe('hi')
+    })
+
     it('keeps showing the wording that was frozen, not the current one', async () => {
       // The whole reason snapshots exist. Editing a question after publication
       // must not change what the paper says a candidate was asked.

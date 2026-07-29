@@ -7,7 +7,45 @@ remembering, and anything left behind as debt.
 
 ---
 
-## M7 — Localization · *in progress*
+## M7 — Localization · *complete*
+
+### Shipped — telling a chef what translation will not do for them (0035)
+
+M7 introduced three failures that are silent by construction, each a
+consequence of a decision taken deliberately. All three are now `exam_health`
+advisories.
+
+- **`translation.stale`** — the English was reworded after a translation was
+  published, so the Hindi describes text that no longer exists. Worse than no
+  translation, because it reads as finished and is therefore delivered to that
+  reader with *more* confidence than the English.
+- **`translation.accepts_stale`** — per-language accepted answers were added
+  after the exam was published. Writing them bumps `questions.revision` and
+  `exam_questions` froze the revision at publish, so the frozen key does not
+  contain them and a Gujarati candidate typing the Gujarati answer is marked
+  wrong. Deliberately not solved by retro-editing `question_revisions`, which is
+  append-only by design; "the frozen thing is behind, re-publish" is how every
+  other version gap here is handled.
+- **`translation.section_title`** — section headings have no translation
+  mechanism, so a fully-Gujarati paper still carries English ones.
+
+**All advisory, none blocking.** A chef may legitimately run an exam whose
+translations lag, and making it blocking would teach people to translate
+carelessly to get past the gate.
+
+**The whole function is reproduced, and that is not laziness.** `exam_health` is
+a single statement — one CTE feeding a chain of `UNION ALL` — so a branch cannot
+be appended without restating it. The alternative, a second function returning
+"the other advisories", would split "is this exam healthy?" across two places
+and leave the UI to remember both. Every branch below the new three is 0022's,
+unchanged, and the check that mattered was that all 40 existing draw and health
+cases still pass.
+
+The staleness test asserts **both directions** — quiet before the reword, noisy
+after — so it cannot pass against a check that never fires. It also reads the
+drawn question from the published paper rather than calling `draw_paper`, which
+is granted to nobody: a chef reaching it directly is the thing this suite's own
+header warns about.
 
 ### Shipped — accepting an answer in the language it was asked in (0034)
 
