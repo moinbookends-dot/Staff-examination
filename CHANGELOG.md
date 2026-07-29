@@ -9,6 +9,61 @@ remembering, and anything left behind as debt.
 
 ## M7 — Localization · *in progress*
 
+### Security — five policies checked a permission and not whose (0031)
+
+Found while planning question translation, and it has nothing to do with
+translation. Five policies in 0010 asked `has_perm('questions.update')` and
+stopped there. That answers "may this person edit questions?" but never
+"whose?" — so a chef holding it in their own company had it against every row
+in the table, and the only thing between company B and company A's question
+bank was not knowing a uuid.
+
+The sibling policies in the same file do it correctly — `answer_keys_write`,
+`question_media_read` and `questions_read` all join back to `questions` and
+compare `company_id`. These five were written in the loose style and nothing
+caught it, because **a permission check looks like authorisation**.
+
+In severity order, which is not the order they were found in:
+
+- **`question_media_write`** — cross-tenant content injection into a *live*
+  exam. `question_snapshot()` aggregates `question_media` unconditionally, so a
+  row attached to another company's question is frozen into their paper at
+  publish and served to their candidates. Nothing downstream re-checks it: the
+  snapshot is trusted by construction, because only the author was supposed to
+  be able to write it.
+- **`question_tags_write`** — cross-tenant denial of service. Exam rules select
+  on tags, so deleting another company's `question_tags` silently shrinks the
+  pool their rules draw from. They meet it as a `rule.short` blocking check at
+  publish time, with no indication why.
+- **`question_translations_write`** — paper tampering, latent while nothing read
+  the table and live the moment 0033 puts it on the delivery path.
+- The two `_read` policies — enumeration of ids, tags and translated text.
+
+**Stated without overselling it:** not exploitable at scale today. `questions_read`
+*is* company-scoped, so ids are not enumerable through the API and an attacker
+needs one to begin. This is defence in depth that the localisation work would
+have converted into a real path.
+
+**The fix is measured, not asserted.** The five new tenancy cases would pass
+against the old policies too if they never supplied a question id — so they
+supply one, and the difference was verified directly by running both policy
+sets against identical data inside a rolled-back transaction:
+
+| as a chef in company B | pre-0031 | with 0031 |
+|:--|:--|:--|
+| read company A's translations | 1 row | 0 rows |
+| attach media to company A's question | accepted | refused |
+| un-tag company A's question | 1 deleted | 0 deleted |
+
+One detail worth keeping: **deletes are filtered by RLS, not refused**, so the
+un-tagging case asserts `rowCount === 0` rather than a throw. Written as a
+`rejects.toThrow()` it would have passed whether or not the policy existed.
+
+Also noted in the migration header: the `exists` subquery is itself subject to
+`questions_read`, so it inherits the brand clause — a brand-A chef cannot
+translate a brand-B question inside their own company. Consistent with
+`answer_keys_read`, and surprising enough to write down.
+
 ### Shipped — the candidate journey in Hindi, Gujarati and Hinglish
 
 102 keys per locale: `app`, `nav`, `common`, `errors`, `results` and `sitting` —

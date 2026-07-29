@@ -34,6 +34,9 @@ const CHEF_A = 'aaaa7777-7777-7777-7777-777777777777'
 const CHEF_B = 'bbbb7777-7777-7777-7777-777777777777'
 
 const EXAM_A = '00000000-0000-0000-0000-0000000e0a77'
+// Plain hex, spelled out — a `.replace()` construction is one typo away from a
+// value that is not a uuid at all.
+const TAG_A = '00000000-0000-0000-0000-0000000aa001'
 const QUESTION_A = '00000000-0000-0000-0000-0000000q0a77'.replace('q', 'e')
 
 /** A chef in whichever company, with the full chef permission set. */
@@ -48,6 +51,10 @@ function chefOf(id: string, companyId: string, outletId: string, brandId: string
       roles: ['chef'],
       perms: [
         'questions.read', 'questions.create', 'questions.update', 'questions.retire',
+        // 0031: the side-table policies are what these cases exercise, and a
+        // chef who lacked this would be refused for the wrong reason — making
+        // the deny cases pass without proving anything about company scoping.
+        'questions.translate',
         'exams.read', 'exams.create', 'exams.update', 'exams.publish',
         'exams.assign', 'exams.archive',
       ],
@@ -132,6 +139,26 @@ describeDb('cross-company isolation', () => {
       [QUESTION_A],
     )
 
+    // Side-table rows on company A's question, for the 0031 scoping cases.
+    // All three cascade from questions, so afterAll's delete covers them.
+    await db.query(
+      `insert into public.question_translations
+         (question_id, locale, stem, content, status)
+       values ($1,'hi','कंपनी A का प्रश्न','{}'::jsonb,'published')
+       on conflict (question_id, locale) do nothing`,
+      [QUESTION_A],
+    )
+    await db.query(
+      `insert into public.tags (id, company_id, name, slug)
+       values ($1,$2,'Tenancy Tag','tenancy-tag') on conflict (id) do nothing`,
+      [TAG_A, fixtures.company],
+    )
+    await db.query(
+      `insert into public.question_tags (question_id, tag_id)
+       values ($1,$2) on conflict do nothing`,
+      [QUESTION_A, TAG_A],
+    )
+
     await db.query(
       `insert into public.exams (id, company_id, title, created_by, duration_minutes)
        values ($1,$2,'Company A exam',$3,10) on conflict (id) do nothing`,
@@ -200,6 +227,82 @@ describeDb('cross-company isolation', () => {
         (await c.query('select id from public.questions where id = $1', [QUESTION_A])).rows,
       )
       expect(rows).toHaveLength(0)
+    })
+
+    /**
+     * The side tables, scoped by 0031.
+     *
+     * Every one of these passed before 0031 — the policies checked a permission
+     * and nothing else, so company B held the key to company A's rows and only
+     * lacked the uuid. These cases supply the uuid, which is the whole point:
+     * they test the gate rather than the obscurity in front of it.
+     */
+    it('company B cannot read company A translations', async () => {
+      const rows = await asUser(db, chefB(), async (c) =>
+        (await c.query('select stem from public.question_translations where question_id = $1', [
+          QUESTION_A,
+        ])).rows,
+      )
+      expect(rows).toHaveLength(0)
+    })
+
+    it('company A can read its own translations', async () => {
+      const rows = await asUser(db, chefA(), async (c) =>
+        (await c.query('select stem from public.question_translations where question_id = $1', [
+          QUESTION_A,
+        ])).rows,
+      )
+      expect(rows).toHaveLength(1)
+    })
+
+    it('company B cannot write a translation onto company A question', async () => {
+      await expect(
+        asUser(db, chefB(), (c) =>
+          c.query(
+            `insert into public.question_translations (question_id, locale, stem, content)
+             values ($1,'gu','તોડફોડ','{}'::jsonb)`,
+            [QUESTION_A],
+          ),
+        ),
+      ).rejects.toThrow()
+    })
+
+    /**
+     * The severe one. question_snapshot() aggregates question_media with no
+     * further check, so a row written here is frozen into company A's paper at
+     * publish and served to their candidates.
+     */
+    it('company B cannot attach media to a company A question', async () => {
+      await expect(
+        asUser(db, chefB(), (c) =>
+          c.query(
+            `insert into public.question_media (question_id, kind, provider, external_url)
+             values ($1,'image','external','http://evil.example/x.png')`,
+            [QUESTION_A],
+          ),
+        ),
+      ).rejects.toThrow()
+    })
+
+    /**
+     * Deletes are FILTERED by RLS, not refused — so this asserts rowCount, not
+     * a throw. Getting that wrong would produce a test that passes whether or
+     * not the policy exists.
+     */
+    it('company B cannot un-tag a company A question', async () => {
+      const deleted = await asUser(db, chefB(), async (c) =>
+        (await c.query('delete from public.question_tags where question_id = $1', [QUESTION_A]))
+          .rowCount,
+      )
+      expect(deleted).toBe(0)
+    })
+
+    it('company A can still un-tag its own', async () => {
+      const deleted = await asUser(db, chefA(), async (c) =>
+        (await c.query('delete from public.question_tags where question_id = $1', [QUESTION_A]))
+          .rowCount,
+      )
+      expect(deleted).toBe(1)
     })
 
     it('company B cannot see company A answer keys', async () => {
