@@ -1,6 +1,6 @@
 'use server'
 
-import { requirePermission } from '@/lib/auth/guards'
+import { requirePermission, requireAnyPermission } from '@/lib/auth/guards'
 import { createClient } from '@/lib/supabase/server'
 import { dbId } from '@/lib/db/id'
 
@@ -73,6 +73,32 @@ export interface QuestionStats {
 }
 
 /**
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ WHY THESE THREE TAKE requireAnyPermission AND NOT requirePermission.      │
+ * │                                                                           │
+ * │ They were guarded on `reports.read_team` alone. HR holds `reports.        │
+ * │ read_all` — which is strictly WIDER — and not `read_team`, so every one   │
+ * │ of these threw for HR. /reports gates its team sections on                │
+ * │ `read_team || read_all` and then calls all three, and with no error        │
+ * │ boundary in the app that throw surfaced as a 500. Verified against this   │
+ * │ database: /en/reports and /api/reports/export both returned 500 for an    │
+ * │ HR user, and 200 for a chef, which is exactly why nobody noticed.         │
+ * │                                                                           │
+ * │ This is not a widening of access. analytics_scope() in 0030 already maps  │
+ * │ read_all → 'all', a superset of 'team', so the SQL was written for this   │
+ * │ caller from the start — and requireAnyPermission's own docstring names    │
+ * │ this exact case ("a report a chef sees via reports.read_team and HR sees  │
+ * │ via reports.read_all"). The helper existed and was never wired up.        │
+ * │                                                                           │
+ * │ THE GENERAL RULE, which /dashboard is now built on: where a screen is     │
+ * │ reachable by two different grants, the ACTION widens, never the caller.   │
+ * │ A page that ORs two keys in front of an action guarded on one of them is  │
+ * │ a 500 waiting for whichever role holds the other.                         │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ */
+const TEAM_OR_ALL = ['reports.read_team', 'reports.read_all'] as const
+
+/**
  * Everyone in reach, including those who have sat nothing.
  *
  * The zero rows are the point: "who still needs to do this" is what a chef
@@ -80,7 +106,7 @@ export interface QuestionStats {
  * dropping them.
  */
 export async function getTeamStats(): Promise<TeamMemberStats[]> {
-  await requirePermission('reports.read_team')
+  await requireAnyPermission(TEAM_OR_ALL)
 
   const supabase = await createClient()
   const { data, error } = await supabase.rpc('team_stats')
@@ -90,7 +116,7 @@ export async function getTeamStats(): Promise<TeamMemberStats[]> {
 }
 
 export async function getExamStats(examId?: string): Promise<ExamStats[]> {
-  await requirePermission('reports.read_team')
+  await requireAnyPermission(TEAM_OR_ALL)
 
   const target = examId ? dbId().safeParse(examId) : null
   if (examId && !target?.success) return []
@@ -111,7 +137,7 @@ export async function getExamStats(examId?: string): Promise<ExamStats[]> {
  * statistics again, which is what 0011's revision counter is for.
  */
 export async function getQuestionStats(categoryId?: string): Promise<QuestionStats[]> {
-  await requirePermission('reports.read_team')
+  await requireAnyPermission(TEAM_OR_ALL)
 
   const target = categoryId ? dbId().safeParse(categoryId) : null
   if (categoryId && !target?.success) return []

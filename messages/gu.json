@@ -149,5 +149,38 @@
       "requestNew": "નવી લિંક માંગો",
       "backToSignIn": "સાઇન ઇન પર પાછા"
     }
+  },
+  "dashboard": {
+    "greeting": "ફરી સ્વાગત છે, {name}",
+    "greetingAnon": "ફરી સ્વાગત છે",
+    "subtitle": "તમારા માટે જે બાકી છે, એક જગ્યાએ.",
+    "noRole": "કોઈ ભૂમિકા આપી નથી",
+    "roles": {
+      "super_admin": "સુપર એડમિન",
+      "chef": "શેફ / રસોઈ મેનેજર",
+      "hr": "એચઆર મેનેજર",
+      "employee": "ટીમ સભ્ય"
+    },
+    "attention": "તમારા ધ્યાનની જરૂર",
+    "attentionEmpty": "તમારા માટે કંઈ બાકી નથી",
+    "attentionEmptyHint": "તપાસવાના, ચકાસવાના કે જાહેર કરવાના પેપર અહીં દેખાશે.",
+    "toEvaluate": "તપાસવાના",
+    "toVerify": "ચકાસવાના",
+    "toRelease": "જાહેર કરવાના",
+    "toApprove": "મંજૂર કરવાના",
+    "viewAll": "બધા જુઓ",
+    "waitingSince": "{when} થી રાહ જુએ છે",
+    "notSubmitted": "હજી જમા થયું નથી",
+    "kindEvaluate": "તપાસ બાકી",
+    "kindVerify": "ચકાસણી બાકી",
+    "kindRelease": "જાહેર કરવા તૈયાર",
+    "myExams": "તમારી પરીક્ષાઓ",
+    "myExamsHint": "તમને સોંપાયેલી અને હમણાં ખુલ્લી.",
+    "myResults": "તાજેતરના પરિણામ",
+    "performance": "તમારું પ્રદર્શન",
+    "nothingHere": "અત્યારે કરવા જેવું કંઈ નથી",
+    "nothingHereHint": "જ્યારે તમને પરીક્ષા સોંપાશે, અથવા કોઈ પેપરને તમારા ધ્યાનની જરૂર પડશે, તે અહીં દેખાશે.",
+    "resultPending": "જાહેર થવાનું બાકી",
+    "andMore": "{count} વધુ"
   }
 }

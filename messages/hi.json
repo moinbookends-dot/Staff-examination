@@ -149,5 +149,38 @@
       "requestNew": "नया लिंक माँगें",
       "backToSignIn": "साइन इन पर वापस"
     }
+  },
+  "dashboard": {
+    "greeting": "फिर से स्वागत है, {name}",
+    "greetingAnon": "फिर से स्वागत है",
+    "subtitle": "आपके लिए जो कुछ बाकी है, एक जगह।",
+    "noRole": "कोई भूमिका नहीं दी गई",
+    "roles": {
+      "super_admin": "सुपर एडमिन",
+      "chef": "शेफ / रसोई प्रबंधक",
+      "hr": "एचआर प्रबंधक",
+      "employee": "टीम सदस्य"
+    },
+    "attention": "आपके ध्यान की ज़रूरत",
+    "attentionEmpty": "आपके लिए कुछ बाकी नहीं है",
+    "attentionEmptyHint": "जाँचने, सत्यापित करने या जारी करने वाले पेपर यहाँ दिखेंगे।",
+    "toEvaluate": "जाँचने हैं",
+    "toVerify": "सत्यापित करने हैं",
+    "toRelease": "जारी करने हैं",
+    "toApprove": "स्वीकृत करने हैं",
+    "viewAll": "सब देखें",
+    "waitingSince": "{when} से प्रतीक्षा में",
+    "notSubmitted": "अभी जमा नहीं हुआ",
+    "kindEvaluate": "जाँच बाकी",
+    "kindVerify": "सत्यापन बाकी",
+    "kindRelease": "जारी करने को तैयार",
+    "myExams": "आपकी परीक्षाएँ",
+    "myExamsHint": "आपको सौंपी गई और अभी खुली हुई।",
+    "myResults": "हाल के परिणाम",
+    "performance": "आपका प्रदर्शन",
+    "nothingHere": "अभी करने को कुछ नहीं",
+    "nothingHereHint": "जब कोई परीक्षा आपको सौंपी जाएगी, या किसी पेपर को आपके ध्यान की ज़रूरत होगी, वह यहाँ दिखेगा।",
+    "resultPending": "जारी होना बाकी",
+    "andMore": "{count} और"
   }
 }

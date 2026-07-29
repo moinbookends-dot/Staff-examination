@@ -102,7 +102,11 @@
   --muted-foreground: oklch(0.52 0.022 264);
   --accent: oklch(0.945 0.018 264);
   --accent-foreground: oklch(0.38 0.12 263);
-  --destructive: oklch(0.577 0.245 27.325);
+  /* Darkened from shadcn's 0.577. Both the destructive Button and the
+     destructive Badge render it as TEXT on a 10% tint of itself, which at
+     0.577 measures 4.01:1 — a fail for body and label text. 5.03:1 here, and
+     6.02:1 as white-on-solid, so it clears AA in both roles it is used in. */
+  --destructive: oklch(0.52 0.22 27.325);
 
   /* Each of these is used two ways: as a solid fill under
      --*-foreground, and as TEXT on a 12%-alpha tint of itself (the badge
@@ -117,7 +121,12 @@
   --success-foreground: oklch(0.985 0 0);
   --warning: oklch(0.50 0.115 72);
   --warning-foreground: oklch(0.985 0 0);
-  --info: oklch(0.5461 0.2152 262.881);
+  /* Darker than --primary on purpose, and this was wrong until it was measured:
+     leaving --info at the brand blue gave 4.37:1 as text on its own 12% tint,
+     which fails AA for the 12px badge label it is used in. --success and
+     --warning were already darkened for exactly this reason; --info was not,
+     because it looked like a brand token. It is a status token. 5.23:1. */
+  --info: oklch(0.50 0.20 262.881);
   --info-foreground: oklch(0.985 0 0);
 
   --border: oklch(0.912 0.008 264);
@@ -184,7 +193,9 @@
   --muted-foreground: oklch(0.715 0.018 264);
   --accent: oklch(0.31 0.035 264);
   --accent-foreground: oklch(0.97 0.01 264);
-  --destructive: oklch(0.704 0.191 22.216);
+  /* Lifted from 0.704 for the same reason the light value was darkened: as
+     text on its own 20% tint over a dark card it measured 4.44:1. 4.90:1 now. */
+  --destructive: oklch(0.75 0.17 22.216);
 
   /* Inverted from light: here the tint sits on a dark card, so these have to
      be LIGHT to be readable, and the foregrounds go dark for the solid-fill

@@ -584,5 +584,38 @@
     "previewHint": "What a candidate reading this language will see.",
     "reviewFirst": "A translation is reviewed before it is published.",
     "publishedEditWarning": "Editing a published translation sends it back for review."
+  },
+  "dashboard": {
+    "greeting": "Welcome back, {name}",
+    "greetingAnon": "Welcome back",
+    "subtitle": "Everything waiting on you, in one place.",
+    "noRole": "No role assigned",
+    "roles": {
+      "super_admin": "Super admin",
+      "chef": "Chef / Kitchen manager",
+      "hr": "HR manager",
+      "employee": "Team member"
+    },
+    "attention": "Needs your attention",
+    "attentionEmpty": "Nothing is waiting on you",
+    "attentionEmptyHint": "Papers to mark, sign off or release will appear here.",
+    "toEvaluate": "To mark",
+    "toVerify": "To sign off",
+    "toRelease": "To release",
+    "toApprove": "To approve",
+    "viewAll": "View all",
+    "waitingSince": "Waiting since {when}",
+    "notSubmitted": "Not submitted yet",
+    "kindEvaluate": "Needs marking",
+    "kindVerify": "Needs sign-off",
+    "kindRelease": "Ready to release",
+    "myExams": "Your exams",
+    "myExamsHint": "Assigned to you and open now.",
+    "myResults": "Recent results",
+    "performance": "Your performance",
+    "nothingHere": "Nothing to do right now",
+    "nothingHereHint": "When an exam is assigned to you, or a paper needs your attention, it will appear here.",
+    "resultPending": "Awaiting release",
+    "andMore": "{count} more"
   }
 }

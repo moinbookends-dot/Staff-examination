@@ -149,5 +149,38 @@
       "requestNew": "Naya link maangein",
       "backToSignIn": "Sign in par wapas"
     }
+  },
+  "dashboard": {
+    "greeting": "Wapas swagat hai, {name}",
+    "greetingAnon": "Wapas swagat hai",
+    "subtitle": "Aapke liye jo bhi baaki hai, ek jagah.",
+    "noRole": "Koi role nahi diya gaya",
+    "roles": {
+      "super_admin": "Super admin",
+      "chef": "Chef / Kitchen manager",
+      "hr": "HR manager",
+      "employee": "Team member"
+    },
+    "attention": "Aapke dhyan ki zaroorat",
+    "attentionEmpty": "Aapke liye kuch baaki nahi hai",
+    "attentionEmptyHint": "Jaanchne, verify karne ya release karne wale paper yahan dikhenge.",
+    "toEvaluate": "Jaanchne hain",
+    "toVerify": "Sign off karne hain",
+    "toRelease": "Release karne hain",
+    "toApprove": "Approve karne hain",
+    "viewAll": "Sab dekhein",
+    "waitingSince": "{when} se intezaar mein",
+    "notSubmitted": "Abhi jama nahi hua",
+    "kindEvaluate": "Jaanch baaki",
+    "kindVerify": "Verify baaki",
+    "kindRelease": "Release ke liye taiyar",
+    "myExams": "Aapki exams",
+    "myExamsHint": "Aapko di gayi aur abhi khuli hui.",
+    "myResults": "Haal ke results",
+    "performance": "Aapka performance",
+    "nothingHere": "Abhi karne ko kuch nahi",
+    "nothingHereHint": "Jab koi exam aapko di jayegi, ya kisi paper ko aapke dhyan ki zaroorat hogi, wo yahan dikhega.",
+    "resultPending": "Release baaki hai",
+    "andMore": "{count} aur"
   }
 }

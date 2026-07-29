@@ -298,6 +298,126 @@ try {
       'A redirect to /pending means the session is not being read server-side.',
   )
 
+  // ── 1b. The dashboard, per role ────────────────────────────────────────────
+  //
+  // ┌─────────────────────────────────────────────────────────────────────────┐
+  // │ WHY AN HR PERSONA EXISTS ONLY IN THIS SECTION.                          │
+  // │                                                                         │
+  // │ Everything above runs as a chef, and a chef holds a superset of almost   │
+  // │ every permission in the product. That is precisely why a whole class of  │
+  // │ bug was invisible: a page that gates on `A || B` and then calls an       │
+  // │ action guarded on `A` alone works perfectly for anyone holding A, and    │
+  // │ 500s for whoever holds only B.                                          │
+  // │                                                                         │
+  // │ That shipped. /reports gated its team sections on                       │
+  // │ `reports.read_team || reports.read_all`; getTeamStats, getExamStats and  │
+  // │ getQuestionStats were guarded on read_team alone; HR holds read_all and  │
+  // │ not read_team. /en/reports and /api/reports/export both returned 500 to  │
+  // │ every HR user, and no check in this file could see it because no check   │
+  // │ in this file had ever been anyone but a chef.                           │
+  // │                                                                         │
+  // │ /dashboard is where this matters most — it is the one route nobody can   │
+  // │ route around — so it is asserted here for the role least like the one    │
+  // │ the rest of the script uses.                                            │
+  // └─────────────────────────────────────────────────────────────────────────┘
+  console.log('\n1b. The dashboard, per role')
+
+  const hrEmail = `render-hr-${stamp}@bookends-test.local`
+  const hrMade = await fetch(`${URL_}/auth/v1/admin/users`, {
+    method: 'POST',
+    headers: adminHeaders,
+    body: JSON.stringify({
+      email: hrEmail,
+      password: PASSWORD,
+      email_confirm: true,
+      user_metadata: { full_name: 'Render HR', locale: 'en' },
+    }),
+  })
+  if (!hrMade.ok) throw new Error(`create hr: ${hrMade.status} ${await hrMade.text()}`)
+  const hrUser = await hrMade.json()
+  createdUsers.push(hrUser.id)
+
+  await db.query(`update public.profiles set approval_status='approved' where id=$1`, [hrUser.id])
+  await db.query(
+    `insert into public.user_roles (user_id, role_id)
+     select $1, id from public.roles where key='hr' on conflict do nothing`,
+    [hrUser.id],
+  )
+  await db.query(
+    `delete from public.user_roles
+      where user_id=$1 and role_id=(select id from public.roles where key='employee')`,
+    [hrUser.id],
+  )
+
+  const hrSession = await (
+    await fetch(`${URL_}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: { apikey: PUB, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: hrEmail, password: PASSWORD }),
+    })
+  ).json()
+  const hrCookie = `${cookieName}=base64-${Buffer.from(JSON.stringify(hrSession)).toString('base64url')}`
+  const hrGet = async (path) => {
+    const res = await fetch(`${APP}${path}`, { headers: { cookie: hrCookie }, redirect: 'manual' })
+    return { status: res.status, location: res.headers.get('location'), html: await res.text() }
+  }
+
+  const hrDashboard = await hrGet('/en/dashboard')
+  check(hrDashboard.status === 200, 'HR reaches the dashboard', `HR dashboard → ${hrDashboard.status}`)
+
+  const hrReports = await hrGet('/en/reports')
+  check(
+    hrReports.status === 200,
+    'HR reaches /reports — reports.read_all is accepted where read_team is',
+    `HR /reports → ${hrReports.status}. A 500 means an action is still guarded on read_team alone ` +
+      'while the page gates on read_team || read_all.',
+  )
+
+  const hrExport = await hrGet('/api/reports/export?dataset=team')
+  check(
+    hrExport.status === 200,
+    'HR can export the team CSV they hold reports.export for',
+    `HR export → ${hrExport.status}. 500 means the guards inside the route diverge from the one it catches.`,
+  )
+
+  // Asserted as a pair, so neither direction can pass vacuously: the chef acts
+  // on the marking queue and sees it; HR cannot and must not.
+  check(
+    />To mark</.test(dashboard.html),
+    'a chef is shown the marking queue',
+    'the chef dashboard has no marking queue tile',
+  )
+  check(
+    !/>To mark</.test(hrDashboard.html),
+    'HR is not shown a queue they hold no permission to act on',
+    'HR WAS SHOWN A MARKING QUEUE THEY CANNOT ACT ON',
+  )
+  check(
+    !/>To approve</.test(hrDashboard.html),
+    'HR is not shown registration approvals',
+    'HR WAS SHOWN REGISTRATION APPROVALS',
+  )
+
+  // The old dashboard printed the JWT `app` claim: a raw role-slug list and a
+  // permission COUNT — which read "Permissions: 0" for a super_admin, because
+  // that role is deliberately not enumerated and short-circuits in has_perm().
+  // The single numeric datum on the page was inverted for the most powerful
+  // user in the system.
+  check(
+    !/>Permissions: /.test(dashboard.html) && !/>Roles: /.test(dashboard.html),
+    'the dashboard no longer prints the raw JWT claim at the user',
+    'the dashboard is still dumping role slugs and a permission count',
+  )
+
+  for (const locale of ['en', 'hi', 'gu', 'hi-Latn']) {
+    const page = await get(`/${locale}/dashboard`)
+    check(
+      page.status === 200 && !/MISSING_MESSAGE|IntlError/.test(page.html),
+      `${locale}/dashboard renders and resolves every message key`,
+      `${locale}/dashboard → ${page.status}, or a translation key is missing`,
+    )
+  }
+
   // ── 2. Seed a question ─────────────────────────────────────────────────────
   const stem = `Render check ${stamp}: which oil has the highest smoke point?`
   const saved = await (
@@ -1226,6 +1346,52 @@ try {
     />Passed</.test(essayCard),
     'the verdict appears on the results list once released',
     'the verdict is missing from the released result',
+  )
+
+  // ── The candidate's dashboard, now that they have a released result ───────
+  //
+  // ┌─────────────────────────────────────────────────────────────────────────┐
+  // │ WHY A RAW-KEY SWEEP AND NOT JUST A MISSING_MESSAGE SWEEP.               │
+  // │                                                                         │
+  // │ The dashboard's verdict badge called tr('failed') against the `reports`  │
+  // │ namespace, which has `passed` and no `failed`. next-intl does not throw  │
+  // │ for that and does not render "MISSING_MESSAGE": use-intl's default       │
+  // │ getMessageFallback returns the joined key path, so the badge shown to a  │
+  // │ candidate who had just failed an exam read, literally, "reports.failed". │
+  // │ Every existing sweep in this file looks for MISSING_MESSAGE or           │
+  // │ IntlError, and the fallback string contains neither.                    │
+  // │                                                                         │
+  // │ This catches the whole class rather than the one instance: any          │
+  // │ `namespace.key` rendered as a bare text node, for every namespace that   │
+  // │ exists.                                                                 │
+  // └─────────────────────────────────────────────────────────────────────────┘
+  const NAMESPACES =
+    'app|common|auth|dashboard|questions|exams|nav|errors|sitting|evaluation|results|reports|translations'
+  const rawKey = new RegExp(`>(${NAMESPACES})\\.[a-zA-Z][a-zA-Z0-9_.]*<`)
+
+  const candDashboard = await candGet('/en/dashboard')
+  check(
+    candDashboard.status === 200,
+    "a candidate reaches their dashboard",
+    `candidate dashboard → ${candDashboard.status}`,
+  )
+  check(
+    !rawKey.test(candDashboard.html),
+    'the dashboard renders no untranslated key path',
+    `A RAW MESSAGE KEY IS BEING SHOWN TO THE USER: ${candDashboard.html.match(rawKey)?.[0]}`,
+  )
+  check(
+    !rawKey.test(dashboard.html),
+    "the chef's dashboard renders no untranslated key path",
+    `A RAW MESSAGE KEY IS BEING SHOWN TO THE USER: ${dashboard.html.match(rawKey)?.[0]}`,
+  )
+  // The verdict pair, asserted in the direction that was broken. The candidate
+  // passed the essay exam, so 'Passed' must be here — and the fail branch is
+  // covered by the raw-key sweep above, which is what actually failed.
+  check(
+    />Passed</.test(candDashboard.html),
+    'the dashboard shows the verdict on a released result',
+    'the released verdict is missing from the dashboard',
   )
 
   const detailAfter = await candGet(`/en/results/${essayAttempt}`)
