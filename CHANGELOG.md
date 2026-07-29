@@ -9,6 +9,50 @@ remembering, and anything left behind as debt.
 
 ## M7 — Localization · *in progress*
 
+### Shipped — the translation workbench
+
+`/questions/[id]/translations`: English on the left, the target language on the
+right, and a preview of what a candidate reading it will actually see.
+
+**A route, not a fourth tab on the question editor.** That component holds the
+whole question in one state object behind one explicit Save, and a second
+independently-dirty half would break that contract; folding translations into
+`save_question` would also drag them into its transaction and its
+revision-bumping triggers. Different permission, and in practice a different
+person.
+
+**`mergeTranslation` is written here and reused by delivery.** It is the reason
+the merge cannot happen in SQL: the base carries `choices` as an array of
+`{id, text}` and a translation carries it as a map of id → text, so jsonb's
+shallow `||` would replace the array with the object and every renderer would
+break on `.map`. 0033's delivery path selects the locale in SQL and calls this
+to merge, so the workbench preview and the real paper cannot disagree about
+which text belongs to which id. Anything untranslated keeps its English, so a
+half-finished translation reads as a mixture rather than as gaps.
+
+**One field component, not nine — a deliberate departure from the plan.** Nine
+editors exist because authoring a matching question and authoring a sequence are
+different jobs. Translating them is not: for every format the task is "here is a
+string in English, write it in Gujarati", and only the source list varies. Nine
+files would have been nine copies of one text box.
+
+**The id set is read-only and there is no answer key on the surface**, which is
+the point rather than an omission — a translator cannot change what a question
+is worth because there is nowhere here to say it. The render check asserts the
+workbench contains no `"correct"`, `"accept"` or `"rubric"`.
+
+**Publish is offered only from review**, because 0032 refuses a jump from draft
+and a button that always errors is worse than no button.
+
+### Fixed — a component defined during render would have ejected the cursor
+
+`StringList` was declared inside `TranslationFields`, so React saw a new
+component type on every render and unmounted the inputs on every keystroke —
+a translator would have lost focus mid-word, on every field. Caught by
+`react-hooks/static-components`, and it is the same trap `registry.tsx` already
+documents for `dynamic()`: identity created during render is identity that
+changes. Hoisted to module scope.
+
 ### Shipped — the translation write path (0032)
 
 `question_translations` has existed since 0009 with RLS, a draft/review/

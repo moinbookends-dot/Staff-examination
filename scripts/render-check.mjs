@@ -1265,6 +1265,48 @@ try {
     'the not-started state is missing from the team table',
   )
 
+  // ── Translation workbench ────────────────────────────────────────────────
+  // The chef holds questions.translate, so this exercises the editable path.
+  // The candidate does not hold questions.read, so it must not open at all.
+  const workbench = await get(`/en/questions/${questionId}/translations`)
+  check(
+    workbench.status === 200,
+    '/en/questions/[id]/translations renders',
+    `status ${workbench.status} → ${workbench.location}`,
+  )
+  check(
+    !/MISSING_MESSAGE|IntlError/.test(workbench.html),
+    'every message key resolves on the workbench',
+    'a translation key is missing',
+  )
+  check(
+    workbench.html.includes(stem),
+    'the workbench shows the English source',
+    'the source question did not render',
+  )
+  check(
+    workbench.html.includes('Rice bran'),
+    'the workbench lists the strings to translate',
+    'the option strings are missing from the workbench',
+  )
+  // There is no answer key on this surface by construction, and that is worth
+  // asserting rather than assuming: a translator who could see the key could
+  // be told which option to make attractive.
+  for (const forbidden of ['"correct"', '"accept"', '"rubric"']) {
+    check(
+      !workbench.html.includes(forbidden),
+      `the workbench contains no ${forbidden}`,
+      `THE TRANSLATION WORKBENCH LEAKED ${forbidden}`,
+    )
+  }
+
+  const candWorkbench = await candGet(`/en/questions/${questionId}/translations`)
+  check(
+    candWorkbench.status !== 200,
+    'a candidate cannot open the translation workbench',
+    `a candidate got ${candWorkbench.status} on the workbench`,
+  )
+
   // ── Locales ──────────────────────────────────────────────────────────────
   // Everything above renders /en. These three locales have partial bundles by
   // design — request.ts merges each over English — so the property to prove is
