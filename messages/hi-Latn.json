@@ -113,5 +113,41 @@
     "backToExams": "Meri exams par wapas",
     "answered": "Jawab diye",
     "startFailed": "Yeh exam shuru nahi ho saki."
+  },
+  "auth": {
+    "login": {
+      "showPassword": "Password dikhayein",
+      "hidePassword": "Password chhupayein"
+    },
+    "register": {
+      "email": "Email",
+      "password": "Password",
+      "passwordHint": "Kam se kam 8 characters.",
+      "signIn": "Sign in karein"
+    },
+    "forgotPassword": {
+      "email": "Email",
+      "sentTitle": "Apna email dekhein",
+      "backToSignIn": "Sign in par wapas"
+    },
+    "pending": {
+      "suspended": "Aapka account suspend kar diya gaya hai. Apne manager se sampark karein.",
+      "checkAgain": "Dobara jaanchein"
+    },
+    "resetPassword": {
+      "title": "Naya password chunein",
+      "body": "Apne account ke liye naya password daalein.",
+      "password": "Naya password",
+      "confirm": "Naya password dobara likhein",
+      "hint": "Kam se kam 8 characters.",
+      "submit": "Naya password save karein",
+      "mismatch": "Dono password match nahi karte.",
+      "doneTitle": "Password badal gaya",
+      "doneBody": "Ab aap apne naye password se sign in kar sakte hain.",
+      "invalidTitle": "Yeh link kaam nahi karega",
+      "invalidBody": "Password reset link kuch samay baad expire ho jaate hain, sirf ek baar chalte hain, aur usi browser mein kholne hote hain jahan se maange gaye the. Naya link maangein.",
+      "requestNew": "Naya link maangein",
+      "backToSignIn": "Sign in par wapas"
+    }
   }
 }

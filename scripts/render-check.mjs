@@ -153,6 +153,82 @@ try {
     `anonymous /en/questions → ${guarded.headers.get('location')}`,
   )
 
+  // ── 0b. The signed-out screens ─────────────────────────────────────────────
+  // These are the only pages in the product that an unapproved, unauthenticated
+  // person can reach, and until now nothing rendered them. Two of the failures
+  // below shipped and went unnoticed for exactly that reason.
+  console.log('\n0b. Signed out')
+
+  for (const locale of ['en', 'hi', 'gu', 'hi-Latn']) {
+    for (const path of ['/login', '/register', '/forgot-password', '/reset-password']) {
+      const res = await fetch(`${APP}/${locale}${path}`, { redirect: 'manual' })
+      const html = await res.text()
+      check(res.status === 200, `${locale}${path} renders`, `${locale}${path} → ${res.status}`)
+      check(
+        !/MISSING_MESSAGE|IntlError/.test(html),
+        `${locale}${path} resolves every message key`,
+        `${locale}${path} is missing a translation key`,
+      )
+    }
+  }
+
+  // Four labels on the register form were hardcoded English in an application
+  // whose whole point is that a Gujarati-speaking porter can use it. Asserted
+  // against the Gujarati bundle, so "it renders" cannot pass by rendering
+  // English.
+  const guRegister = await (await fetch(`${APP}/gu/register`)).text()
+  check(
+    />ઈમેલ</.test(guRegister) && />પાસવર્ડ</.test(guRegister),
+    'the register form is translated rather than hardcoded English',
+    'the register form still renders English labels to a Gujarati reader',
+  )
+
+  // The page heading names the page. Every auth screen previously had the
+  // product name as its only h1, so heading navigation told a screen-reader
+  // user nothing about which of the five screens they were on.
+  const loginHtml = await (await fetch(`${APP}/en/login`)).text()
+  check(
+    /<h1[^>]*>Sign in</.test(loginHtml),
+    'the login page h1 names the page, not the product',
+    'the login page h1 does not name the page',
+  )
+  // Language before sign-in: preferred_locale lives on the profile and cannot
+  // be read until there is a session, so the URL is the only signal and this
+  // control is the only way to change it.
+  check(
+    /aria-label="Language"/.test(loginHtml),
+    'language can be changed before signing in',
+    'there is no way to change language on the login page',
+  )
+
+  // ── The reset link ─────────────────────────────────────────────────────────
+  // forgotPasswordAction has always pointed its email at /{locale}/reset-password
+  // and that route did not exist, so every reset link this app ever sent hit a
+  // 404. Asserted in both directions: the page exists, AND it refuses to offer
+  // a password form to somebody who has not arrived with a usable link.
+  const bareReset = await (await fetch(`${APP}/en/reset-password`)).text()
+  check(
+    />This link cannot be used</.test(bareReset),
+    'reset-password with no link reports that it cannot be used',
+    'reset-password did not report a missing link',
+  )
+  check(
+    !/name="confirm"/.test(bareReset),
+    'no password form is offered without a recovery link',
+    'A PASSWORD FORM WAS OFFERED WITH NO RECOVERY LINK',
+  )
+  // Supabase signals a dead link by redirecting BACK to this URL with ?error=,
+  // sometimes alongside a code. Reading only `code` would show the form to
+  // somebody holding a link that has already been rejected.
+  const deadReset = await (
+    await fetch(`${APP}/en/reset-password?error=access_denied&error_code=otp_expired&code=abc`)
+  ).text()
+  check(
+    />This link cannot be used</.test(deadReset),
+    'an ?error= reset link is refused even when a code is present',
+    'an expired reset link was treated as usable',
+  )
+
   // ── 1. A real chef session ─────────────────────────────────────────────────
   console.log('\n1. Session')
   const email = `render-chef-${stamp}@bookends-test.local`
