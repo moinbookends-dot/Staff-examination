@@ -9,6 +9,63 @@ remembering, and anything left behind as debt.
 
 ## M7 — Localization · *in progress*
 
+### Shipped — accepting an answer in the language it was asked in (0034)
+
+0033 let a Gujarati speaker *read* a fill-in-the-blank in Gujarati. They then
+typed the answer in Gujarati and were marked wrong, because the key held one
+list of accepted strings and it was English.
+
+**The accepts live in the answer key, never in the translation.**
+`question_translations` is presentation-only — 0009 said so and 0032 made it a
+CHECK — so putting accepted answers there would be precisely what that
+constraint exists to prevent: a translator deciding what is correct.
+`acceptByLocale` sits *inside* each blank, beside the `accept` list it extends,
+rather than as a parallel structure whose failure mode is a key on a blank id
+that no longer exists, contributing silently nothing.
+
+**The grader takes the union of every language and asks for none.** Three
+reasons, and the third decides it: the frozen key carries no locale, so
+threading one in would mark a candidate who switched language mid-attempt
+against a different truth than they were served; nothing records which language
+an answer was typed in; and **candidates code-switch constantly** — a Gujarati
+cook types `74` in Latin digits, or the English word, because that is what the
+kitchen calls it. Locale-scoped grading marks that wrong, and that false
+negative is the failure this migration exists to prevent.
+
+The union is monotone: adding a translation can only turn a wrong answer right,
+never the reverse, so it is safe against attempts already sat. The cost, stated
+rather than buried: a word correct in Hindi and wrong in Gujarati is now
+accepted from a Gujarati candidate — far rarer than the false negative, and
+worth it.
+
+**A pre-existing grader bug, fixed because the union would have amplified it.**
+0027's regex branch did `review := true; return` on an invalid pattern,
+abandoning the whole blank — so one unusable pattern sent that blank to manual
+review for everybody. With several languages' patterns in one list, a single bad
+Gujarati regex would have queued *every* candidate's blank, English speakers
+included. It now skips the bad pattern and keeps looking, which is better even
+without translations.
+
+**`save_blank_accepts()` exists because of a permission mismatch.**
+`answer_keys_write` demands `questions.update`, so a holder of
+`questions.translate` alone — an agency, a bilingual cook, the whole reason that
+permission is separate — could translate the stem and *not* supply the answers
+that decide marks. It is SECURITY DEFINER and earns that by touching exactly one
+field: `accept`, `match`, `tolerance` and every other format's key are
+unreachable from it.
+
+**Caught by its own test:** the first version used
+`jsonb_set(blank, '{acceptByLocale, gu}', …, true)`, which silently returned the
+blank unchanged — `create_missing` only creates the *last* element of a path, so
+it cannot create the intermediate object. Merging the map creates it.
+
+**Known limitation, and the reason 0035 exists.** Writing accepts bumps
+`questions.revision` (0011's trigger) and `exam_questions` freezes the revision
+at publish, so accepts added *after* an exam is published never reach that
+exam's frozen key. The remedy is to re-publish, as with every other
+frozen-versus-current gap here — and 0035 adds the `exam_health` advisory that
+says so out loud rather than leaving it to be discovered.
+
 ### Shipped — questions delivered in the candidate's language (0033)
 
 A candidate whose profile says `gu`, or who switched the app to Gujarati, now

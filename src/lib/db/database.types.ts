@@ -1313,6 +1313,10 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "blank_accept_list": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "bump_question_revision": {
         Args: Record<string, unknown>
         Returns: unknown
@@ -1526,6 +1530,10 @@ export type Database = {
         Returns: unknown
       }
       "save_answer": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "save_blank_accepts": {
         Args: Record<string, unknown>
         Returns: unknown
       }

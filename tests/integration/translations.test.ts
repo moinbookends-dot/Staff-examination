@@ -390,6 +390,77 @@ describeDb('question translations', () => {
     })
   })
 
+  // ── Per-language accepted answers (0034) ───────────────────────────────────
+
+  describe('save_blank_accepts', () => {
+    async function keyFor(questionId: string) {
+      const who = await db.query('select current_user as u')
+      await actAsOwner()
+      const { rows } = await db.query(
+        'select answer_key from public.question_answer_keys where question_id=$1',
+        [questionId],
+      )
+      if (who.rows[0].u === 'authenticated') await db.query('set local role authenticated')
+      return rows[0].answer_key
+    }
+
+    it('writes one language into the blank without disturbing the rest', async () => {
+      await scenario(async () => {
+        await actAs(translator(AUTHOR))
+        await db.query('select public.save_blank_accepts($1,$2,$3::jsonb)', [
+          Q_BLANKS, 'gu', JSON.stringify({ low: ['પાંચ'], high: ['ત્રેસઠ'] }),
+        ])
+
+        const key = await keyFor(Q_BLANKS)
+        const low = key.blanks.find((b: { id: string }) => b.id === 'low')
+        expect(low.acceptByLocale.gu).toEqual(['પાંચ'])
+        // The English list, the match mode and partialCredit are untouched —
+        // this function reaches exactly one field.
+        expect(low.accept).toEqual(['5'])
+        expect(low.match).toBe('ci')
+        expect(key.partialCredit).toBe(true)
+      })
+    })
+
+    it('adds a second language beside the first', async () => {
+      await scenario(async () => {
+        await actAs(translator(AUTHOR))
+        await db.query('select public.save_blank_accepts($1,$2,$3::jsonb)', [
+          Q_BLANKS, 'gu', JSON.stringify({ low: ['પાંચ'] }),
+        ])
+        await db.query('select public.save_blank_accepts($1,$2,$3::jsonb)', [
+          Q_BLANKS, 'hi', JSON.stringify({ low: ['पाँच'] }),
+        ])
+
+        const key = await keyFor(Q_BLANKS)
+        const low = key.blanks.find((b: { id: string }) => b.id === 'low')
+        expect(low.acceptByLocale).toEqual({ gu: ['પાંચ'], hi: ['पाँच'] })
+      })
+    })
+
+    it('refuses a question with no blanks', async () => {
+      await scenario(async () => {
+        await actAs(translator(AUTHOR))
+        await expect(
+          db.query('select public.save_blank_accepts($1,$2,$3::jsonb)', [
+            Q_MCQ, 'gu', JSON.stringify({ a: ['ક'] }),
+          ]),
+        ).rejects.toThrow(/no blanks/i)
+      })
+    })
+
+    it('refuses somebody without questions.translate', async () => {
+      await scenario(async () => {
+        await actAs(employee(CAND))
+        await expect(
+          db.query('select public.save_blank_accepts($1,$2,$3::jsonb)', [
+            Q_BLANKS, 'gu', JSON.stringify({ low: ['પાંચ'] }),
+          ]),
+        ).rejects.toThrow(/forbidden/i)
+      })
+    })
+  })
+
   // ── Permission ─────────────────────────────────────────────────────────────
 
   describe('permission', () => {

@@ -223,6 +223,85 @@ const GROUPS: Array<[string, Expectation[]]> = [
       answer: { format: 'order', order: [] }, max: 6, negative: 2, score: 0, status: 'graded' },
   ]],
 
+  // ── 0034: a blank answered in the language it was asked in ────────────────
+  ['blanks across languages', [
+    {
+      name: 'accepts the Gujarati answer to a Gujarati question', content: BLANKS,
+      key: {
+        format: 'blanks', partialCredit: true,
+        blanks: [
+          { id: 'one', accept: ['five'], match: 'ci', acceptByLocale: { gu: ['પાંચ'], hi: ['पाँच'] } },
+          { id: 'two', accept: ['x'], match: 'ci' },
+        ],
+      },
+      answer: { format: 'blanks', values: { one: 'પાંચ', two: 'x' } },
+      max: 2, score: 2, status: 'graded',
+    },
+    {
+      // The reason this is a union and not locale-scoped grading: a Gujarati
+      // cook types the English word because that is what the kitchen calls it.
+      name: 'still accepts the English answer from a Gujarati speaker', content: BLANKS,
+      key: {
+        format: 'blanks', partialCredit: true,
+        blanks: [
+          { id: 'one', accept: ['five'], match: 'ci', acceptByLocale: { gu: ['પાંચ'] } },
+          { id: 'two', accept: ['x'], match: 'ci' },
+        ],
+      },
+      answer: { format: 'blanks', values: { one: 'five', two: 'x' } },
+      max: 2, score: 2, status: 'graded',
+    },
+    {
+      name: 'accepts Hindi on the same blank as Gujarati', content: BLANKS,
+      key: {
+        format: 'blanks', partialCredit: true,
+        blanks: [
+          { id: 'one', accept: ['five'], match: 'ci', acceptByLocale: { gu: ['પાંચ'], hi: ['पाँच'] } },
+          { id: 'two', accept: ['x'], match: 'ci' },
+        ],
+      },
+      answer: { format: 'blanks', values: { one: 'पाँच', two: 'x' } },
+      max: 2, score: 2, status: 'graded',
+    },
+    {
+      name: 'still marks a genuinely wrong answer wrong', content: BLANKS,
+      key: {
+        format: 'blanks', partialCredit: true,
+        blanks: [
+          { id: 'one', accept: ['five'], match: 'ci', acceptByLocale: { gu: ['પાંચ'] } },
+          { id: 'two', accept: ['x'], match: 'ci' },
+        ],
+      },
+      answer: { format: 'blanks', values: { one: 'seven', two: 'x' } },
+      max: 2, score: 1, status: 'graded',
+    },
+    {
+      // A key written before 0034 has no acceptByLocale at all, and must grade
+      // exactly as it did — the union is additive by construction.
+      name: 'a key with no translations grades as it always did', content: BLANKS,
+      key: blanksKey({ accept: ['five'], match: 'ci' }, { accept: ['six'], match: 'ci' }),
+      answer: { format: 'blanks', values: { one: 'five', two: 'six' } },
+      max: 4, score: 4, status: 'graded',
+    },
+    {
+      /**
+       * The pre-existing bug the union would have amplified: 0027 abandoned
+       * the whole blank on one invalid pattern, so a single bad Gujarati regex
+       * would have sent EVERY candidate's blank to manual review.
+       */
+      name: 'one invalid regex no longer condemns a blank that matched another', content: BLANKS,
+      key: {
+        format: 'blanks', partialCredit: true,
+        blanks: [
+          { id: 'one', accept: ['[unclosed', '5|five'], match: 'regex' },
+          { id: 'two', accept: ['x'], match: 'ci' },
+        ],
+      },
+      answer: { format: 'blanks', values: { one: 'five', two: 'x' } },
+      max: 2, score: 2, status: 'graded',
+    },
+  ]],
+
   ['manual formats and data faults', [
     { name: 'an essay is not auto-graded', content: { format: 'text_long' },
       key: { format: 'text_long', rubric: [{ id: 'r1', label: 'x', max: 2 }] },
