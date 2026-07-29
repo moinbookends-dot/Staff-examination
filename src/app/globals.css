@@ -104,10 +104,19 @@
   --accent-foreground: oklch(0.38 0.12 263);
   --destructive: oklch(0.577 0.245 27.325);
 
-  --success: oklch(0.627 0.17 149.2);
+  /* Each of these is used two ways: as a solid fill under
+     --*-foreground, and as TEXT on a 12%-alpha tint of itself (the badge
+     variants). The second is the binding constraint — a mid-tone green that
+     looks right as a fill only reaches 3:1 as text on white — so the light
+     values are darker than a status colour usually is. All three clear 4.5:1
+     both ways.
+
+     --warning is a dark amber, NOT AIKO Yellow. AIKO is a restaurant, and a
+     brand mark that also means "something is wrong" is a mark you cannot use. */
+  --success: oklch(0.50 0.14 149.2);
   --success-foreground: oklch(0.985 0 0);
-  --warning: oklch(0.7952 0.1617 86.047);
-  --warning-foreground: oklch(0.28 0.06 86);
+  --warning: oklch(0.50 0.115 72);
+  --warning-foreground: oklch(0.985 0 0);
   --info: oklch(0.5461 0.2152 262.881);
   --info-foreground: oklch(0.985 0 0);
 
@@ -177,11 +186,14 @@
   --accent-foreground: oklch(0.97 0.01 264);
   --destructive: oklch(0.704 0.191 22.216);
 
-  --success: oklch(0.696 0.17 162.5);
+  /* Inverted from light: here the tint sits on a dark card, so these have to
+     be LIGHT to be readable, and the foregrounds go dark for the solid-fill
+     case. Same 4.5:1 floor in both roles. */
+  --success: oklch(0.74 0.16 162);
   --success-foreground: oklch(0.18 0.03 162);
-  --warning: oklch(0.83 0.16 86);
-  --warning-foreground: oklch(0.20 0.04 86);
-  --info: oklch(0.68 0.18 263);
+  --warning: oklch(0.83 0.14 80);
+  --warning-foreground: oklch(0.20 0.04 80);
+  --info: oklch(0.72 0.16 263);
   --info-foreground: oklch(0.16 0.03 263);
 
   --border: oklch(1 0 0 / 12%);

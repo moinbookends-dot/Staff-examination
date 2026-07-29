@@ -4,7 +4,10 @@ import { can } from '@/lib/auth/claims'
 import { getCandidateStats, getCandidateCategoryStats } from '@/server/actions/reports'
 import { TeamSections } from './team-sections'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { BarChart3Icon } from 'lucide-react'
+import { PageHeader } from '@/components/ui/page-header'
+import { StatTile } from '@/components/ui/stat-tile'
+import { EmptyState } from '@/components/ui/empty-state'
+import { BarChart3Icon, AwardIcon, CheckCircle2Icon, GaugeIcon, ListChecksIcon } from 'lucide-react'
 
 /**
  * How one person is doing.
@@ -44,25 +47,25 @@ export default async function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{t('title')}</h1>
-        <p className="text-sm text-muted-foreground">{t('subtitle')}</p>
-      </div>
+      <PageHeader title={t('title')} description={t('subtitle')} />
 
       {!hasData ? (
         <Card>
-          <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
-            <BarChart3Icon className="size-8 text-muted-foreground" />
-            <p className="text-sm font-medium">{t('noData')}</p>
-            <p className="text-sm text-muted-foreground">{t('noDataHint')}</p>
+          <CardContent className="p-0">
+            <EmptyState icon={BarChart3Icon} message={t('noData')} hint={t('noDataHint')} />
           </CardContent>
         </Card>
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Stat label={t('attempts')} value={String(stats!.attempts_n)} />
-            <Stat
+            <StatTile
+              label={t('attempts')}
+              value={String(stats!.attempts_n)}
+              icon={ListChecksIcon}
+            />
+            <StatTile
               label={t('passed')}
+              icon={CheckCircle2Icon}
               value={t('ofAttempts', { passed: stats!.passed_n, total: stats!.attempts_n })}
               hint={
                 stats!.pass_rate != null
@@ -70,16 +73,18 @@ export default async function ReportsPage() {
                   : undefined
               }
             />
-            <Stat
+            <StatTile
               label={t('average')}
+              icon={GaugeIcon}
               value={
                 stats!.avg_percent != null
                   ? t('percentValue', { value: stats!.avg_percent })
                   : '—'
               }
             />
-            <Stat
+            <StatTile
               label={t('best')}
+              icon={AwardIcon}
               value={
                 stats!.best_percent != null
                   ? t('percentValue', { value: stats!.best_percent })
@@ -144,17 +149,5 @@ export default async function ReportsPage() {
           who has sat nothing still needs to see who on their team has. */}
       {seesTeam && <TeamSections canExport={canExport} />}
     </div>
-  )
-}
-
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <Card>
-      <CardContent className="pt-6">
-        <p className="text-xs font-medium text-muted-foreground">{label}</p>
-        <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
-        {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
-      </CardContent>
-    </Card>
   )
 }

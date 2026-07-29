@@ -30,6 +30,7 @@ import {
 } from '@/server/actions/questions'
 import { FormatEditor, FormatRenderer } from './registry'
 import { Button } from '@/components/ui/button'
+import { InlineError } from '@/components/ui/inline-error'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -283,7 +284,7 @@ export function QuestionForm({ question, categories, tags, revisions, canRetire 
         </div>
       </div>
 
-      {error && <p className="rounded-md border border-destructive p-3 text-sm text-destructive">{error}</p>}
+      {error && <InlineError>{error}</InlineError>}
 
       <div className="grid gap-6 lg:grid-cols-[20rem_1fr]">
         {/* ── Metadata ───────────────────────────────────────────────────── */}

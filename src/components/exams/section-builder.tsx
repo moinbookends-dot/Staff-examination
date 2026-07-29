@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { saveSections, previewRuleCount, type RuleCount } from '@/server/actions/exams'
 import type { CategoryOption } from '@/server/actions/questions'
 import { Button } from '@/components/ui/button'
+import { InlineError } from '@/components/ui/inline-error'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -128,9 +129,7 @@ export function SectionBuilder({
       </CardHeader>
       <CardContent className="space-y-4">
         {error && (
-          <p className="rounded-md border border-destructive p-3 text-sm text-destructive">
-            {error}
-          </p>
+          <InlineError>{error}</InlineError>
         )}
 
         {sections.length === 0 && (

@@ -14,6 +14,20 @@ const badgeVariants = cva(
           "bg-secondary text-secondary-foreground [a]:hover:bg-secondary/80",
         destructive:
           "bg-destructive/10 text-destructive focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:focus-visible:ring-destructive/40 [a]:hover:bg-destructive/20",
+        // Outcome pills. Before these existed the only choices were `default`
+        // (solid brand blue) and `secondary` (grey), so a passed attempt and
+        // one still awaiting evaluation were the same colour in a queue — the
+        // single most useful thing a status column can tell you was the one
+        // thing it did not.
+        //
+        // Never used for brand identity: which restaurant a row belongs to is
+        // --brand-bookends/-capiche/-aiko, a separate scale, so that "red" can
+        // keep meaning "failed" rather than "Capiche".
+        success:
+          "bg-success/12 text-success dark:bg-success/18 [a]:hover:bg-success/20",
+        warning:
+          "bg-warning/14 text-warning dark:bg-warning/20 [a]:hover:bg-warning/22",
+        info: "bg-info/12 text-info dark:bg-info/18 [a]:hover:bg-info/20",
         outline:
           "border-border text-foreground [a]:hover:bg-muted [a]:hover:text-muted-foreground",
         ghost:

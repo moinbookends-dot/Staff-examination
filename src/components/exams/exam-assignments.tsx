@@ -8,6 +8,7 @@ import { setAssignments } from '@/server/actions/exams'
 import { ASSIGNMENT_TARGETS, type AssignmentTarget } from '@/lib/exams/rules'
 import type { DirectoryOption, PersonOption } from '@/server/actions/directory'
 import { Button } from '@/components/ui/button'
+import { InlineError } from '@/components/ui/inline-error'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -144,9 +145,7 @@ export function ExamAssignments({
       </CardHeader>
       <CardContent className="space-y-4">
         {error && (
-          <p className="rounded-md border border-destructive p-3 text-sm text-destructive">
-            {error}
-          </p>
+          <InlineError>{error}</InlineError>
         )}
 
         {rows.length === 0 ? (

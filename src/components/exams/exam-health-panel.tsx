@@ -14,6 +14,7 @@ import {
 import { getExamHealth, publishExam, setExamStatus } from '@/server/actions/exams'
 import type { ExamStatus } from '@/lib/exams/rules'
 import { Button } from '@/components/ui/button'
+import { InlineError } from '@/components/ui/inline-error'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   AlertDialog,
@@ -118,9 +119,7 @@ export function ExamHealthPanel({
 
       <CardContent className="space-y-4">
         {error && (
-          <p className="rounded-md border border-destructive p-3 text-sm text-destructive">
-            {error}
-          </p>
+          <InlineError>{error}</InlineError>
         )}
 
         {issues.length === 0 && (
