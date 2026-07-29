@@ -7,9 +7,12 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
+  /* Was `var(--font-sans)` — self-referential, so it resolved to nothing and
+     every `font-sans` in the app silently fell back to the Tailwind default
+     stack. The layout publishes Geist as --font-geist-sans. */
+  --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-heading: var(--font-geist-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -39,6 +42,22 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+
+  /* Outcome colours. A pass and a pending review used to share `secondary`,
+     so the two looked identical in a queue. */
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+
+  /* Brand marks. Reserved for identifying WHICH restaurant a row belongs to —
+     never for status, which is what the outcome colours above are for. */
+  --color-brand-bookends: var(--brand-bookends);
+  --color-brand-capiche: var(--brand-capiche);
+  --color-brand-aiko: var(--brand-aiko);
+
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -48,73 +67,156 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   Palette.
+
+   Every token below used to be chroma 0 except --destructive, which is why the
+   app had no brand presence anywhere and every chart on /reports came out as a
+   ramp of five greys. Names are unchanged on purpose: each is consumed through
+   a Tailwind utility generated from the @theme inline block above, so swapping
+   the VALUES repaints the whole application without touching a component.
+
+   The neutrals carry a small amount of blue (hue 264) rather than being
+   literally grey. It is below the threshold at which anyone would call a
+   surface "blue", but it stops the UI reading as a wireframe.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --background: oklch(0.985 0.002 264);
+  --foreground: oklch(0.21 0.02 264);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.21 0.02 264);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.21 0.02 264);
+
+  /* Bookends Blue #2563EB, converted exactly rather than borrowed from
+     Tailwind's blue-600 — v4 rebased that swatch to #155dfc, which is visibly
+     a different blue. Contrast against --primary-foreground is 5.1:1, clearing
+     AA for the button labels that sit on it. */
+  --primary: oklch(0.5461 0.2152 262.881);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+
+  --secondary: oklch(0.967 0.006 264);
+  --secondary-foreground: oklch(0.28 0.03 264);
+  --muted: oklch(0.967 0.006 264);
+  --muted-foreground: oklch(0.52 0.022 264);
+  --accent: oklch(0.945 0.018 264);
+  --accent-foreground: oklch(0.38 0.12 263);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
+
+  --success: oklch(0.627 0.17 149.2);
+  --success-foreground: oklch(0.985 0 0);
+  --warning: oklch(0.7952 0.1617 86.047);
+  --warning-foreground: oklch(0.28 0.06 86);
+  --info: oklch(0.5461 0.2152 262.881);
+  --info-foreground: oklch(0.985 0 0);
+
+  --border: oklch(0.912 0.008 264);
+  --input: oklch(0.912 0.008 264);
+  /* The focus ring is the brand colour rather than a neutral, so keyboard
+     users get the same visual language as everyone else. */
+  --ring: oklch(0.5461 0.2152 262.881);
+
+  /* A real categorical ramp: blue, teal, amber, violet, coral. Distinguishable
+     by hue, so the /reports bars survive being printed or read by someone with
+     deuteranopia — the old ramp separated only by lightness. */
+  --chart-1: oklch(0.5461 0.2152 262.881);
+  --chart-2: oklch(0.70 0.14 182);
+  --chart-3: oklch(0.7952 0.1617 86.047);
+  --chart-4: oklch(0.63 0.21 300);
+  --chart-5: oklch(0.64 0.19 22);
+
+  --brand-bookends: oklch(0.5461 0.2152 262.881);
+  --brand-capiche: oklch(0.5773 0.1994 23.262);
+  --brand-aiko: oklch(0.7952 0.1617 86.047);
+
+  --radius: 0.75rem;
+
+  --sidebar: oklch(0.975 0.004 264);
+  --sidebar-foreground: oklch(0.21 0.02 264);
+  --sidebar-primary: oklch(0.5461 0.2152 262.881);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar-accent: oklch(0.94 0.02 264);
+  --sidebar-accent-foreground: oklch(0.38 0.12 263);
+  --sidebar-border: oklch(0.912 0.008 264);
+  --sidebar-ring: oklch(0.5461 0.2152 262.881);
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   Dark.
+
+   This block existed before and was complete, but nothing ever put the `dark`
+   class on <html>, so it — and every `dark:` utility in the app — was dead
+   code. src/components/shell/theme-provider.tsx is what makes it reachable.
+
+   Surfaces are a deep blue-slate rather than black: pure black next to a
+   saturated blue makes the blue look like it is glowing, and a phone screen in
+   a kitchen is usually behind grease.
+   ───────────────────────────────────────────────────────────────────────────── */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --background: oklch(0.181 0.014 264);
+  --foreground: oklch(0.968 0.006 264);
+  --card: oklch(0.226 0.016 264);
+  --card-foreground: oklch(0.968 0.006 264);
+  --popover: oklch(0.226 0.016 264);
+  --popover-foreground: oklch(0.968 0.006 264);
+
+  /* The same Bookends Blue, unchanged. Lightening it for "contrast against the
+     dark background" is the obvious move and the wrong one: it drops the
+     contrast of the WHITE LABEL sitting on top below AA, and the background is
+     already 0.18 lightness, so there is nothing to fix. --ring and --chart-1
+     below ARE lifted, because nothing sits on top of those. */
+  --primary: oklch(0.5461 0.2152 262.881);
+  --primary-foreground: oklch(0.985 0 0);
+
+  --secondary: oklch(0.278 0.02 264);
+  --secondary-foreground: oklch(0.968 0.006 264);
+  --muted: oklch(0.278 0.02 264);
+  --muted-foreground: oklch(0.715 0.018 264);
+  --accent: oklch(0.31 0.035 264);
+  --accent-foreground: oklch(0.97 0.01 264);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
+
+  --success: oklch(0.696 0.17 162.5);
+  --success-foreground: oklch(0.18 0.03 162);
+  --warning: oklch(0.83 0.16 86);
+  --warning-foreground: oklch(0.20 0.04 86);
+  --info: oklch(0.68 0.18 263);
+  --info-foreground: oklch(0.16 0.03 263);
+
+  --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --ring: oklch(0.62 0.19 263);
+
+  /* Same five hues as light, lifted so they read against a dark plot area.
+     They used to be byte-identical to the light ramp, which is how a chart
+     ends up invisible in one theme. */
+  --chart-1: oklch(0.68 0.18 263);
+  --chart-2: oklch(0.76 0.13 182);
+  --chart-3: oklch(0.83 0.16 86);
+  --chart-4: oklch(0.72 0.19 300);
+  --chart-5: oklch(0.71 0.18 22);
+
+  --brand-bookends: oklch(0.68 0.18 263);
+  --brand-capiche: oklch(0.70 0.17 23.262);
+  --brand-aiko: oklch(0.83 0.16 86);
+
+  --sidebar: oklch(0.206 0.016 264);
+  --sidebar-foreground: oklch(0.968 0.006 264);
+  --sidebar-primary: oklch(0.5461 0.2152 262.881);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.30 0.03 264);
+  --sidebar-accent-foreground: oklch(0.97 0.01 264);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar-ring: oklch(0.62 0.19 263);
+}
+
+/* Frosted chrome. Deliberately NOT applied to /attempt/[id]: translucency
+   costs contrast, and that page is a timed assessment. */
+@utility glass {
+  background-color: color-mix(in oklab, var(--card) 72%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(140%);
 }
 
 @layer base {
@@ -123,8 +225,32 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* Two very low-alpha washes so large empty areas are not a flat slab.
+       `fixed` keeps them still while content scrolls over them. */
+    background-image:
+      radial-gradient(48rem 32rem at 12% -8%, oklch(0.546 0.245 262.881 / 0.05), transparent 60%),
+      radial-gradient(40rem 28rem at 100% 0%, oklch(0.578 0.199 21.5 / 0.035), transparent 55%);
+    background-attachment: fixed;
+  }
+  .dark body {
+    background-image:
+      radial-gradient(48rem 32rem at 12% -8%, oklch(0.62 0.19 263 / 0.12), transparent 60%),
+      radial-gradient(40rem 28rem at 100% 0%, oklch(0.70 0.17 23.262 / 0.07), transparent 55%);
   }
   html {
     @apply font-sans;
+  }
+}
+
+/* Respect the user's own setting. Motion is decoration here; nothing in the
+   app depends on an animation completing. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import { NextIntlClientProvider, hasLocale } from 'next-intl'
 import { notFound } from 'next/navigation'
 import { routing } from '@/lib/i18n/routing'
+import { ThemeProvider } from '@/components/shell/theme-provider'
+import { Toaster } from '@/components/ui/sonner'
 import '../globals.css'
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
@@ -41,12 +43,23 @@ export default async function LocaleLayout({
   }
 
   return (
+    // suppressHydrationWarning: next-themes writes the theme class onto this
+    // element from an inline script before React hydrates, so the server markup
+    // and the live DOM legitimately differ by one class name.
     <html
       lang={locale}
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <NextIntlClientProvider>{children}</NextIntlClientProvider>
+        <ThemeProvider>
+          <NextIntlClientProvider>
+            {children}
+            {/* Seven files called toast.success() into a void: sonner needs a
+                mounted <Toaster /> and there was never one. */}
+            <Toaster position="top-right" richColors closeButton />
+          </NextIntlClientProvider>
+        </ThemeProvider>
       </body>
     </html>
   )
