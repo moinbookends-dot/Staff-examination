@@ -23,6 +23,7 @@ import {
 import { listMyExams, listMyResults } from '@/server/actions/attempts'
 import { getCandidateStats } from '@/server/actions/reports'
 import { Link } from '@/lib/i18n/navigation'
+import { ExecutiveOverview } from './executive-overview'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -95,6 +96,13 @@ export default async function DashboardPage() {
   const canSit = can(claims, 'attempts.take')
   const canSeeOwnResults = can(claims, 'attempts.read_own')
   const canSeeOwnStats = can(claims, 'reports.read_own')
+  // The pair, not a superset: getTeamStats and getExamStats are guarded on
+  // requireAnyPermission(['reports.read_team', 'reports.read_all']), so this
+  // gate lists exactly those two literals. A chef arrives via read_team, HR via
+  // read_all — and gating on only one of them is precisely what made /reports
+  // 500 for every HR user.
+  const seesOverview =
+    can(claims, 'reports.read_team') || can(claims, 'reports.read_all')
 
   // One round of parallel reads. getQuestionStats and getTeamStats are
   // deliberately absent: the first is the most expensive read in the codebase
@@ -142,7 +150,11 @@ export default async function DashboardPage() {
   // first day lands here, from the notification that told them they were
   // approved — so it has to say something true rather than render nothing.
   const emptyEverywhere =
-    !hasQueues && openExams.length === 0 && recentResults.length === 0 && !hasOwnStats
+    !hasQueues &&
+    !seesOverview &&
+    openExams.length === 0 &&
+    recentResults.length === 0 &&
+    !hasOwnStats
 
   return (
     <div className="space-y-8">
@@ -174,6 +186,13 @@ export default async function DashboardPage() {
             />
           </CardContent>
         </Card>
+      )}
+
+      {/* ── The manager's numbers ───────────────────────────────────────
+          Above the queues on purpose: Stitch leads with the figures, and a
+          manager arrives asking "how are we doing" before "what is waiting". */}
+      {seesOverview && (
+        <ExecutiveOverview claims={claims} pendingCount={canApprove ? pending.length : null} />
       )}
 
       {/* ── What is waiting on this person ──────────────────────────────── */}

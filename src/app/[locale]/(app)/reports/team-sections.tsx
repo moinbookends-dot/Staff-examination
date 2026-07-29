@@ -10,8 +10,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { AlertTriangleIcon, DownloadIcon } from 'lucide-react'
-import { buttonVariants } from '@/components/ui/button'
+import { AlertTriangleIcon } from 'lucide-react'
+import { ExportLink } from '@/components/reports/export-link'
 
 /**
  * The sections a chef or HR sees, on the same page as their own record.
@@ -232,14 +232,3 @@ export async function TeamSections({ canExport }: { canExport: boolean }) {
  * way out. A plain anchor is also all this needs: the Content-Disposition
  * header does the work, with no client JavaScript.
  */
-function ExportLink({ dataset, label }: { dataset: string; label: string }) {
-  return (
-    <a
-      href={`/api/reports/export?dataset=${dataset}`}
-      className={buttonVariants({ variant: 'outline', size: 'sm' })}
-    >
-      <DownloadIcon className="size-4" />
-      {label}
-    </a>
-  )
-}

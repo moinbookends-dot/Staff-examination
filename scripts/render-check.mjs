@@ -418,6 +418,62 @@ try {
     )
   }
 
+  // ── The executive overview, and the line between real and not-yet-real ────
+  //
+  // Both roles reach it through DIFFERENT grants — the chef via
+  // reports.read_team, HR via reports.read_all — and both are asserted, because
+  // an overview that renders for one and 500s for the other is the exact bug
+  // section 1b exists to catch.
+  for (const [who, page] of [
+    ['a chef', dashboard],
+    ['HR', hrDashboard],
+  ]) {
+    check(
+      />Executive overview</.test(page.html),
+      `${who} sees the executive overview`,
+      `${who} did not get the executive overview`,
+    )
+    check(
+      />Overall pass rate</.test(page.html),
+      `${who} sees the headline pass rate`,
+      `the hero figure is missing for ${who}`,
+    )
+  }
+
+  // ┌─────────────────────────────────────────────────────────────────────────┐
+  // │ THE PANELS WITH NO DATA MUST SAY SO, AND MUST NOT INVENT ANY.           │
+  // │                                                                         │
+  // │ Four panels in the reference design cannot be answered by this schema —  │
+  // │ a weekly time series, period-over-period deltas, a department rollup,    │
+  // │ and an audit feed whose RLS policy has no company predicate. Each keeps  │
+  // │ its place in the layout behind a "Backend required" label rather than    │
+  // │ being filled with numbers that look right.                              │
+  // │                                                                         │
+  // │ The second assertion is the load-bearing one: it pins the literal        │
+  // │ figures from the mock (94.2% pass rate, 88.4% average, 1,284 exams,      │
+  // │ +10.8%). If any of them ever appears in the served HTML, somebody has    │
+  // │ hard-coded the design's placeholder data into the product — which on a   │
+  // │ page a manager uses to decide who needs retraining is worse than an      │
+  // │ empty panel, and looks identical to working software.                    │
+  // └─────────────────────────────────────────────────────────────────────────┘
+  check(
+    />Backend required</.test(dashboard.html),
+    'panels with no data behind them are labelled rather than faked',
+    'the Backend required label is missing',
+  )
+  check(
+    !/94\.2|88\.4|1,284|\+10\.8/.test(dashboard.html),
+    'no figure from the design mock is being rendered as real data',
+    'A NUMBER FROM THE DESIGN MOCK IS BEING SHOWN AS IF IT WERE REAL',
+  )
+  // Named explicitly so that "why is there no activity feed?" has an answer in
+  // the product, not only in a document nobody opens.
+  check(
+    /audit_logs_read/.test(dashboard.html),
+    'the activity feed states the RLS policy blocking it',
+    'the live activity panel does not say what it is blocked on',
+  )
+
   // ── 2. Seed a question ─────────────────────────────────────────────────────
   const stem = `Render check ${stamp}: which oil has the highest smoke point?`
   const saved = await (
