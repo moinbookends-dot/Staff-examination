@@ -1265,6 +1265,36 @@ try {
     'the not-started state is missing from the team table',
   )
 
+  // ── Locales ──────────────────────────────────────────────────────────────
+  // Everything above renders /en. These three locales have partial bundles by
+  // design — request.ts merges each over English — so the property to prove is
+  // that a translated string appears AND an untranslated one falls back to
+  // readable English rather than to a raw key.
+  for (const [locale, translated] of [
+    ['hi', 'मेरी परीक्षाएँ'],
+    ['gu', 'મારી પરીક્ષાઓ'],
+    ['hi-Latn', 'Meri exams'],
+  ]) {
+    const page = await candGet(`/${locale}/results`)
+    check(
+      page.status === 200,
+      `/${locale}/results renders`,
+      `status ${page.status} → ${page.location}`,
+    )
+    check(
+      page.html.includes(translated),
+      `${locale} renders its own translation`,
+      `${locale} did not render "${translated}" — the bundle is not being applied`,
+    )
+    // The fallback, and the thing that makes partial translation safe: no raw
+    // key ever reaches a candidate.
+    check(
+      !/MISSING_MESSAGE|IntlError/.test(page.html),
+      `${locale} resolves every key, translated or fallen back`,
+      `${locale} produced a missing-message error`,
+    )
+  }
+
   // ── CSV export ───────────────────────────────────────────────────────────
   // /api sits outside the proxy's matcher, so nothing has checked the session
   // before the handler runs. Its own requirePermission() is the entire gate,

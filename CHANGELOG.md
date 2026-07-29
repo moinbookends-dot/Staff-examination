@@ -7,6 +7,54 @@ remembering, and anything left behind as debt.
 
 ---
 
+## M7 — Localization · *in progress*
+
+### Shipped — the candidate journey in Hindi, Gujarati and Hinglish
+
+102 keys per locale: `app`, `nav`, `common`, `errors`, `results` and `sitting` —
+sign-in, the exam runner, and results. The authoring namespaces (`questions`,
+`exams`, `evaluation`, 261 keys) stay English for now, because chefs and
+administrators are far likelier to work in English than the floor staff being
+examined are.
+
+**Partial translation is safe, and that is a deliberate property rather than an
+accident.** `src/lib/i18n/request.ts` deep-merges each locale over English, so
+an untranslated key renders in readable English rather than as
+`sitting.timeLeft`. It also corrects something recorded earlier in this log:
+`/hi`, `/gu` and `/hi-Latn` were never broken by the empty bundles — they
+rendered entirely in English.
+
+**Hinglish is Hinglish, not transliterated Hindi.** `hi-Latn` keeps the English
+nouns a kitchen already uses — exam, result, submit, dashboard — with Hindi
+grammar around them. Rendering those as formal Hindi in Latin script would be
+less comprehensible, not more.
+
+**The guard is the reverse of the obvious one.** A parity check demanding all
+439 keys in every locale would fight the fallback and keep the build permanently
+red, which teaches people to ignore it. What the fallback *cannot* catch is a
+key that exists only in a locale file: rename `sitting.timeLeft` in English and
+the Hindi entry keeps the old name, silently never renders, and that string
+quietly reverts to English with nothing to say so. `tests/unit/messages.test.ts`
+fails on orphan keys and on placeholder drift — a translation that renames
+`{score}` renders the literal braces to a candidate or throws, and neither is
+visible until somebody switches language. Both checks were verified by
+deliberately introducing each fault and watching them fail.
+
+**`render-check.mjs` now renders all three locales**, asserting both halves:
+a translated string appears, and no `MISSING_MESSAGE` reaches the page.
+
+### Fixed while building
+
+**Re-running an old scratchpad script reverted a later fix.** The `sitting`
+translations were drafted back in M4 slice 3 and never applied, so M7 re-ran
+that script to lift them — and it carried the original English `resultPending`
+with it, undoing the M4 rewording and giving all three locales the wrong
+meaning. The message covers both "an evaluator has it" and "auto-graded but not
+released", so "your paper needs a human evaluator" is simply false in the second
+case. Caught by reading the applied values rather than trusting the script.
+
+---
+
 ## M6 — Reports & Analytics · *complete*
 
 ### Shipped — the analytics data layer (0030)
