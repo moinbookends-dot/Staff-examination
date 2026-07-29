@@ -5,7 +5,10 @@ import { revalidatePath } from 'next/cache'
 import { requirePermission } from '@/lib/auth/guards'
 import { createClient } from '@/lib/supabase/server'
 import { dbId } from '@/lib/db/id'
+import { getLocale } from 'next-intl/server'
 import { answerPayloadSchema } from '@/lib/questions/schemas'
+import { mergeTranslation, type TranslationContent } from '@/lib/questions/translation'
+import type { RenderableContent } from '@/components/questions/types'
 import type { AnswerPayload } from '@/lib/questions/schemas'
 
 /**
@@ -48,6 +51,14 @@ export interface CandidateExam {
   last_score: number | null
   last_passed: boolean | null
   last_published: boolean
+}
+
+/** What localise_snapshot returns: the base, one language, and no others. */
+interface LocalisedSnapshot extends Record<string, unknown> {
+  stem?: string
+  content?: unknown
+  locale?: string
+  t?: { stem: string; content: TranslationContent }
 }
 
 export interface AttemptQuestion {
@@ -223,10 +234,45 @@ export async function getAttemptPaper(attemptId: string): Promise<AttemptQuestio
   if (!parsed.success) return []
 
   const supabase = await createClient()
-  const { data, error } = await supabase.rpc('attempt_paper', { p_attempt_id: parsed.data })
+  // The language they are BROWSING in. attempt_paper falls back to their
+  // profile and then to English, so this is a preference rather than a
+  // requirement — but a candidate who switched the app to Gujarati has said
+  // something more recent than their profile did.
+  const { data, error } = await supabase.rpc('attempt_paper', {
+    p_attempt_id: parsed.data,
+    p_locale: await getLocale(),
+  })
 
   if (error) return []
-  return (data ?? []) as unknown as AttemptQuestion[]
+
+  /**
+   * The merge happens here, not in SQL.
+   *
+   * localise_snapshot() has already chosen one language and removed the rest;
+   * what arrives is `{…base…, locale, t: {stem, content}}`. Reshaping the base
+   * arrays against the translation's id → text maps is what jsonb `||` cannot
+   * do, and doing it here means the candidate's paper and the translator's
+   * preview go through the SAME function — so a preview cannot promise
+   * something the paper does not deliver.
+   */
+  return ((data ?? []) as unknown as Array<AttemptQuestion & { snapshot: LocalisedSnapshot }>).map(
+    (row) => {
+      const { t, ...snapshot } = row.snapshot
+      if (!t) return { ...row, snapshot } as AttemptQuestion
+
+      return {
+        ...row,
+        snapshot: {
+          ...snapshot,
+          stem: t.stem || snapshot.stem,
+          content: mergeTranslation(
+            snapshot.content as RenderableContent,
+            t.content,
+          ) as unknown as Record<string, unknown>,
+        },
+      } as AttemptQuestion
+    },
+  )
 }
 
 /**

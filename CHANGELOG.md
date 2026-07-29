@@ -9,6 +9,83 @@ remembering, and anything left behind as debt.
 
 ## M7 — Localization · *in progress*
 
+### Shipped — questions delivered in the candidate's language (0033)
+
+A candidate whose profile says `gu`, or who switched the app to Gujarati, now
+reads the question in Gujarati. Proven end to end: the render check publishes a
+translated exam, sits it as that candidate, and asserts the Gujarati stem and
+option appear.
+
+**The snapshot carries every language and picks none.** A `fixed` paper is
+frozen at publish, before any candidate exists, and `start_attempt` copies those
+rows verbatim — so there is no moment at freeze time when "which language?" has
+an answer, and a snapshot specialised to one could not serve a kitchen where
+three are spoken. Embedding them all means the locale is chosen at read time
+from data that was already frozen: one paper, several renderings, and the freeze
+guarantee intact.
+
+**SQL selects the language; TypeScript merges the shapes.** The base holds
+`choices` as an array of `{id, text}` and a translation as a map of id → text,
+so jsonb's shallow `||` would replace the array with the object and every
+renderer would break on `.map`. Doing it properly in SQL means nine content
+shapes reimplemented in PL/pgSQL beside the `mergeTranslation()` the workbench
+already uses — and two implementations of "which text belongs to which id" drift
+into a candidate reading an option whose text no longer matches its id. So
+`localise_snapshot()` picks and strips; `getAttemptPaper()` merges, through the
+same function the translator previewed with.
+
+**The strip is unconditional and ships in the same migration as the embedding.**
+Other languages never leave the server — both a payload fix (a candidate would
+otherwise download every translation of every question, on a phone) and a
+security property. In one function, so no call site can forget it.
+
+**Fallback is per question and per language.** `locale_chain` sends Hinglish to
+Hindi before English, because somebody who reads Hinglish reads Hindi and
+falling straight to English wastes a translation that exists. A paper with
+forty-eight of fifty questions translated serves forty-eight; an untranslated
+option keeps its English rather than going blank, so a half-finished translation
+reads as a mixture rather than as gaps.
+
+**The URL locale beats the profile.** Routing is path-based, so a cook who
+switched the app to Gujarati has said something more recent than a setting made
+months ago.
+
+**`exam_paper` keeps every language when no locale is asked for**, and that
+asymmetry with `attempt_paper` is deliberate: the question an admin preview
+answers is "what will candidates be asked?", which for a multilingual company
+includes "…and what will the Gujarati speakers be asked?". It is the one path
+where all languages legitimately travel, and it lets a chef check a translation
+against the *real frozen paper* before two hundred people sit it.
+
+### Fixed — two regressions from rewriting a function without reading it
+
+Both found by the render check, both mine, and both from reconstructing
+`exam_paper` from its signature rather than its body.
+
+**An overload, which is exactly what the plan said not to create.** Adding a
+defaulted `p_locale` to functions that already had defaults left
+`exam_paper(uuid, text)` and `attempt_paper(uuid)` in place beside the new
+versions — so those calls matched two signatures and Postgres refused them as
+ambiguous. "A defaulted parameter, never an overload" only holds if the old
+signature is dropped; both now are.
+
+**A changed frozen/preview condition.** 0019 decides by whether frozen rows
+*exist*; the rewrite tested `status` and `paper_mode` instead, which would send
+a published `per_attempt` exam down the frozen branch and return an empty paper.
+Restored to 0019's test, with a comment saying why it is not the obvious one.
+
+### Deferred, and named rather than left implicit
+
+`exam_sections.title` is untranslated, so a fully-Gujarati paper still carries
+English section headings. It needs its own table, RLS, authoring surface and
+status workflow — and a `title_i18n` column bolted onto `exam_sections` would be
+a *second* translation mechanism with different rules from `question_translations`,
+which is the thing to avoid. Recorded as a column comment.
+
+Per-locale accepted answers for fill-in-the-blank are the remaining half of the
+approved plan and ship next, separately: the snapshot embedding and its strip
+had to travel together, the accepts did not.
+
 ### Shipped — the translation workbench
 
 `/questions/[id]/translations`: English on the left, the target language on the

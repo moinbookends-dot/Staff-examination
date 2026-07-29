@@ -1445,6 +1445,14 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "locale_chain": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "localise_snapshot": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "me_status": {
         Args: Record<string, unknown>
         Returns: unknown

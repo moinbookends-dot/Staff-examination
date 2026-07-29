@@ -1385,6 +1385,123 @@ try {
     `expected 401 for an anonymous request, got ${anonExport.status}`,
   )
 
+  // ── 10. A candidate sits a translated exam ───────────────────────────────
+  // ┌─────────────────────────────────────────────────────────────────────────┐
+  // │ THE POINT OF M7. Everything above proves the machinery; this proves a   │
+  // │ Gujarati speaker actually reads the question in Gujarati — and that the │
+  // │ other languages did not travel with it.                                 │
+  // └─────────────────────────────────────────────────────────────────────────┘
+  console.log('\n10. Sitting an exam in another language')
+
+  const guStem = `પ્રશ્ન ${stamp}: ભય ક્ષેત્ર શું છે?`
+  const guOption = `ચોખાની ભૂકી ${stamp}`
+
+  // Published, because a draft is somebody's working copy: only 'published'
+  // reaches a snapshot.
+  await db.query(
+    `insert into public.question_translations
+       (question_id, locale, stem, content, status, translated_by)
+     values ($1,'gu',$2,$3::jsonb,'published',$4)
+     on conflict (question_id, locale) do update
+       set stem = excluded.stem, content = excluded.content, status = 'published'`,
+    [questionId, guStem, JSON.stringify({ choices: { b: guOption } }), user.id],
+  )
+
+  // A fresh exam, because the snapshot is frozen at publish and the earlier one
+  // was frozen before the translation existed — which is itself the behaviour
+  // the accepts_stale advisory warns about.
+  const { rows: guExam } = await db.query(
+    `insert into public.exams
+       (company_id, title, created_by, kind, duration_minutes, paper_mode,
+        max_attempts, pass_mark_percent, verification_mode, closes_at)
+     values ($1,$2,$3,'official',30,'fixed',3,50,'auto', now() + interval '1 day')
+     returning id`,
+    ['00000000-0000-0000-0000-00000000c001', `Render check gu exam ${stamp}`, user.id],
+  )
+  const guExamId = guExam[0].id
+  createdExams.push(guExamId)
+
+  const { rows: guSection } = await db.query(
+    `insert into public.exam_sections (exam_id, title, sort_order)
+     values ($1,'Only section',0) returning id`,
+    [guExamId],
+  )
+  await db.query(
+    `insert into public.exam_rules
+       (section_id, category_id, question_count, difficulty_min, difficulty_max, question_types)
+     values ($1,$2,1,1,5,$3::public.question_type[])`,
+    [guSection[0].id, RENDER_CAT, ['mcq_single']],
+  )
+  await db.query(
+    `insert into public.exam_assignments (exam_id, target_kind, target_id)
+     values ($1,'outlet','00000000-0000-0000-0000-00000000a001')`,
+    [guExamId],
+  )
+  await fetch(`${URL_}/rest/v1/rpc/publish_exam`, {
+    method: 'POST',
+    headers: {
+      apikey: PUB,
+      Authorization: `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ p_exam_id: guExamId }),
+  })
+
+  // The frozen snapshot must now carry the Gujarati alongside the English.
+  const { rows: frozen } = await db.query(
+    `select snapshot from public.exam_questions where exam_id = $1 limit 1`,
+    [guExamId],
+  )
+  check(
+    Boolean(frozen[0]?.snapshot?.i18n?.gu),
+    'publishing freezes the translation into the paper',
+    'the frozen snapshot carries no Gujarati',
+  )
+
+  await db.query(`update public.profiles set preferred_locale = 'gu' where id = $1`, [candUser.id])
+
+  const guStart = await (await candRpc('start_attempt', { p_exam_id: guExamId })).json()
+  const guAttempt = Array.isArray(guStart) ? guStart[0]?.attempt_id : null
+  check(Boolean(guAttempt), 'the candidate starts the translated exam', 'start_attempt failed')
+
+  if (guAttempt) {
+    const guPaper = await candGet(`/gu/attempt/${guAttempt}`)
+    check(guPaper.status === 200, '/gu/attempt/[id] renders', `status ${guPaper.status}`)
+    check(
+      guPaper.html.includes(guStem),
+      'the question is shown in Gujarati',
+      'the candidate got the English stem on a Gujarati paper',
+    )
+    check(
+      guPaper.html.includes(guOption),
+      'the translated option is shown',
+      'the option was not translated',
+    )
+    // Untranslated strings keep their English rather than going blank — a
+    // half-finished translation must read as a mixture, not as gaps.
+    check(
+      guPaper.html.includes('Rice bran'),
+      'an untranslated option falls back to English rather than disappearing',
+      'an untranslated option vanished instead of falling back',
+    )
+    // localise_snapshot strips every other language on the way out. Without
+    // this the candidate downloads every translation of every question.
+    check(
+      !/"i18n"/.test(guPaper.html),
+      'no other language travels to the candidate',
+      'THE PAPER CARRIED EVERY LANGUAGE TO THE BROWSER',
+    )
+    for (const forbidden of ['"correct"', '"accept"', '"rubric"']) {
+      check(
+        !guPaper.html.includes(forbidden),
+        `the translated paper contains no ${forbidden}`,
+        `THE TRANSLATED PAPER LEAKED ${forbidden}`,
+      )
+    }
+  }
+
+  await db.query(`update public.profiles set preferred_locale = 'en' where id = $1`, [candUser.id])
+
   // ── The release notice ───────────────────────────────────────────────────
   const { rows: notices } = await db.query(
     `select kind, link from public.notifications where data ->> 'attempt_id' = $1`,
