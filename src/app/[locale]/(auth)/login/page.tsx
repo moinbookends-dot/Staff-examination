@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import { getTranslations } from 'next-intl/server'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { AuthCard } from '@/components/auth/auth-card'
 import { LoginForm } from './login-form'
 
 export default async function LoginPage({
@@ -12,18 +12,12 @@ export default async function LoginPage({
   const t = await getTranslations('auth.login')
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t('title')}</CardTitle>
-        <CardDescription>{t('subtitle')}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        {/* useSearchParams needs a Suspense boundary, otherwise the whole route
-            opts out of static rendering. */}
-        <Suspense fallback={null}>
-          <LoginForm locale={locale} />
-        </Suspense>
-      </CardContent>
-    </Card>
+    <AuthCard title={t('title')} description={t('subtitle')}>
+      {/* useSearchParams needs a Suspense boundary, otherwise the whole route
+          opts out of static rendering. */}
+      <Suspense fallback={null}>
+        <LoginForm locale={locale} />
+      </Suspense>
+    </AuthCard>
   )
 }

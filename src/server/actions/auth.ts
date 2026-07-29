@@ -184,6 +184,106 @@ export async function forgotPasswordAction(
   }
 }
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * Completing a reset.
+ *
+ * forgotPasswordAction has always pointed its email at
+ * `/{locale}/reset-password`, and that route did not exist — so every reset
+ * link this application has ever sent landed on a 404. These two actions and
+ * the page under (auth)/reset-password are what close that loop.
+ *
+ * WHY THE EXCHANGE IS AN ACTION AND NOT DONE IN THE PAGE.
+ *
+ * Both paths below establish a session, which means writing auth cookies. A
+ * Server Component cannot set cookies — server.ts swallows exactly that failure
+ * in its setAll — so doing this during render would appear to succeed and leave
+ * the user with no session. A Server Action can, so the page renders first and
+ * the client calls this.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export async function exchangeRecoveryLink(input: {
+  code?: string
+  tokenHash?: string
+}): Promise<ActionResult> {
+  const supabase = await createClient()
+
+  // Two link shapes, because which one arrives depends on the project's email
+  // template rather than on anything this code controls. `{{ .ConfirmationURL }}`
+  // produces a PKCE `?code=`; `{{ .TokenHash }}` produces `?token_hash=&type=`.
+  // Supporting one and not the other fails invisibly, in production, on a
+  // template change nobody connected to this file.
+  if (input.code) {
+    const { error } = await supabase.auth.exchangeCodeForSession(input.code)
+    // Deliberately not surfaced verbatim. The common causes — expired, already
+    // used, opened in a different browser from the one that asked — are all
+    // answered by the same instruction, and Supabase's wording for them is not
+    // something to show a line cook.
+    if (error) return { ok: false }
+    return { ok: true }
+  }
+
+  if (input.tokenHash) {
+    const { error } = await supabase.auth.verifyOtp({
+      type: 'recovery',
+      token_hash: input.tokenHash,
+    })
+    if (error) return { ok: false }
+    return { ok: true }
+  }
+
+  return { ok: false }
+}
+
+const resetSchema = z
+  .object({
+    // Same rule as registration: length only. See registerSchema.
+    password: z.string().min(8, 'Password must be at least 8 characters.').max(128, 'Password is too long.'),
+    confirm: z.string(),
+  })
+  .refine((v) => v.password === v.confirm, {
+    message: 'Those passwords do not match.',
+  })
+
+/**
+ * Sets the new password.
+ *
+ * Relies on the recovery session established by exchangeRecoveryLink — there is
+ * no token here, and there must not be. updateUser acts on whoever the cookie
+ * says is signed in, so a request without a valid recovery session changes
+ * nothing and returns an error rather than falling through to some default.
+ */
+export async function resetPasswordAction(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const parsed = resetSchema.safeParse({
+    password: formData.get('password'),
+    confirm: formData.get('confirm'),
+  })
+
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Check the form and try again.' }
+  }
+
+  const supabase = await createClient()
+
+  // getUser(), not getSession(): getSession trusts the cookie without checking
+  // it against the auth server, which would let a forged cookie reach a
+  // password change. The same rule server.ts states.
+  const { data: userData, error: userError } = await supabase.auth.getUser()
+  if (userError || !userData.user) {
+    return { ok: false, error: 'This reset link is no longer valid. Ask for a new one.' }
+  }
+
+  const { error } = await supabase.auth.updateUser({ password: parsed.data.password })
+  if (error) {
+    return { ok: false, error: 'That password could not be saved. Try a different one.' }
+  }
+
+  return { ok: true }
+}
+
 // ── Approval status poll ─────────────────────────────────────────────────────
 
 /**

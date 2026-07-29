@@ -1,5 +1,5 @@
 import { getTranslations } from 'next-intl/server'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { AuthCard } from '@/components/auth/auth-card'
 import { listOutletsForRegistration, listDepartmentsForRegistration } from '@/server/actions/org'
 import { RegisterForm } from './register-form'
 
@@ -17,14 +17,8 @@ export default async function RegisterPage({
   ])
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t('title')}</CardTitle>
-        <CardDescription>{t('subtitle')}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <RegisterForm locale={locale} outlets={outlets} departments={departments} />
-      </CardContent>
-    </Card>
+    <AuthCard title={t('title')} description={t('subtitle')}>
+      <RegisterForm locale={locale} outlets={outlets} departments={departments} />
+    </AuthCard>
   )
 }

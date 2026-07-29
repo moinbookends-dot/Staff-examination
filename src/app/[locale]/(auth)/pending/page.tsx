@@ -1,5 +1,5 @@
 import { getTranslations } from 'next-intl/server'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { AuthCard } from '@/components/auth/auth-card'
 import { checkApprovalStatus, logoutAction } from '@/server/actions/auth'
 import { Button } from '@/components/ui/button'
 import { PendingClient } from './pending-client'
@@ -24,11 +24,8 @@ export default async function PendingPage({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t('title')}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-6">
+    <AuthCard title={t('title')}>
+      <div className="space-y-6">
         <PendingClient initialStatus={status} initialReason={reason} />
 
         <form action={signOut}>
@@ -36,7 +33,7 @@ export default async function PendingPage({
             {tc('signOut')}
           </Button>
         </form>
-      </CardContent>
-    </Card>
+      </div>
+    </AuthCard>
   )
 }

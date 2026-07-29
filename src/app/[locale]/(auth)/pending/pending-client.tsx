@@ -2,11 +2,12 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useTranslations } from 'next-intl'
+import { Hourglass, Loader2, RefreshCw } from 'lucide-react'
 import { useRouter } from '@/lib/i18n/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { checkApprovalStatus } from '@/server/actions/auth'
-import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { InlineError } from '@/components/ui/inline-error'
 
 type Status = 'pending' | 'approved' | 'rejected' | 'suspended' | 'unknown'
 
@@ -69,34 +70,42 @@ export function PendingClient({ initialStatus, initialReason }: {
 
   if (status === 'rejected') {
     return (
-      <Alert variant="destructive">
-        <AlertDescription>
-          <p className="font-medium">{t('rejected')}</p>
-          {reason && (
-            <p className="mt-2 text-sm">
-              {t('reason')}: {reason}
-            </p>
-          )}
-        </AlertDescription>
-      </Alert>
+      <InlineError>
+        <span className="font-medium">{t('rejected')}</span>
+        {reason && (
+          <span className="mt-1 block font-normal">
+            {t('reason')}: {reason}
+          </span>
+        )}
+      </InlineError>
     )
   }
 
   if (status === 'suspended') {
-    return (
-      <Alert variant="destructive">
-        <AlertDescription>
-          Your account has been suspended. Contact your manager.
-        </AlertDescription>
-      </Alert>
-    )
+    // Was hardcoded English. A suspended Gujarati-speaking porter was told, in
+    // a language they may not read, the one thing they most need to understand.
+    return <InlineError>{t('suspended')}</InlineError>
   }
 
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">{t('body')}</p>
+    <div className="space-y-5">
+      <div className="flex flex-col items-center gap-3 text-center">
+        <span
+          aria-hidden
+          className="grid size-11 place-items-center rounded-xl bg-warning/14 text-warning"
+        >
+          <Hourglass className="size-5" />
+        </span>
+        {/* aria-live: this panel replaces itself when approval lands, and the
+            change is what the user is sitting here waiting for. */}
+        <p aria-live="polite" className="text-sm text-balance text-muted-foreground">
+          {t('body')}
+        </p>
+      </div>
+
       <Button variant="outline" className="w-full" onClick={check} disabled={checking}>
-        {checking ? t('checking') : 'Check again'}
+        {checking ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+        {checking ? t('checking') : t('checkAgain')}
       </Button>
     </div>
   )
