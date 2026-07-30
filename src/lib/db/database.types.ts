@@ -1323,6 +1323,14 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "bulk_set_question_deleted": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "bulk_update_questions": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "bump_question_revision": {
         Args: Record<string, unknown>
         Returns: unknown
