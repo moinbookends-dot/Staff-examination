@@ -74,8 +74,14 @@ export default async function MyExamsPage() {
 
                 <CardContent className="flex flex-1 flex-col justify-between gap-4">
                   <div className="space-y-3">
-                    {/* The three numbers that decide whether to start now. */}
-                    <dl className="grid grid-cols-3 gap-2 rounded-lg border p-2 text-center">
+                    {/* The numbers that decide whether to start now.
+                        WRAPPING, not a three-column grid. At 768px the sidebar
+                        appears while the cards are already two-up, which left
+                        each column 58px wide — and what `truncate` cut was the
+                        number, the only reason the fact is on the card. A
+                        wrapping row has no column arithmetic to get wrong at
+                        any width, in any script. */}
+                    <ul className="flex flex-wrap gap-x-3 gap-y-1.5 rounded-lg border p-2">
                       <Fact
                         icon={TimerIcon}
                         label={t('minutes', { count: exam.duration_minutes })}
@@ -90,7 +96,7 @@ export default async function MyExamsPage() {
                         icon={TargetIcon}
                         label={t('passMark', { percent: exam.pass_mark_percent })}
                       />
-                    </dl>
+                    </ul>
 
                     <div className="space-y-1 text-sm text-muted-foreground">
                       <p>
@@ -142,14 +148,19 @@ export default async function MyExamsPage() {
   )
 }
 
+/**
+ * One fact, whole.
+ *
+ * A <li>, not a <dl> pair. The first version put the identical string in both
+ * a visually-hidden <dt> and its <dd>, so every fact was announced twice —
+ * "30 minutes, 30 minutes" — which is what a term/definition list does when
+ * the term and the definition are the same words.
+ */
 function Fact({ icon: Icon, label }: { icon: typeof TimerIcon; label: string }) {
   return (
-    <div className="min-w-0">
-      <dt className="sr-only">{label}</dt>
-      <dd className="flex flex-col items-center gap-1 text-xs">
-        <Icon aria-hidden className="size-4 text-muted-foreground" />
-        <span className="truncate">{label}</span>
-      </dd>
-    </div>
+    <li className="flex items-center gap-1.5 text-xs">
+      <Icon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
+      {label}
+    </li>
   )
 }

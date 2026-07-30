@@ -211,6 +211,20 @@ export function AttemptRunner({
 
   /** Thresholds already spoken, so a re-render cannot repeat one. */
   const announced = useRef(new Set<number>())
+  /**
+   * True until the first tick has run.
+   *
+   * A fresh mount starts with an empty `announced` set, so every threshold
+   * above the time now left looks uncrossed. Speaking the smallest of them is
+   * how somebody who hits Resume with 5:01 on the clock gets told they have
+   * TEN minutes — and on an exam of ten minutes or less it happens on the very
+   * first tick of the paper, announcing more time than the exam contains.
+   *
+   * So the first tick banks whatever has already gone by and says nothing.
+   * A number that is silently absent is recoverable; a number that is wrong is
+   * acted on.
+   */
+  const firstTick = useRef(true)
 
   useEffect(() => {
     const tick = () => {
@@ -226,14 +240,21 @@ export function AttemptRunner({
         (s) => seconds <= s && !announced.current.has(s),
       )
       if (crossed.length > 0 && seconds > 0) {
+        // Banked either way, so a threshold that has already gone by can never
+        // be replayed one-per-second afterwards.
         for (const s of crossed) announced.current.add(s)
-        // The SMALLEST of them — the one closest to the truth. Taking the
-        // largest instead is a first draft that tells somebody waking at 90
-        // seconds left that they have ten minutes, which is worse than saying
-        // nothing at all. Marking every crossed threshold consumed is what
-        // stops the skipped ones being replayed one per second afterwards.
-        setAnnounceSeconds(Math.min(...crossed))
+
+        const nearest = Math.min(...crossed)
+        // Spoken only if it was crossed JUST NOW. `nearest - seconds` is how
+        // stale the crossing is: 0-1s on a live tick, minutes on a mount or
+        // after a throttled tab. Announcing a stale threshold states a time
+        // the candidate does not have, and this region is the only clock a
+        // screen-reader user gets — the display is deliberately silent.
+        if (!firstTick.current && nearest - seconds <= 2) {
+          setAnnounceSeconds(nearest)
+        }
       }
+      firstTick.current = false
 
       if (left <= 0 && !submitted.current) {
         setTimedOut(true)
