@@ -992,6 +992,53 @@ try {
       'the countdown did not render',
     )
 
+    // ── What a candidate who cannot see the screen gets ────────────────────
+    //
+    // ┌───────────────────────────────────────────────────────────────────────┐
+    // │ THESE ARE ASSERTED BECAUSE NOTHING ELSE CAN SEE THEM.                 │
+    // │                                                                       │
+    // │ Accessibility work is invisible to every other check in this repo: the │
+    // │ page renders, the tests pass, the build is green, and a screen-reader  │
+    // │ user still cannot tell which questions they have answered. So the      │
+    // │ properties that make this screen usable without sight are pinned here, │
+    // │ in the same file that pins the answer-key leak.                       │
+    // └───────────────────────────────────────────────────────────────────────┘
+
+    // The countdown must NOT be a live region. A number changing once a second
+    // inside one is announced once a second, which makes the exam unusable —
+    // the thresholds are spoken separately instead.
+    check(
+      /role="timer"[^>]*aria-live="off"|aria-live="off"[^>]*role="timer"/.test(paper.html),
+      'the ticking countdown is silent, so it cannot talk over the candidate',
+      'the countdown is a live region and will announce every second',
+    )
+    // The save indicator's wrapper is in the DOM from first paint. A live
+    // region inserted at the same moment as its first message is routinely
+    // missed, because the screen reader was not observing the node yet.
+    check(
+      /role="status"[^>]*aria-live="polite"/.test(paper.html),
+      'the save-state live region exists before it has anything to say',
+      'the save indicator is only mounted once it has a message, which is announced to nobody',
+    )
+    // The question is a real heading and can be jumped to. CardTitle renders a
+    // <div>, so before this the thing being answered was not a heading at all.
+    check(
+      /<h2[^>]*tabindex="-1"/i.test(paper.html),
+      'the question is a focusable heading, so moving between questions lands somewhere',
+      'the question stem is not a focusable heading',
+    )
+    // Answered-ness is in the accessible NAME, not only in the fill colour.
+    check(
+      /aria-label="Question \d+, (answered|not answered|current)"/.test(paper.html),
+      'the navigator says whether each question is answered, in words',
+      'the navigator distinguishes answered from unanswered by colour alone',
+    )
+    check(
+      /<nav aria-label="Questions">/.test(paper.html),
+      'the question navigator is a landmark',
+      'the navigator is not reachable as a landmark',
+    )
+
     // THE ASSERTION THIS SECTION EXISTS FOR.
     for (const forbidden of ['"correct"', 'modelAnswer', '"rubric"', '"accept"']) {
       check(

@@ -411,7 +411,19 @@
     "resultPending": "Your result has not been released yet. You will be notified when it is ready.",
     "backToExams": "Back to my exams",
     "answered": "Answered",
-    "startFailed": "This exam could not be started."
+    "startFailed": "This exam could not be started.",
+    "questionHeading": "Question {current} of {total}",
+    "navLabel": "Questions",
+    "navAnswered": "Question {n}, answered",
+    "navUnanswered": "Question {n}, not answered",
+    "navCurrent": "Question {n}, current",
+    "navLocked": "Question {n}, locked",
+    "progressLabel": "{answered} of {total} answered",
+    "timeAnnounce": "{minutes, plural, one {# minute remaining} other {# minutes remaining}}",
+    "timeAnnounceSeconds": "{seconds, plural, one {# second remaining} other {# seconds remaining}}",
+    "noBacktrack": "This exam does not allow going back.",
+    "marksLabel": "Marks",
+    "saveStatus": "Save status"
   },
   "evaluation": {
     "title": "Evaluate",

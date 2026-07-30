@@ -125,7 +125,19 @@
     "resultPending": "आपका परिणाम अभी जारी नहीं हुआ है। तैयार होने पर आपको सूचित किया जाएगा।",
     "backToExams": "मेरी परीक्षाओं पर वापस",
     "answered": "उत्तर दिए",
-    "startFailed": "यह परीक्षा शुरू नहीं हो सकी।"
+    "startFailed": "यह परीक्षा शुरू नहीं हो सकी।",
+    "questionHeading": "प्रश्न {current} / {total}",
+    "navLabel": "प्रश्न",
+    "navAnswered": "प्रश्न {n}, उत्तर दिया",
+    "navUnanswered": "प्रश्न {n}, उत्तर नहीं दिया",
+    "navCurrent": "प्रश्न {n}, वर्तमान",
+    "navLocked": "प्रश्न {n}, बंद",
+    "progressLabel": "{total} में से {answered} के उत्तर दिए",
+    "timeAnnounce": "{minutes, plural, one {# मिनट शेष} other {# मिनट शेष}}",
+    "timeAnnounceSeconds": "{seconds, plural, one {# सेकंड शेष} other {# सेकंड शेष}}",
+    "noBacktrack": "इस परीक्षा में पीछे जाने की अनुमति नहीं है।",
+    "marksLabel": "अंक",
+    "saveStatus": "सहेजने की स्थिति"
   },
   "auth": {
     "login": {

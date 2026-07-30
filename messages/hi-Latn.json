@@ -125,7 +125,19 @@
     "resultPending": "Aapka result abhi release nahi hua hai. Taiyar hone par aapko bataya jayega.",
     "backToExams": "Meri exams par wapas",
     "answered": "Jawab diye",
-    "startFailed": "Yeh exam shuru nahi ho saki."
+    "startFailed": "Yeh exam shuru nahi ho saki.",
+    "questionHeading": "Sawaal {current} / {total}",
+    "navLabel": "Sawaal",
+    "navAnswered": "Sawaal {n}, jawab diya",
+    "navUnanswered": "Sawaal {n}, jawab nahi diya",
+    "navCurrent": "Sawaal {n}, abhi ka",
+    "navLocked": "Sawaal {n}, band",
+    "progressLabel": "{total} mein se {answered} ke jawab diye",
+    "timeAnnounce": "{minutes, plural, one {# minute baaki} other {# minute baaki}}",
+    "timeAnnounceSeconds": "{seconds, plural, one {# second baaki} other {# second baaki}}",
+    "noBacktrack": "Is exam mein peeche jaane ki ijazat nahi hai.",
+    "marksLabel": "Marks",
+    "saveStatus": "Save status"
   },
   "auth": {
     "login": {

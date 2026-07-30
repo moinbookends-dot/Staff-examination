@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { startAttempt } from '@/server/actions/attempts'
 import { Button } from '@/components/ui/button'
+import { InlineError } from '@/components/ui/inline-error'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -53,9 +54,16 @@ export function StartExamButton({
     })
   }
 
+  // Full width and size lg on both paths: this is the one action on the card,
+  // and it is tapped with a thumb.
   if (openAttemptId) {
     return (
-      <Button onClick={() => router.push(`/attempt/${openAttemptId}`)} disabled={pending}>
+      <Button
+        size="lg"
+        className="w-full"
+        onClick={() => router.push(`/attempt/${openAttemptId}`)}
+        disabled={pending}
+      >
         {t('resume')}
       </Button>
     )
@@ -63,11 +71,20 @@ export function StartExamButton({
 
   return (
     <>
-      <div className="flex flex-col items-end gap-1">
-        <Button onClick={() => setOpen(true)} disabled={disabled || pending}>
+      <div className="space-y-2">
+        <Button
+          size="lg"
+          className="w-full"
+          onClick={() => setOpen(true)}
+          disabled={disabled || pending}
+        >
           {t('start')}
         </Button>
-        {error && <p className="text-xs text-destructive">{error}</p>}
+        {/* InlineError carries role="alert". startAttempt refuses for reasons
+            the candidate can act on — the window has shut, no attempts left —
+            and a paragraph that appears with no announcement is a refusal they
+            may never learn about. */}
+        {error && <InlineError className="text-xs">{error}</InlineError>}
       </div>
 
       <AlertDialog open={open} onOpenChange={setOpen}>
