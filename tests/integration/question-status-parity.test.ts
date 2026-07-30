@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import type { Client } from 'pg'
 import { connect, hasDatabase } from './helpers/db'
 import {
+  DRAWABLE_STATUSES,
   QUESTION_STATUSES,
   QUESTION_STATUS_TRANSITIONS,
   type QuestionStatusValue,
@@ -90,8 +91,9 @@ describeDb('question status parity', () => {
         where public.question_is_drawable(s)
         order by 1`,
     )
-    // Named here as well as in SQL because it is the fact that decides whether
-    // a question appears on a paper, and 0037 got it wrong silently.
-    expect(rows.map((r) => r.status)).toEqual(['active', 'approved'])
+    // Compared against the TypeScript constant, not a literal: DRAWABLE_STATUSES
+    // is what the publish gate keys on, so a divergence here means the gate is
+    // validating a different set of statuses than the draw actually uses.
+    expect(rows.map((r) => r.status).sort()).toEqual([...DRAWABLE_STATUSES].sort())
   })
 })

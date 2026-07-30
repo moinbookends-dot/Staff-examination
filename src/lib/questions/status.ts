@@ -73,6 +73,33 @@ export function nextStatuses(from: QuestionStatusValue): QuestionStatusValue[] {
 }
 
 /**
+ * The statuses from which a question can be drawn onto a paper.
+ *
+ * Mirrors `question_is_drawable()` (0040), and
+ * tests/integration/question-status-parity.test.ts asserts the two agree.
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ THIS IS WHAT THE PUBLISH GATE KEYS ON — NOT THE LITERAL 'active'.         │
+ * │                                                                           │
+ * │ 0040 made `approved` drawable alongside `active`, and setQuestionStatus    │
+ * │ routed only `active` through publishQuestion. So a question with a broken  │
+ * │ answer key — one naming an option id that no longer exists — could go      │
+ * │ draft → review → approved and be drawn onto a live paper, having never     │
+ * │ passed publishIssues. Marking every candidate wrong, with no error         │
+ * │ anywhere.                                                                 │
+ * │                                                                           │
+ * │ Before 0040 that path was inert, because `approved` was not drawable.      │
+ * │ 0040 made it live. Keying the gate on drawability rather than on one       │
+ * │ status name is what stops the next added status reopening it.              │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ */
+export const DRAWABLE_STATUSES = ['active', 'approved'] as const
+
+export function isDrawableStatus(status: QuestionStatusValue): boolean {
+  return (DRAWABLE_STATUSES as readonly string[]).includes(status)
+}
+
+/**
  * Which permission a move requires.
  *
  * Three families:

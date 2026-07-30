@@ -7,7 +7,12 @@ import { createClient } from '@/lib/supabase/server'
 import type { Database } from '@/lib/db/database.types'
 import { dbId } from '@/lib/db/id'
 import { publishIssues } from '@/lib/questions/publish'
-import { questionStatusSchema } from '@/lib/questions/status'
+import {
+  questionStatusSchema,
+  isDrawableStatus,
+  permissionForStatus,
+  type QuestionStatusValue,
+} from '@/lib/questions/status'
 import {
   bloomLevelSchema,
   type BloomLevel,
@@ -386,7 +391,10 @@ export async function saveQuestion(
  * a valid-looking body alongside a broken stored question — and this is the one
  * transition after which candidates are graded against the key.
  */
-export async function publishQuestion(id: string): Promise<MutationResult> {
+export async function publishQuestion(
+  id: string,
+  to: QuestionStatusValue = 'active',
+): Promise<MutationResult> {
   await requirePermission('questions.update')
 
   const supabase = await createClient()
@@ -407,7 +415,7 @@ export async function publishQuestion(id: string): Promise<MutationResult> {
     return { ok: false, error: 'This question is not ready to publish.', issues }
   }
 
-  const { error } = await supabase.from('questions').update({ status: 'active' }).eq('id', id)
+  const { error } = await supabase.from('questions').update({ status: to }).eq('id', id)
   if (error) return { ok: false, error: 'Could not publish this question.' }
 
   revalidatePath('/questions')
@@ -421,33 +429,57 @@ const statusSchema = z.object({
 })
 
 /**
- * Retire, or return a retired question to draft.
+ * Move a question along its lifecycle.
  *
  * Status changes deliberately do NOT bump the revision — migration 0011 lists
  * status among the excluded columns. Retiring is not a different question, and
  * bumping would fragment its analytics for a filing decision.
  *
- * Retire never goes straight back to active: a question pulled from circulation
- * gets re-read before it returns, which is what draft is for.
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ THE GATE KEYS ON DRAWABILITY, NOT ON THE WORD 'active'.                   │
+ * │                                                                           │
+ * │ It used to be `if (status === 'active') return publishQuestion(id)`, with  │
+ * │ every other status taking a bare update. 0040 then made `approved`         │
+ * │ drawable too — so a question with an answer key naming an option id that   │
+ * │ no longer exists could go draft → review → approved and be drawn onto a    │
+ * │ live paper, having never passed publishIssues, marking every candidate     │
+ * │ wrong with no error anywhere.                                             │
+ * │                                                                           │
+ * │ Before 0040 that path was inert. 0040 made it live, and this closes it.    │
+ * │ Keyed on isDrawableStatus so the next status added cannot reopen it.       │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ *
+ * The permission comes from permissionForStatus, the same function the bulk
+ * path uses. Previously this required `questions.retire` for EVERYTHING that
+ * was not 'active' — including draft and review, which are authoring moves, not
+ * withdrawals — while permissionForStatus said otherwise and was never called.
+ * Two rules, one of them dead. No seeded role changes capability: chef holds
+ * both permissions.
  */
 export async function setQuestionStatus(input: unknown): Promise<MutationResult> {
   const parsed = statusSchema.safeParse(input)
   if (!parsed.success) return { ok: false, error: 'Invalid status.' }
 
   const { id, status } = parsed.data
-  if (status === 'active') {
-    return publishQuestion(id)
+
+  if (isDrawableStatus(status)) {
+    return publishQuestion(id, status)
   }
-  await requirePermission('questions.retire')
+
+  await requirePermission(permissionForStatus(status))
 
   const supabase = await createClient()
-  const { error } = await supabase
+  const { error, count } = await supabase
     .from('questions')
-    .update({ status })
+    .update({ status }, { count: 'exact' })
     .eq('id', id)
     .is('deleted_at', null)
 
   if (error) return { ok: false, error: 'Could not change the status.' }
+  // RLS refuses by returning zero rows, not by erroring. Without this the
+  // action reports success for a question the caller was never allowed to
+  // touch — the bug deleteQuestion still has.
+  if (count === 0) return { ok: false, error: 'That question could not be changed.' }
 
   revalidatePath('/questions')
   revalidatePath(`/questions/${id}`)

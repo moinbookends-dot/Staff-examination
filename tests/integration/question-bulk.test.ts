@@ -403,4 +403,51 @@ describeDb('bulk question operations', () => {
       expect(entry.changes).toHaveProperty('status')
     })
   })
+// ── 7. The gate that keys on drawability ───────────────────────────────────
+
+  /**
+   * 0040 made `approved` drawable alongside `active`, and setQuestionStatus
+   * routed only `active` through the publish gate. So a question whose answer
+   * key names an option that no longer exists could go draft -> review ->
+   * approved and be DRAWN ONTO A LIVE PAPER, marking every candidate wrong,
+   * having never once passed publishIssues.
+   *
+   * The database cannot catch this — nothing in SQL inspects
+   * question_answer_keys at publish time, and q_content_valid checks only shape
+   * and arity. So this asserts the database's half: that a question reaching a
+   * drawable status IS drawn. The TypeScript half — that the gate runs for both
+   * drawable statuses — is asserted by the unit test on isDrawableStatus.
+   */
+  it('draws a question the moment it reaches any drawable status', async () => {
+    await scenario(async () => {
+      await seed()
+      await actAsOwner()
+      const { rows: [exam] } = await db.query(
+        `select id from public.exams where company_id = $1 and deleted_at is null limit 1`,
+        [fixtures.company],
+      )
+      expect(exam, 'the seed must contain an exam to draw against').toBeTruthy()
+
+      const inPool = async () =>
+        (
+          await db.query(
+            `select count(*)::int n
+               from public.question_pool($1, null, true, '{}', null, 1::smallint, 5::smallint)
+              where question_id = $2`,
+            [exam.id, Q1],
+          )
+        ).rows[0].n
+
+      expect(await inPool(), 'a draft is not drawable').toBe(0)
+
+      await db.query(`update public.questions set status='review' where id=$1`, [Q1])
+      expect(await inPool(), 'nor is one in review').toBe(0)
+
+      await db.query(`update public.questions set status='approved' where id=$1`, [Q1])
+      expect(
+        await inPool(),
+        'APPROVED IS DRAWABLE — which is why the publish gate must key on drawability, not on the word active',
+      ).toBe(1)
+    })
+  })
 })
