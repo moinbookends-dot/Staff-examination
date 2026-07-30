@@ -1108,6 +1108,8 @@ export type Database = {
           "updated_at": string
           "search_tsv": string | null
           "revision": number
+          "bloom_level": Database["public"]["Enums"]["bloom_taxonomy"] | null
+          "imported_from": string | null
         }
         Insert: {
           "id"?: string
@@ -1134,6 +1136,8 @@ export type Database = {
           "created_at"?: string
           "updated_at"?: string
           "revision"?: number
+          "bloom_level"?: Database["public"]["Enums"]["bloom_taxonomy"] | null
+          "imported_from"?: string | null
         }
         Update: {
           "id"?: string
@@ -1160,6 +1164,8 @@ export type Database = {
           "created_at"?: string
           "updated_at"?: string
           "revision"?: number
+          "bloom_level"?: Database["public"]["Enums"]["bloom_taxonomy"] | null
+          "imported_from"?: string | null
         }
         Relationships: []
       }
@@ -1591,10 +1597,11 @@ export type Database = {
       "assignment_target": "outlet" | "department" | "brand" | "role" | "user"
       "attempt_status": "in_progress" | "submitted" | "auto_graded" | "evaluating" | "evaluated" | "verifying" | "verified" | "returned" | "published" | "expired" | "voided"
       "auto_grade_status": "not_applicable" | "pending" | "graded" | "needs_review"
+      "bloom_taxonomy": "remember" | "understand" | "apply" | "analyze" | "evaluate" | "create"
       "exam_kind": "official" | "practice" | "quiz" | "monthly" | "annual" | "practical"
       "exam_status": "draft" | "scheduled" | "active" | "completed" | "archived" | "cancelled"
       "paper_mode": "fixed" | "per_attempt"
-      "question_status": "draft" | "active" | "retired"
+      "question_status": "draft" | "review" | "active" | "approved" | "retired" | "archived" | "deprecated"
       "question_type": "mcq_single" | "mcq_multi" | "true_false" | "fill_blank" | "match" | "sequence" | "short_answer" | "essay" | "image" | "video" | "audio" | "document" | "practical" | "viva"
       "response_format": "choice_single" | "choice_multi" | "boolean" | "blanks" | "pairs" | "order" | "text_short" | "text_long" | "evaluator_only"
       "submit_reason": "user" | "timer" | "tab_switch" | "sweeper" | "admin"

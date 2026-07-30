@@ -104,7 +104,11 @@
     "status": {
       "draft": "Draft",
       "active": "Active",
-      "retired": "Retired"
+      "retired": "Retired",
+      "review": "In review",
+      "approved": "Approved",
+      "archived": "Archived",
+      "deprecated": "Deprecated"
     },
     "filters": {
       "anyStatus": "Any status",

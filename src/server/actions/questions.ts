@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { requirePermission } from '@/lib/auth/guards'
 import { createClient } from '@/lib/supabase/server'
+import type { Database } from '@/lib/db/database.types'
 import { dbId } from '@/lib/db/id'
 import { publishIssues } from '@/lib/questions/publish'
 import {
@@ -47,18 +48,25 @@ export interface MutationResult {
   issues?: ValidationIssue[]
 }
 
+export type QuestionStatus = Database['public']['Enums']['question_status']
+export type BloomTaxonomy = Database['public']['Enums']['bloom_taxonomy']
+export type QuestionSource = 'manual' | 'import' | 'ai'
+
 export interface QuestionListItem {
   id: string
   stem: string
   type: QuestionType
   response_format: ResponseFormat
-  status: 'draft' | 'active' | 'retired'
+  status: QuestionStatus
   difficulty: number
   marks: number
   revision: number
   usage_count: number
   category_id: string | null
   category_name: string | null
+  bloom_level: BloomTaxonomy | null
+  source: QuestionSource
+  imported_from: string | null
   updated_at: string
 }
 
@@ -67,7 +75,7 @@ export interface QuestionDetail {
   stem: string
   type: QuestionType
   response_format: ResponseFormat
-  status: 'draft' | 'active' | 'retired'
+  status: QuestionStatus
   content: unknown
   answerKey: unknown
   brand_id: string | null
@@ -80,6 +88,9 @@ export interface QuestionDetail {
   reference_note: string | null
   revision: number
   tagIds: string[]
+  bloom_level: BloomTaxonomy | null
+  source: QuestionSource
+  imported_from: string | null
 }
 
 export interface QuestionRevisionEntry {
@@ -117,7 +128,7 @@ export async function listQuestions(
   let query = supabase
     .from('questions')
     .select(
-      'id, stem, type, response_format, status, difficulty, marks, revision, usage_count, category_id, updated_at, categories(name)',
+      'id, stem, type, response_format, status, difficulty, marks, revision, usage_count, category_id, bloom_level, source, imported_from, updated_at, categories(name)',
       { count: 'exact' },
     )
     .is('deleted_at', null)
@@ -146,7 +157,11 @@ export async function listQuestions(
       categories: { name: string } | { name: string }[] | null
     }
     const category = Array.isArray(categories) ? categories[0] : categories
-    return { ...rest, category_name: category?.name ?? null } as QuestionListItem
+    return { 
+      ...rest, 
+      category_name: category?.name ?? null,
+      source: rest.source as QuestionSource
+    } as QuestionListItem
   })
 
   return { items, total: count ?? 0, page: filters.page, pageSize: QUESTIONS_PAGE_SIZE }
@@ -189,8 +204,11 @@ export async function getQuestion(id: string): Promise<QuestionDetail | null> {
     estimated_seconds: question.estimated_seconds,
     explanation: question.explanation,
     reference_note: question.reference_note,
-    revision: question.revision,
-    tagIds: (tags ?? []).map((t) => t.tag_id),
+    revision: question.revision ?? 1,
+    tagIds: tags?.map((t) => t.tag_id) ?? [],
+    bloom_level: question.bloom_level,
+    source: question.source as QuestionSource,
+    imported_from: question.imported_from,
   }
 }
 

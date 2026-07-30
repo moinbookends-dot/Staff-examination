@@ -231,5 +231,13 @@
     "liveActivityHint": "Kisne kisko approve kiya, kisne role badla, kisne exam publish ki.",
     "trends": "Pichhle period se tulna",
     "trendsHint": "Upar ka har aankda pichhle period se kitna badla."
+  },
+  "questions": {
+    "status": {
+      "review": "Review mein",
+      "approved": "Approved",
+      "archived": "Archived",
+      "deprecated": "Band kiya gaya"
+    }
   }
 }
