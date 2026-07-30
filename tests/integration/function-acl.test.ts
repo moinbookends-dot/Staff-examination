@@ -53,6 +53,10 @@ const GUARDED_ENTRY_POINTS = [
   'duplicate_exam',
   'get_question_revision',
   'me_status',
+  // 0036. Guarded by has_perm('reports.read_own') and self-scoped by
+  // auth.uid(); takes no arguments, so there is nothing to ask for on somebody
+  // else's behalf.
+  'my_standing',
 ] as const
 
 describeDb('function privileges', () => {

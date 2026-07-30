@@ -1,40 +1,64 @@
 import { getTranslations, getFormatter } from 'next-intl/server'
 import { requirePermission } from '@/lib/auth/guards'
+import { can } from '@/lib/auth/claims'
 import { Link } from '@/lib/i18n/navigation'
 import { listMyResults } from '@/server/actions/attempts'
+import { StandingCard } from './standing-card'
+import { Leaderboard } from './leaderboard'
 import { buttonVariants } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { EmptyState } from '@/components/ui/empty-state'
+import { PageHeader } from '@/components/ui/page-header'
 import { FileTextIcon, ClockIcon } from 'lucide-react'
 
 /**
- * A candidate's own results.
+ * A candidate's own results, and where they stand.
  *
  * Everything unreleased shows its state and no numbers — not because this page
  * withholds them, but because my_results() returns null for score, percent and
  * passed until the attempt is published. A rendering mistake here cannot leak a
  * mark, because there is no mark in the data to leak.
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ THE RESULT CARDS BELOW ARE STRUCTURALLY FROZEN.                           │
+ * │                                                                           │
+ * │ render-check.mjs finds the essay result by indexOf(title), then finds the │
+ * │ NEXT card by indexOf(otherTitle, from) and asserts over the slice between │
+ * │ them. It does that because "no verdict before release" has to be checked  │
+ * │ against one card and not the whole page — this candidate legitimately has │
+ * │ a released result and a held one at the same time.                        │
+ * │                                                                           │
+ * │ So: nothing may be inserted BETWEEN two result cards, and their order may │
+ * │ not change. Anything new goes above the list, which is where the standing │
+ * │ card and the leaderboard are. Reordering, grouping, tabbing or paginating │
+ * │ this list collapses that slice and fails a correct page.                  │
+ * └───────────────────────────────────────────────────────────────────────────┘
  */
 export default async function ResultsPage() {
-  await requirePermission('attempts.read_own')
+  const claims = await requirePermission('attempts.read_own')
   const t = await getTranslations('results')
   const format = await getFormatter()
+
+  // The same pair the actions are guarded on. team_stats() takes
+  // requireAnyPermission(['reports.read_team', 'reports.read_all']), so this
+  // gate names both literals and neither more.
+  const seesTeam = can(claims, 'reports.read_team') || can(claims, 'reports.read_all')
+  const seesOwnStanding = can(claims, 'reports.read_own')
 
   const results = await listMyResults()
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{t('title')}</h1>
-        <p className="text-sm text-muted-foreground">{t('subtitle')}</p>
-      </div>
+      <PageHeader title={t('title')} description={t('subtitle')} />
+
+      {seesOwnStanding && <StandingCard />}
+      {seesTeam && <Leaderboard />}
 
       {results.length === 0 ? (
         <Card>
-          <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
-            <FileTextIcon className="size-8 text-muted-foreground" />
-            <p className="text-sm font-medium">{t('empty')}</p>
-            <p className="text-sm text-muted-foreground">{t('emptyHint')}</p>
+          <CardContent className="p-0">
+            <EmptyState icon={FileTextIcon} message={t('empty')} hint={t('emptyHint')} />
           </CardContent>
         </Card>
       ) : (

@@ -1493,6 +1493,10 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "my_standing": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "notify_attempt_published": {
         Args: Record<string, unknown>
         Returns: unknown

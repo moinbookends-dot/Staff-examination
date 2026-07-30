@@ -1404,6 +1404,54 @@ try {
     'the verdict is missing from the released result',
   )
 
+  // ── Where you stand, and who you may not see ──────────────────────────────
+  //
+  // ┌─────────────────────────────────────────────────────────────────────────┐
+  // │ THE ASSERTIONS THAT MATTER HERE ARE THE NEGATIVE ONES.                  │
+  // │                                                                         │
+  // │ 0036's my_standing() exists so a candidate can be told where they stand │
+  // │ WITHOUT being told anything about a colleague. A rank is the most        │
+  // │ disclosive statistic there is about an ordering: "3rd of 4" is the exact │
+  // │ statement that two named people scored above you, and in a kitchen the   │
+  // │ reader can put names to them by looking up.                            │
+  // │                                                                         │
+  // │ So the checks are: the candidate sees their own standing; the candidate  │
+  // │ sees NO colleague's name; and the chef — who is entitled — does. The     │
+  // │ last one is the positive control, without which the middle assertion     │
+  // │ would pass just as well against a page that failed to render at all.    │
+  // └─────────────────────────────────────────────────────────────────────────┘
+  check(
+    />Where you stand</.test(resultsReleased.html),
+    'a candidate is shown their own standing',
+    'the standing card is missing for a candidate with a released result',
+  )
+  // This run creates far fewer than ten people with released results, so the
+  // floor must fire. Asserting the suppressed copy pins that the withholding
+  // path is the one being exercised — the alternative is a check that only
+  // ever sees the happy path and silently stops testing the interesting one.
+  check(
+    />Not enough participants yet</.test(resultsReleased.html),
+    'below ten participants the position is withheld, with a reason given',
+    'a rank was shown in a cohort too small to publish one',
+  )
+  check(
+    !/>Render Chef</.test(resultsReleased.html) &&
+      !/>Render Verifier</.test(resultsReleased.html),
+    'a candidate is shown no colleague by name',
+    'A COLLEAGUE’S NAME APPEARED ON A CANDIDATE’S RESULTS PAGE',
+  )
+  // The positive control, and it has to name the CANDIDATE, not the chef.
+  // The chef has sat nothing, and the board ranks only people with a result —
+  // so asserting the chef's own name would fail against a perfectly correct
+  // board. The candidate is the one person in this run who has a released
+  // result, which makes them the only name that can legitimately appear.
+  const chefResults = await get('/en/results')
+  check(
+    />Render Candidate</.test(chefResults.html),
+    'a chef reaches the ranked board, and it names the person on it',
+    'the leaderboard did not render for a chef — so the negative check above proves nothing',
+  )
+
   // ── The candidate's dashboard, now that they have a released result ───────
   //
   // ┌─────────────────────────────────────────────────────────────────────────┐

@@ -67,7 +67,20 @@
     "blankCorrect": "Sahi",
     "blankWrong": "Galat",
     "back": "Results par wapas",
-    "notReleased": "Yeh result abhi release nahi hua hai."
+    "notReleased": "Yeh result abhi release nahi hua hai.",
+    "standing": "Aap kahan hain",
+    "standingHint": "Aapki company ke sabhi logon ki tulna mein aapka behtareen result.",
+    "yourBest": "Aapka behtareen score",
+    "yourRank": "Aapka sthaan",
+    "yourPercentile": "Percentile",
+    "participants": "Participants",
+    "rankOf": "{total} mein se {rank}",
+    "topPercent": "Top {percent}%",
+    "standingSuppressed": "Abhi paryapt participants nahi",
+    "standingSuppressedHint": "Sthaan tabhi dikhega jab aapki company ke kam se kam das logon ka result release ho chuka ho. Usse kam mein rank aapke baare mein kam aur aapke saathiyon ke baare mein zyada batayega.",
+    "standingNone": "Abhi koi release result nahi",
+    "standingNoneHint": "Result release hote hi aapka sthaan yahan dikhega.",
+    "standingScope": "Poori company · sirf release results"
   },
   "sitting": {
     "title": "Meri exams",

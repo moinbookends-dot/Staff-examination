@@ -152,6 +152,37 @@ export async function getQuestionStats(categoryId?: string): Promise<QuestionSta
   return (data ?? []) as unknown as QuestionStats[]
 }
 
+export interface OwnStanding {
+  best_percent: number | null
+  cohort_n: number | null
+  rank_position: number | null
+  percentile: number | null
+  /** True when the cohort is too small to report a position in it. */
+  suppressed: boolean
+}
+
+/**
+ * Where the caller stands, and nothing about anybody else.
+ *
+ * Takes no argument, deliberately — my_standing() reads auth.uid(), so there is
+ * no "whose standing?" to guard. See migration 0036 for why the cohort is the
+ * company rather than the outlet, and why rank, percentile AND the participant
+ * count are all withheld below ten.
+ *
+ * `reports.read_own` here is character-identical to the has_perm() check inside
+ * the function. It is the whole of the authorisation: this action adds none.
+ */
+export async function getMyStanding(): Promise<OwnStanding | null> {
+  await requirePermission('reports.read_own')
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('my_standing')
+
+  if (error) return null
+  const row = (Array.isArray(data) ? data[0] : data) as OwnStanding | undefined
+  return row ?? null
+}
+
 /** One candidate's record. Defaults to the signed-in user. */
 export async function getCandidateStats(candidateId?: string): Promise<CandidateStats | null> {
   await requirePermission('reports.read_own')

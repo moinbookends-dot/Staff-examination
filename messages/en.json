@@ -497,7 +497,20 @@
     "blankCorrect": "Correct",
     "blankWrong": "Wrong",
     "back": "Back to results",
-    "notReleased": "This result has not been released yet."
+    "notReleased": "This result has not been released yet.",
+    "standing": "Where you stand",
+    "standingHint": "Your best result compared with everyone at your company.",
+    "yourBest": "Your best score",
+    "yourRank": "Your position",
+    "yourPercentile": "Percentile",
+    "participants": "Participants",
+    "rankOf": "{rank} of {total}",
+    "topPercent": "Top {percent}%",
+    "standingSuppressed": "Not enough participants yet",
+    "standingSuppressedHint": "A position is only shown once at least ten people at your company have a released result. Below that, a rank would say more about your colleagues than about you.",
+    "standingNone": "No released result yet",
+    "standingNoneHint": "Once a result is released, your position will appear here.",
+    "standingScope": "Company-wide · released results only"
   },
   "reports": {
     "title": "Reports",

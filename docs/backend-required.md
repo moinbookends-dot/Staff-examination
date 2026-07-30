@@ -47,10 +47,12 @@ Every function below must also satisfy the two checks already in CI:
 **Shows:** attempts started and completed per week, split by training vs
 assessment.
 
-**Why it is blocked.** Nothing exposes time-bucketed attempt counts.
-`analytics_attempts` has no date bucketing, `attempts.started_at` is not
-returned by any RPC, and `my_attempts()` / `my_results()` are self-only. A
-client-side rollup is impossible because the rows never reach the client.
+**Why it is blocked.** Nothing exposes time-bucketed attempt counts. The
+underlying column exists on `analytics_attempts`, but no RPC returns per-attempt
+rows to a manager — `my_attempts()` and `my_results()` are self-only, and
+`team_stats()` / `exam_stats()` return pre-aggregated totals with no date
+dimension. A client-side rollup is impossible because the rows never reach the
+client.
 
 ```sql
 create or replace function public.engagement_by_week(p_weeks int default 12)
@@ -82,11 +84,14 @@ $$;
 grant execute on function public.engagement_by_week(int) to authenticated;
 ```
 
-**Also needed:** `started_at` is not currently a column on `analytics_attempts`
-— check and add it to the view, which is a change to 0030's definition.
+**Correction to an earlier draft of this document,** which said `started_at` was
+not a column on `analytics_attempts` and would have to be added. It is there —
+`supabase/migrations/…_0030_analytics.sql:56` selects `a.started_at`, and
+`exam_stats()` already uses it to compute `avg_minutes`. No view change is
+needed; the function above can be written against the view as it stands.
 
-**Effort:** ~half a day including the view change, types regeneration and an
-integration test asserting the scope.
+**Effort:** ~2 hours — the function, types regeneration, and an integration test
+asserting the scope.
 
 ---
 
@@ -201,6 +206,78 @@ independent of the dashboard.
 
 **Effort:** ~half a day for the policy, back-fill and a multi-tenant RLS test
 proving company B cannot read company A's trail. Then ~half a day for the feed.
+
+---
+
+## 6 — Super admin across all companies — REFUSED, not deferred
+
+**Asked for:** a leaderboard where a super admin sees every company.
+
+**Why it was refused rather than built.** There is no such thing as multi-company
+reach in this system, and adding it as a side effect of a leaderboard would be
+the single most dangerous change anyone could make to it.
+
+```sql
+-- 0004
+create or replace function public.my_company()
+returns uuid language sql stable as $$
+  select nullif(public.jwt_app() ->> 'company_id', '')::uuid;   -- SCALAR
+$$;
+```
+
+- `profiles.company_id` is one nullable FK. `handle_new_user()` assigns every
+  profile — super admins included — to the first company.
+- `has_perm()` short-circuits for `is_super_admin()`, but `my_company()` does
+  **not**. So `analytics_scope()` returns `'all'` for a super admin and that
+  means *every outlet in their one company*.
+- Every definer function granted to `authenticated` is either self-scoped by
+  `auth.uid()` or carries an explicit `company_id = my_company()`. Not one can
+  return two companies' rows.
+
+**What it would actually take:** a plural claim (`company_ids`), a
+`my_companies() returns uuid[]`, every `= my_company()` in the schema rewritten
+to `= any(my_companies())`, a change to `custom_access_token_hook`, and the
+whole tenancy suite re-proved for every *other* role — because widening that
+one function widens every policy built on it at once.
+
+**And it is not testable today even if written.** `handle_new_user()` puts
+everybody in the one seeded company, so "all companies" and "my company" are the
+same set. Any test written now would pass without proving anything, right up
+until a second company existed.
+
+**Shipped instead:** super admin sees the company-wide board, byte-identical to
+HR's, via the `'all'` scope that already exists. Zero new code, zero new risk.
+
+**Effort if it is genuinely wanted:** 3–5 days, and it is a tenancy project with
+its own review, not a line in a UI ticket.
+
+---
+
+## 7 — The residual disclosure in `my_standing()`, stated out loud
+
+`my_standing()` (0036) withholds rank, percentile **and** the participant count
+below ten participants, which closes the small-cohort attack: at nine people or
+fewer nothing is emitted at all.
+
+**It does not close temporal differencing, and no floor can.**
+
+A candidate's own score is a probe they control. Their rank as a function of it
+is the cohort's distribution sampled point by point: score 70 → rank 5 of 12,
+score 85 → rank 2 of 12, therefore exactly three people lie in (70, 85]. Repeat
+and the interval bisects. This works identically at forty participants — it is
+slower, not harder. Passive polling is weaker but real: `cohort_n` incrementing
+marks the day one identified person's first result was released.
+
+Closing it needs one of:
+
+1. a coarse **band** ("top quarter") instead of an integer rank;
+2. permanently withholding `cohort_n`;
+3. computing against a **period-closed snapshot** rather than live rows.
+
+All three are product decisions with a real cost to the feature's usefulness, so
+none was taken unilaterally. What must not happen is for "we added a minimum of
+ten" to be recorded as having solved the privacy problem. It solved half of it,
+and this is the other half.
 
 ---
 
