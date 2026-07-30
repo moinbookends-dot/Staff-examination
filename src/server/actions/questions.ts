@@ -9,6 +9,11 @@ import { dbId } from '@/lib/db/id'
 import { publishIssues } from '@/lib/questions/publish'
 import { questionStatusSchema } from '@/lib/questions/status'
 import {
+  bloomLevelSchema,
+  type BloomLevel,
+  type QuestionSourceValue,
+} from '@/lib/questions/metadata'
+import {
   parseQuestionFilters,
   QUESTIONS_PAGE_SIZE,
   type QuestionFilters,
@@ -50,8 +55,13 @@ export interface MutationResult {
 }
 
 export type QuestionStatus = Database['public']['Enums']['question_status']
-export type BloomTaxonomy = Database['public']['Enums']['bloom_taxonomy']
-export type QuestionSource = 'manual' | 'import' | 'ai'
+// Was Database['public']['Enums']['bloom_taxonomy']. Same values, but the
+// shared constant carries the ORDER, which the generated type does not — and
+// Bloom sorted alphabetically is not a taxonomy.
+export type BloomTaxonomy = BloomLevel
+// Re-exported from the one definition, so a consumer importing it from here
+// still gets the vocabulary that mirrors the database CHECK.
+export type QuestionSource = QuestionSourceValue
 
 export interface QuestionListItem {
   id: string
@@ -137,6 +147,8 @@ export async function listQuestions(
   if (filters.type) query = query.eq('type', filters.type)
   if (filters.categoryId) query = query.eq('category_id', filters.categoryId)
   if (filters.difficulty) query = query.eq('difficulty', filters.difficulty)
+  if (filters.bloomLevel) query = query.eq('bloom_level', filters.bloomLevel)
+  if (filters.source) query = query.eq('source', filters.source)
 
   if (filters.q) {
     // 'simple' matches the config the search_tsv generated column was built
@@ -283,6 +295,12 @@ const saveSchema = z
     referenceNote: z.string().trim().max(1000).nullable().default(null),
     tagIds: z.array(dbId()).default([]),
     changeNote: z.string().trim().max(300).nullable().default(null),
+    bloomLevel: bloomLevelSchema.nullable().default(null),
+    // NO source or importedFrom. Provenance is not editable — see
+    // PROVENANCE_IS_READ_ONLY in lib/questions/metadata.ts. Omitting them from
+    // the schema means there is no code path from the editor that could
+    // overwrite them, which is a stronger guarantee than validating a value
+    // the editor should never have sent.
   })
   // Mirrors the q_format_matches_type CHECK in migration 0009. Caught here so
   // the chef reads "True/False questions must use the boolean format" instead
@@ -333,6 +351,10 @@ export async function saveQuestion(
     p_reference_note: v.referenceNote,
     p_tag_ids: v.tagIds,
     p_change_note: v.changeNote,
+    p_bloom_level: v.bloomLevel,
+    // p_source and p_imported_from are deliberately absent. 0039 defaults them
+    // to NULL and coalesces to the stored value, so not sending them is what
+    // preserves provenance across an edit.
   })
 
   if (error) {

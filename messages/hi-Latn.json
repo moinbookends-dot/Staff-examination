@@ -246,6 +246,33 @@
       "retired": "Hatayein",
       "archived": "Archive karein",
       "deprecated": "Band karein"
-    }
+    },
+    "bloom": {
+      "remember": "Yaad rakhna",
+      "understand": "Samajhna",
+      "apply": "Lagu karna",
+      "analyze": "Vishleshan",
+      "evaluate": "Mulyankan",
+      "create": "Srijan"
+    },
+    "source": {
+      "manual": "Yahan likha",
+      "import": "Import kiya",
+      "ai": "AI-sahayit"
+    },
+    "columns": {
+      "bloom": "Bloom",
+      "source": "Source"
+    },
+    "filters": {
+      "anyBloom": "Koi bhi Bloom level",
+      "anySource": "Koi bhi source"
+    },
+    "bloomLabel": "Bloom level",
+    "bloomHint": "Sawaal candidate se kya karata hai — fact yaad karna, ya situation ka aakalan. Yeh jaanchne ke liye ki poora paper sirf yaaddasht ka na ho.",
+    "bloomNone": "Tay nahi",
+    "provenance": "Source",
+    "provenanceHint": "Yeh sawaal kahan se aaya. Ek baar record hota hai aur badla nahi ja sakta — edit karne se import kiya sawaal khud likha nahi ban jaata.",
+    "importedFrom": "{source} se import"
   }
 }

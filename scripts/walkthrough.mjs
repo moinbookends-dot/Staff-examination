@@ -294,6 +294,10 @@ try {
     p_content: questionContent,
     p_answer_key: { format: 'choice_single', correct: 'b' },
     p_change_note: 'created by the walkthrough',
+    // Provenance and Bloom, set at creation the way an importer would.
+    p_source: 'import',
+    p_imported_from: 'walkthrough',
+    p_bloom_level: 'remember',
   })
   check(
     saved.status === 200 && Array.isArray(saved.body) && saved.body.length === 1,
@@ -312,6 +316,28 @@ try {
       key.body?.[0]?.answer_key?.correct === 'b',
       'answer key landed in the same call as the question',
       `chef read back ${JSON.stringify(key.body)?.slice(0, 120)}`,
+    )
+
+    // ── Provenance, over real HTTP ─────────────────────────────────────────
+    //
+    // The RLS suite proves the coalesce in save_question. This proves the same
+    // thing through PostgREST with a real token, which is the path the importer
+    // (M11) and the AI generator (M12) will actually use — a named-argument RPC
+    // where a missing parameter takes its default rather than being sent as
+    // null. If those two ever disagree, this is where it shows.
+    const meta = await asUser(
+      chefSession.access_token,
+      `questions?select=source,imported_from,bloom_level&id=eq.${questionId}`,
+    )
+    check(
+      meta.body?.[0]?.source === 'import' && meta.body?.[0]?.imported_from === 'walkthrough',
+      'provenance is recorded at creation',
+      `source/imported_from came back as ${JSON.stringify(meta.body?.[0])}`,
+    )
+    check(
+      meta.body?.[0]?.bloom_level === 'remember',
+      'the Bloom level round-trips through the RPC',
+      `bloom_level = ${JSON.stringify(meta.body?.[0]?.bloom_level)}`,
     )
 
     // The change note only exists because 0013 routes it through a
@@ -383,6 +409,54 @@ try {
       `history = ${JSON.stringify(after.map((r) => r.revision))}`,
     )
     check(after[1]?.change_note === 'reworded', 'the second note is stamped on revision 2', `note = ${after[1]?.change_note}`)
+
+    // ── Provenance survives the reword ─────────────────────────────────────
+    //
+    // Asserted against the reword ABOVE rather than an edit of its own: that
+    // call sends exactly what saveQuestion() sends — no p_source, no
+    // p_imported_from — so it is the real editor path, over real HTTP, with a
+    // real token. save_question (0039) coalesces the missing arguments to the
+    // stored values.
+    //
+    // The RLS suite proves the same coalesce against Postgres directly. This
+    // proves it through PostgREST, where a named-argument RPC omitting a
+    // parameter takes its DEFAULT — if those two ever diverge, an edit starts
+    // silently erasing where every imported question came from, and nothing
+    // else in the schema remembers it.
+    const provenance = await asUser(
+      chefSession.access_token,
+      `questions?select=source,imported_from,bloom_level&id=eq.${questionId}`,
+    )
+    check(
+      provenance.body?.[0]?.source === 'import' &&
+        provenance.body?.[0]?.imported_from === 'walkthrough',
+      'A REWORD DOES NOT REWRITE WHERE THE QUESTION CAME FROM',
+      `provenance after the reword: ${JSON.stringify(provenance.body?.[0])}`,
+    )
+    // ┌───────────────────────────────────────────────────────────────────────┐
+    // │ AND THE OTHER HALF: bloom_level DOES NOT survive, and must not.        │
+    // │                                                                       │
+    // │ save_question is a FULL-RECORD WRITE, not a patch. It already          │
+    // │ overwrites stem, marks, difficulty and every other column with         │
+    // │ whatever the caller sent, so bloom_level behaving the same way is the  │
+    // │ consistent answer — and the necessary one, because Bloom is editable   │
+    // │ and a coalesce would make it impossible to CLEAR a level set by        │
+    // │ mistake.                                                              │
+    // │                                                                       │
+    // │ source and imported_from are the deliberate exception, because they    │
+    // │ are provenance rather than attributes.                                │
+    // │                                                                       │
+    // │ Asserted rather than left implicit because it is a trap for anything   │
+    // │ doing a PARTIAL update: a bulk "set category on 200 questions" routed  │
+    // │ through save_question would silently blank the Bloom level, the        │
+    // │ explanation and the reference note on every one of them. Bulk          │
+    // │ operations must not go through this function.                         │
+    // └───────────────────────────────────────────────────────────────────────┘
+    check(
+      provenance.body?.[0]?.bloom_level === null,
+      'a reword that does not mention Bloom clears it — save_question is a full write, not a patch',
+      `bloom_level = ${JSON.stringify(provenance.body?.[0]?.bloom_level)}, expected null`,
+    )
   }
   // ── 8. Internal RPCs are not a public API ──────────────────────────────────
   //

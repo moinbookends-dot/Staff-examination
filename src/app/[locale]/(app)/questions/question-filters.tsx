@@ -6,6 +6,7 @@ import { useRouter } from '@/lib/i18n/navigation'
 import { useTranslations } from 'next-intl'
 import { QUESTION_TYPES } from '@/lib/questions/schemas'
 import { QUESTION_STATUSES } from '@/lib/questions/status'
+import { BLOOM_LEVELS, QUESTION_SOURCES } from '@/lib/questions/metadata'
 import { filtersToSearchParams } from '@/lib/search-params'
 import type { CategoryOption } from '@/server/actions/questions'
 import { Input } from '@/components/ui/input'
@@ -25,6 +26,8 @@ export function QuestionFilters({ categories }: { categories: CategoryOption[] }
   const params = useSearchParams()
   const t = useTranslations('questions')
   const tTypes = useTranslations('questions.types')
+  const tBloom = useTranslations('questions.bloom')
+  const tSource = useTranslations('questions.source')
   const [pending, startTransition] = useTransition()
   const [query, setQuery] = useState(params.get('q') ?? '')
 
@@ -38,7 +41,7 @@ export function QuestionFilters({ categories }: { categories: CategoryOption[] }
     })
   }
 
-  const hasFilters = ['q', 'status', 'type', 'categoryId', 'difficulty'].some((key) =>
+  const hasFilters = ['q', 'status', 'type', 'categoryId', 'difficulty', 'bloomLevel', 'source'].some((key) =>
     params.get(key),
   )
 
@@ -81,6 +84,36 @@ export function QuestionFilters({ categories }: { categories: CategoryOption[] }
         {QUESTION_STATUSES.map((status) => (
           <option key={status} value={status}>
             {t(`status.${status}`)}
+          </option>
+        ))}
+      </select>
+
+      <select
+        value={params.get('bloomLevel') ?? ''}
+        onChange={(e) => apply({ bloomLevel: e.target.value })}
+        disabled={pending}
+        aria-label={t('columns.bloom')}
+        className={selectClass}
+      >
+        <option value="">{t('filters.anyBloom')}</option>
+        {BLOOM_LEVELS.map((level) => (
+          <option key={level} value={level}>
+            {tBloom(level)}
+          </option>
+        ))}
+      </select>
+
+      <select
+        value={params.get('source') ?? ''}
+        onChange={(e) => apply({ source: e.target.value })}
+        disabled={pending}
+        aria-label={t('columns.source')}
+        className={selectClass}
+      >
+        <option value="">{t('filters.anySource')}</option>
+        {QUESTION_SOURCES.map((src) => (
+          <option key={src} value={src}>
+            {tSource(src)}
           </option>
         ))}
       </select>

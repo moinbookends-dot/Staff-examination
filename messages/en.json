@@ -99,7 +99,9 @@
       "difficulty": "Difficulty",
       "marks": "Marks",
       "status": "Status",
-      "revision": "Rev"
+      "revision": "Rev",
+      "bloom": "Bloom",
+      "source": "Source"
     },
     "status": {
       "draft": "Draft",
@@ -115,7 +117,9 @@
       "anyType": "Any type",
       "anyCategory": "Any category",
       "anyDifficulty": "Any difficulty",
-      "clear": "Clear"
+      "clear": "Clear",
+      "anyBloom": "Any Bloom level",
+      "anySource": "Any source"
     },
     "types": {
       "mcq_single": "Multiple choice — one answer",
@@ -178,7 +182,26 @@
       "retired": "Retire",
       "archived": "Archive",
       "deprecated": "Deprecate"
-    }
+    },
+    "bloom": {
+      "remember": "Remember",
+      "understand": "Understand",
+      "apply": "Apply",
+      "analyze": "Analyse",
+      "evaluate": "Evaluate",
+      "create": "Create"
+    },
+    "source": {
+      "manual": "Written here",
+      "import": "Imported",
+      "ai": "AI-assisted"
+    },
+    "bloomLabel": "Bloom level",
+    "bloomHint": "What the question asks the candidate to DO — recall a fact, or judge a situation. Used to check a paper is not all recall.",
+    "bloomNone": "Not set",
+    "provenance": "Provenance",
+    "provenanceHint": "Where this question came from. Recorded once and not editable — an edit does not make an imported question hand-written.",
+    "importedFrom": "Imported from {source}"
   },
   "exams": {
     "title": "Exams",

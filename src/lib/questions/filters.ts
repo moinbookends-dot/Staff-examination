@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { dbId } from '@/lib/db/id'
 import { questionTypeSchema } from './schemas'
 import { questionStatusSchema } from './status'
+import { bloomLevelSchema, questionSourceSchema } from './metadata'
 
 /**
  * Question bank filters.
@@ -28,6 +29,8 @@ export const questionFiltersSchema = z.object({
   type: questionTypeSchema.optional(),
   categoryId: dbId().optional(),
   difficulty: z.coerce.number().int().min(1).max(5).optional(),
+  bloomLevel: bloomLevelSchema.optional(),
+  source: questionSourceSchema.optional(),
   page: z.coerce.number().int().min(1).default(1),
 })
 

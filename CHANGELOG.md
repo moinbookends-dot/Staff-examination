@@ -7,6 +7,90 @@ remembering, and anything left behind as debt.
 
 ---
 
+## M8 — Question Bank & Metadata · *in progress*
+
+### Shipped — the question lifecycle, and making `approved` mean something (0040)
+
+Migration 0037 added `review`, `approved`, `archived` and `deprecated` to
+`question_status` with nothing behind them: no transition rule, no CHECK, no
+way to reach them from the UI. An enum value with no state machine is exactly
+what 0016 was written to prevent for exams.
+
+The dangerous half was invisible. Every drawing path routes through
+`question_pool()`, and it asked for exactly `status = 'active'` — so a question
+set to `approved`, the status whose entire purpose is to say it is ready to be
+used, was **silently absent from every paper, every rule count and every
+category expansion**. The rule reported a shortfall and the questions were
+sitting right there. Postgres has no `DROP VALUE` for enums, so the label could
+not simply be removed.
+
+0040 adds `question_status_transition_allowed()` and a trigger, both modelled on
+0016, and extracts `question_is_drawable()` so the next status is one decision
+in one place.
+
+**Worth remembering:** the predicate looked like it lived in three migrations
+(0014, 0018, 0024). Two are dead — 0018 replaced 0014's inline draw with a
+delegation, and 0024 replaced 0018's `question_pool`. "Fixing all three sites"
+would have edited two functions nothing calls.
+
+The first draft of the transition table omitted `retired -> draft` and would
+have broken the editor's shipped "Return to draft" button at the trigger.
+
+### Shipped — one status vocabulary instead of five (0040)
+
+The statuses were spelled out independently in five layers and three disagreed:
+the enum had 7, the message bundles 3, the filter schema 3, the action schema 3,
+and the editor hard-coded 2. `src/lib/questions/status.ts` is now the single
+source, and `question-status-parity.test.ts` pins its transition table against
+the SQL **in both directions** — checking one way passes against a table that
+allows nothing, the other against one that allows everything.
+
+### Shipped — question metadata end to end (0039)
+
+`bloom_level`, `source` and `imported_from` reached the page and were thrown
+away: `listQuestions` already selected all three while the table rendered seven
+columns, none of them these. Now wired through validation, the RPC, the editor,
+the list, the filters and all four message bundles.
+
+**`source` and `imported_from` are read-only in the editor, deliberately.** They
+record where a question *came from*; a chef rewording an imported question has
+not made it hand-written. `saveQuestion` sends neither field, so 0039's
+`coalesce` preserves them — the guarantee is structural, not a rule somebody has
+to remember. The writers are the importer (M11) and the AI generator (M12).
+
+**Bugs found and fixed:**
+
+- **0038 erased provenance on every edit.** It declared
+  `p_source text default 'manual'` and then wrote
+  `source = coalesce(p_source, source)` — the default guarantees `p_source` is
+  never null, so the coalesce was dead code and every update forced `'manual'`.
+  `imported_from` had no coalesce at all. Fixed in 0039. Harmless only because
+  nothing had ever written a non-default value; it would have armed itself the
+  day the importer landed, and nothing else in the schema remembers a question's
+  origin.
+- **Four of seven statuses had no label.** `t(\`status.${item.status}\`)` would
+  have rendered the literal string `questions.status.review` at a chef.
+- **The filter fallback discarded the whole query.** Both the action and the
+  page did `safeParse(raw).success ? data : { page: 1 }`, so a bookmarked
+  `?q=knife&difficulty=4&status=…` with one unrecognised value came back as the
+  **unfiltered first page** — silently, to somebody who believed they were
+  reading a filtered list.
+
+### Recorded — `save_question` is a full write, not a patch
+
+It overwrites every column with whatever the caller sent. `bloom_level` behaves
+that way too, and must: Bloom is editable, so a `coalesce` would make it
+impossible to clear a level set by mistake. `source` and `imported_from` are the
+deliberate exception.
+
+This is a trap for partial updates. A bulk "set category on 200 questions"
+routed through `save_question` would blank the Bloom level, the explanation and
+the reference note on every one of them. **Bulk operations must not go through
+this function** — asserted in `scripts/walkthrough.mjs` so the constraint is
+enforced rather than remembered.
+
+---
+
 ## M7 — Localization · *complete*
 
 ### Shipped — telling a chef what translation will not do for them (0035)

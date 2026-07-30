@@ -38,6 +38,8 @@ export default async function QuestionsPage({
   const claims = await requirePermission('questions.read')
   const t = await getTranslations('questions')
   const tTypes = await getTranslations('questions.types')
+  const tBloom = await getTranslations('questions.bloom')
+  const tSource = await getTranslations('questions.source')
 
   const raw = await searchParams
   // Unparseable parameters fall back to defaults rather than erroring: these
@@ -85,6 +87,8 @@ export default async function QuestionsPage({
                   <TableHead>{t('columns.type')}</TableHead>
                   <TableHead>{t('columns.category')}</TableHead>
                   <TableHead className="text-right">{t('columns.difficulty')}</TableHead>
+                  <TableHead>{t('columns.bloom')}</TableHead>
+                  <TableHead>{t('columns.source')}</TableHead>
                   <TableHead className="text-right">{t('columns.marks')}</TableHead>
                   <TableHead>{t('columns.status')}</TableHead>
                   <TableHead className="text-right">{t('columns.revision')}</TableHead>
@@ -108,6 +112,21 @@ export default async function QuestionsPage({
                       {item.category_name ?? '—'}
                     </TableCell>
                     <TableCell className="text-right text-sm">{item.difficulty}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {item.bloom_level ? tBloom(item.bloom_level) : '—'}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {/* Provenance at a glance. 'manual' is the overwhelming
+                          majority and carries no badge — badging every row
+                          makes the exceptions harder to see, not easier. */}
+                      {item.source === 'manual' ? (
+                        <span className="text-muted-foreground">—</span>
+                      ) : (
+                        <Badge variant={item.source === 'ai' ? 'info' : 'secondary'}>
+                          {tSource(item.source)}
+                        </Badge>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right text-sm">{item.marks}</TableCell>
                     <TableCell>
                       <Badge variant={item.status === 'active' ? 'default' : 'secondary'}>

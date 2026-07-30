@@ -6,6 +6,7 @@ import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from '@/lib/i18n/navigation'
 import { useTranslations } from 'next-intl'
 import { nextStatuses, type QuestionStatusValue } from '@/lib/questions/status'
+import { BLOOM_LEVELS, type BloomLevel } from '@/lib/questions/metadata'
 import { toast } from 'sonner'
 import {
   QUESTION_TYPES,
@@ -84,6 +85,9 @@ export function QuestionForm({ question, categories, tags, revisions, canRetire 
   const tTypes = useTranslations('questions.types')
   const tFormats = useTranslations('questions.formats')
   const tStatusAction = useTranslations('questions.statusAction')
+  const tBloom = useTranslations('questions.bloom')
+  const tSource = useTranslations('questions.source')
+  const tMeta = useTranslations('questions')
 
   const [type, setType] = useState<QuestionType>(question?.type ?? 'mcq_single')
   const [format, setFormat] = useState<ResponseFormat>(question?.response_format ?? 'choice_single')
@@ -110,6 +114,7 @@ export function QuestionForm({ question, categories, tags, revisions, canRetire 
   const [availableTags, setAvailableTags] = useState(tags)
   const [newTag, setNewTag] = useState('')
   const [changeNote, setChangeNote] = useState('')
+  const [bloomLevel, setBloomLevel] = useState<BloomLevel | null>(question?.bloom_level ?? null)
 
   const [previewAnswer, setPreviewAnswer] = useState<AnswerPayload>(() =>
     getFormat(question?.response_format ?? 'choice_single').emptyAnswer(),
@@ -177,6 +182,7 @@ export function QuestionForm({ question, categories, tags, revisions, canRetire 
         referenceNote: referenceNote || null,
         tagIds,
         changeNote: changeNote || null,
+        bloomLevel,
       })
 
       if (!result.ok || !result.id) {
@@ -428,6 +434,55 @@ export function QuestionForm({ question, categories, tags, revisions, canRetire 
                 />
               </div>
             </div>
+
+            {/* ── Bloom level ──────────────────────────────────────────────
+                Editable, unlike the provenance below it: what a question asks
+                the candidate to DO is an authoring decision, and M9's blueprint
+                validation reads it. A native <select> to match the rest of this
+                form and the filter bar. */}
+            <div className="space-y-2">
+              <Label htmlFor="q-bloom">{tMeta('bloomLabel')}</Label>
+              <select
+                id="q-bloom"
+                value={bloomLevel ?? ''}
+                onChange={(e) =>
+                  setBloomLevel((e.target.value || null) as BloomLevel | null)
+                }
+                disabled={pending}
+                className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="">{tMeta('bloomNone')}</option>
+                {BLOOM_LEVELS.map((level) => (
+                  <option key={level} value={level}>
+                    {tBloom(level)}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">{tMeta('bloomHint')}</p>
+            </div>
+
+            {/* ── Provenance, read-only ────────────────────────────────────
+                Shown, never editable. `source` and `imported_from` record where
+                a question CAME FROM; a chef rewording an imported question has
+                not made it hand-written. saveQuestion sends neither field, so
+                0039's coalesce preserves them — the guarantee is structural
+                rather than a rule anyone has to remember. */}
+            {question && (
+              <div className="space-y-2">
+                {/* Not a <Label>: there is no form control to label. A label
+                    pointing at nothing is announced as an orphan. */}
+                <p className="text-sm font-medium">{tMeta('provenance')}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary">{tSource(question.source)}</Badge>
+                  {question.imported_from && (
+                    <Badge variant="outline">
+                      {tMeta('importedFrom', { source: question.imported_from })}
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">{tMeta('provenanceHint')}</p>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label>Tags</Label>

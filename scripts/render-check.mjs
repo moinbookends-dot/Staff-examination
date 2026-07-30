@@ -531,6 +531,44 @@ try {
   const searched = await get(`/en/questions?q=${encodeURIComponent('smoke')}`)
   check(searched.html.includes(stem), 'full-text search finds it', 'search returned nothing')
 
+  // ── Bloom and provenance ──────────────────────────────────────────────────
+  //
+  // Both are columns in the database that reached the page and were thrown
+  // away: listQuestions already SELECTed bloom_level, source and imported_from
+  // while the table rendered seven columns, none of them these.
+  check(
+    /<option value="analyze"/.test(list.html) && /<option value="create"/.test(list.html),
+    'the Bloom filter is populated from the taxonomy',
+    'the Bloom filter rendered no options',
+  )
+  check(
+    /<option value="import"/.test(list.html) && /<option value="ai"/.test(list.html),
+    'the provenance filter is populated',
+    'the source filter rendered no options',
+  )
+  // Asserted as a PAIR against the same URL, so neither direction is vacuous:
+  // an unknown filter value must drop only itself and leave the rest working.
+  // Before parseQuestionFilters, `?status=approved&q=smoke` returned the
+  // unfiltered first page — everything discarded, silently, to somebody who
+  // believed they were reading a filtered list.
+  // 'nonsense', not 'approved' — the first draft of this check used approved,
+  // which WAS invalid before 0037 added it to the enum and is now perfectly
+  // valid, so the check was quietly asserting that a working filter works.
+  const unknownFilter = await get(
+    `/en/questions?status=nonsense&q=${encodeURIComponent('smoke')}`,
+  )
+  check(
+    unknownFilter.html.includes(stem),
+    'an unrecognised filter value drops only itself, keeping the search term',
+    'an unknown status discarded the whole query',
+  )
+  const realFilter = await get('/en/questions?status=active')
+  check(
+    !realFilter.html.includes(stem),
+    'a filter that genuinely excludes the row still hides it',
+    'the filter stopped filtering — the check above proves nothing',
+  )
+
   // ── 4. The editor ──────────────────────────────────────────────────────────
   console.log('\n3. Editor')
   const create = await get('/en/questions/new')
