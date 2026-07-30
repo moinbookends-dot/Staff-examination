@@ -170,6 +170,14 @@
         "label": "Assessed in person",
         "description": "A practical or viva. The candidate types nothing; a chef scores the rubric."
       }
+    },
+    "statusAction": {
+      "draft": "Return to draft",
+      "review": "Send for review",
+      "approved": "Approve",
+      "retired": "Retire",
+      "archived": "Archive",
+      "deprecated": "Deprecate"
     }
   },
   "exams": {

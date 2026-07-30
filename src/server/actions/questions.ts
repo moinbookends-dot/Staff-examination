@@ -7,8 +7,9 @@ import { createClient } from '@/lib/supabase/server'
 import type { Database } from '@/lib/db/database.types'
 import { dbId } from '@/lib/db/id'
 import { publishIssues } from '@/lib/questions/publish'
+import { questionStatusSchema } from '@/lib/questions/status'
 import {
-  questionFiltersSchema,
+  parseQuestionFilters,
   QUESTIONS_PAGE_SIZE,
   type QuestionFilters,
 } from '@/lib/questions/filters'
@@ -120,8 +121,7 @@ export async function listQuestions(
 ): Promise<{ items: QuestionListItem[]; total: number; page: number; pageSize: number }> {
   await requirePermission('questions.read')
 
-  const parsed = questionFiltersSchema.safeParse(input ?? {})
-  const filters: QuestionFilters = parsed.success ? parsed.data : { page: 1 }
+  const filters: QuestionFilters = parseQuestionFilters(input)
   const from = (filters.page - 1) * QUESTIONS_PAGE_SIZE
 
   const supabase = await createClient()
@@ -395,7 +395,7 @@ export async function publishQuestion(id: string): Promise<MutationResult> {
 
 const statusSchema = z.object({
   id: dbId(),
-  status: z.enum(['draft', 'active', 'retired']),
+  status: questionStatusSchema,
 })
 
 /**

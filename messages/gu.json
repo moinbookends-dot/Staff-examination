@@ -238,6 +238,14 @@
       "approved": "મંજૂર",
       "archived": "સંગ્રહિત",
       "deprecated": "બંધ કરેલ"
+    },
+    "statusAction": {
+      "draft": "ડ્રાફ્ટમાં પાછું મોકલો",
+      "review": "સમીક્ષા માટે મોકલો",
+      "approved": "મંજૂર કરો",
+      "retired": "હટાવો",
+      "archived": "સંગ્રહિત કરો",
+      "deprecated": "બંધ કરો"
     }
   }
 }

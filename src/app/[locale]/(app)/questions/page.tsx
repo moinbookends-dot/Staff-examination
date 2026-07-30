@@ -3,7 +3,7 @@ import { requirePermission } from '@/lib/auth/guards'
 import { can } from '@/lib/auth/claims'
 import { Link } from '@/lib/i18n/navigation'
 import { listQuestions, listCategories } from '@/server/actions/questions'
-import { questionFiltersSchema } from '@/lib/questions/filters'
+import { parseQuestionFilters } from '@/lib/questions/filters'
 import { filtersToSearchParams } from '@/lib/search-params'
 import { QuestionFilters } from './question-filters'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -42,8 +42,7 @@ export default async function QuestionsPage({
   const raw = await searchParams
   // Unparseable parameters fall back to defaults rather than erroring: these
   // arrive from URLs people edit, share and truncate.
-  const parsed = questionFiltersSchema.safeParse(raw)
-  const filters = parsed.success ? parsed.data : { page: 1 }
+  const filters = parseQuestionFilters(raw)
 
   const [{ items, total, page, pageSize }, categories] = await Promise.all([
     listQuestions(filters),

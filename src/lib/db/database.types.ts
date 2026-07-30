@@ -1375,6 +1375,10 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "enforce_question_status_transition": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "exam_audience": {
         Args: Record<string, unknown>
         Returns: unknown
@@ -1523,6 +1527,10 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "question_is_drawable": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "question_pool": {
         Args: Record<string, unknown>
         Returns: unknown
@@ -1532,6 +1540,10 @@ export type Database = {
         Returns: unknown
       }
       "question_stats": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "question_status_transition_allowed": {
         Args: Record<string, unknown>
         Returns: unknown
       }

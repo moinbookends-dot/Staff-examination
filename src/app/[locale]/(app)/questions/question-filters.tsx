@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/lib/i18n/navigation'
 import { useTranslations } from 'next-intl'
 import { QUESTION_TYPES } from '@/lib/questions/schemas'
+import { QUESTION_STATUSES } from '@/lib/questions/status'
 import { filtersToSearchParams } from '@/lib/search-params'
 import type { CategoryOption } from '@/server/actions/questions'
 import { Input } from '@/components/ui/input'
@@ -73,9 +74,15 @@ export function QuestionFilters({ categories }: { categories: CategoryOption[] }
         className={selectClass}
       >
         <option value="">{t('filters.anyStatus')}</option>
-        <option value="draft">{t('status.draft')}</option>
-        <option value="active">{t('status.active')}</option>
-        <option value="retired">{t('status.retired')}</option>
+        {/* Generated from QUESTION_STATUSES, not listed by hand. The hand-written
+            list had three of the seven the database has, so four statuses were
+            unfilterable — and a URL naming one of them fell through to the
+            unfiltered first page. */}
+        {QUESTION_STATUSES.map((status) => (
+          <option key={status} value={status}>
+            {t(`status.${status}`)}
+          </option>
+        ))}
       </select>
 
       <select

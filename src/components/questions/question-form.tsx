@@ -5,6 +5,7 @@ import { useMemo, useState, useTransition } from 'react'
 // a chef working in Hindi is silently dropped back to English on every save.
 import { useRouter } from '@/lib/i18n/navigation'
 import { useTranslations } from 'next-intl'
+import { nextStatuses, type QuestionStatusValue } from '@/lib/questions/status'
 import { toast } from 'sonner'
 import {
   QUESTION_TYPES,
@@ -82,6 +83,7 @@ export function QuestionForm({ question, categories, tags, revisions, canRetire 
   const [pending, startTransition] = useTransition()
   const tTypes = useTranslations('questions.types')
   const tFormats = useTranslations('questions.formats')
+  const tStatusAction = useTranslations('questions.statusAction')
 
   const [type, setType] = useState<QuestionType>(question?.type ?? 'mcq_single')
   const [format, setFormat] = useState<ResponseFormat>(question?.response_format ?? 'choice_single')
@@ -209,7 +211,7 @@ export function QuestionForm({ question, categories, tags, revisions, canRetire 
     })
   }
 
-  function changeStatus(status: 'draft' | 'retired') {
+  function changeStatus(status: QuestionStatusValue) {
     startTransition(async () => {
       const result = await setQuestionStatus({ id: question!.id, status })
       if (!result.ok) setError(result.error ?? 'Could not change the status.')
@@ -267,15 +269,28 @@ export function QuestionForm({ question, categories, tags, revisions, canRetire 
           </Button>
           {question && canRetire && (
             <>
-              {question.status === 'retired' ? (
-                <Button variant="outline" onClick={() => changeStatus('draft')} disabled={pending}>
-                  Return to draft
-                </Button>
-              ) : (
-                <Button variant="outline" onClick={() => changeStatus('retired')} disabled={pending}>
-                  Retire
-                </Button>
-              )}
+              {/* Offered from the lifecycle rather than hard-coded.
+                  This used to be a fixed pair — Retire, or Return to draft if
+                  already retired — which was right for a three-status world and
+                  wrong the moment 0037 added four more: `review` and `approved`
+                  were unreachable from anywhere in the product, and a button
+                  offering a move the 0040 trigger refuses would fail at the
+                  database with a message nobody should have to read.
+                  `active` is excluded because Publish above owns it: going
+                  active runs the validation gate, and a plain status update
+                  would skip it. */}
+              {nextStatuses(question.status as QuestionStatusValue)
+                .filter((status) => status !== 'active')
+                .map((status) => (
+                  <Button
+                    key={status}
+                    variant="outline"
+                    onClick={() => changeStatus(status)}
+                    disabled={pending}
+                  >
+                    {tStatusAction(status)}
+                  </Button>
+                ))}
               <Button variant="destructive" onClick={() => setConfirmDelete(true)} disabled={pending}>
                 Remove
               </Button>

@@ -238,6 +238,14 @@
       "approved": "स्वीकृत",
       "archived": "संग्रहीत",
       "deprecated": "बंद किया गया"
+    },
+    "statusAction": {
+      "draft": "ड्राफ़्ट में लौटाएँ",
+      "review": "समीक्षा के लिए भेजें",
+      "approved": "स्वीकृत करें",
+      "retired": "हटाएँ",
+      "archived": "संग्रहीत करें",
+      "deprecated": "बंद करें"
     }
   }
 }
