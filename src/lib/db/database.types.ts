@@ -403,6 +403,54 @@ export type Database = {
         }
         Relationships: []
       }
+      "document_pages": {
+        Row: {
+          "id": string
+          "company_id": string
+          "source_document_id": string
+          "page_number": number
+          "image_path": string | null
+          "ocr_status": string
+          "ocr_text": string | null
+          "ocr_confidence": number | null
+          "ocr_model": string | null
+          "ocr_attempts": number
+          "ocr_error": string | null
+          "ocr_completed_at": string | null
+          "created_at": string
+        }
+        Insert: {
+          "id"?: string
+          "company_id": string
+          "source_document_id": string
+          "page_number": number
+          "image_path"?: string | null
+          "ocr_status"?: string
+          "ocr_text"?: string | null
+          "ocr_confidence"?: number | null
+          "ocr_model"?: string | null
+          "ocr_attempts"?: number
+          "ocr_error"?: string | null
+          "ocr_completed_at"?: string | null
+          "created_at"?: string
+        }
+        Update: {
+          "id"?: string
+          "company_id"?: string
+          "source_document_id"?: string
+          "page_number"?: number
+          "image_path"?: string | null
+          "ocr_status"?: string
+          "ocr_text"?: string | null
+          "ocr_confidence"?: number | null
+          "ocr_model"?: string | null
+          "ocr_attempts"?: number
+          "ocr_error"?: string | null
+          "ocr_completed_at"?: string | null
+          "created_at"?: string
+        }
+        Relationships: []
+      }
       "email_outbox": {
         Row: {
           "id": string
@@ -712,6 +760,51 @@ export type Database = {
           "deleted_at"?: string | null
           "created_at"?: string
           "updated_at"?: string
+        }
+        Relationships: []
+      }
+      "import_batches": {
+        Row: {
+          "id": string
+          "company_id": string
+          "source_document_id": string
+          "kind": string
+          "status": string
+          "stats": Json
+          "last_error": string | null
+          "started_by": string
+          "started_at": string
+          "finished_at": string | null
+          "reverted_at": string | null
+          "reverted_by": string | null
+        }
+        Insert: {
+          "id"?: string
+          "company_id": string
+          "source_document_id": string
+          "kind": string
+          "status"?: string
+          "stats"?: Json
+          "last_error"?: string | null
+          "started_by": string
+          "started_at"?: string
+          "finished_at"?: string | null
+          "reverted_at"?: string | null
+          "reverted_by"?: string | null
+        }
+        Update: {
+          "id"?: string
+          "company_id"?: string
+          "source_document_id"?: string
+          "kind"?: string
+          "status"?: string
+          "stats"?: Json
+          "last_error"?: string | null
+          "started_by"?: string
+          "started_at"?: string
+          "finished_at"?: string | null
+          "reverted_at"?: string | null
+          "reverted_by"?: string | null
         }
         Relationships: []
       }
@@ -1247,6 +1340,69 @@ export type Database = {
           "sort_order"?: number
           "created_at"?: string
           "updated_at"?: string
+        }
+        Relationships: []
+      }
+      "source_documents": {
+        Row: {
+          "id": string
+          "company_id": string
+          "brand_id": string | null
+          "kind": string
+          "original_filename": string
+          "storage_path": string
+          "mime_type": string
+          "byte_size": number
+          "sha256": string
+          "page_count": number | null
+          "status": string
+          "supersedes_id": string | null
+          "title": string | null
+          "description": string | null
+          "uploaded_by": string
+          "created_at": string
+          "updated_at": string
+          "deleted_at": string | null
+        }
+        Insert: {
+          "id"?: string
+          "company_id": string
+          "brand_id"?: string | null
+          "kind": string
+          "original_filename": string
+          "storage_path": string
+          "mime_type": string
+          "byte_size": number
+          "sha256": string
+          "page_count"?: number | null
+          "status"?: string
+          "supersedes_id"?: string | null
+          "title"?: string | null
+          "description"?: string | null
+          "uploaded_by": string
+          "created_at"?: string
+          "updated_at"?: string
+          "deleted_at"?: string | null
+        }
+        Update: {
+          "id"?: string
+          "company_id"?: string
+          "brand_id"?: string | null
+          "kind"?: string
+          "original_filename"?: string
+          "storage_path"?: string
+          "mime_type"?: string
+          "byte_size"?: number
+          "sha256"?: string
+          "page_count"?: number | null
+          "status"?: string
+          "supersedes_id"?: string | null
+          "title"?: string | null
+          "description"?: string | null
+          "uploaded_by"?: string
+          "created_at"?: string
+          "updated_at"?: string
+          "deleted_at"?: string | null
         }
         Relationships: []
       }

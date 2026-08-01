@@ -135,47 +135,68 @@ describeDb('question quality intelligence', () => {
       [SECTION, EXAM],
     )
 
-    for (let i = 0; i < n; i += 1) {
-      const attempt = `00000000-0000-0000-0000-0000000e1${String(i).padStart(3, '0')}`
-      const correct = i < correctFor
-      await db.query(
-        `insert into public.attempts
-           (id, exam_id, candidate_id, company_id, status, attempt_number,
-            score, max_score, started_at, expires_at, submitted_at, submit_reason)
-         values ($1,$2,$3,$4,'published',$5,$6,2,now(),now() + interval '1 hour',now(),'user')`,
-        [attempt, EXAM, CAND, fixtures.company, i + 1, correct ? 2 : 0],
-      )
-      for (const [qid, position] of [
-        [EASY, 1],
-        [MCQ, 2],
-      ] as const) {
-        await db.query(
-          `insert into public.attempt_questions
-             (attempt_id, question_id, question_revision, snapshot, position, marks)
-           values ($1,$2,1,'{}'::jsonb,$3,1)`,
-          [attempt, qid, position],
-        )
-      }
-      await db.query(
-        `insert into public.attempt_answers
-           (attempt_id, question_id, question_revision, answer, auto_grade_status, score)
-         values ($1,$2,1,'{"format":"boolean","value":true}'::jsonb,'graded',$3)`,
-        [attempt, EASY, correct ? 1 : 0],
-      )
-      // Everybody who gets it wrong picks 'b' — a distractor that outdraws the
-      // key, which is the signature of a mis-keyed question.
-      await db.query(
-        `insert into public.attempt_answers
-           (attempt_id, question_id, question_revision, answer, auto_grade_status, score)
-         values ($1,$2,1,$3::jsonb,'graded',$4)`,
-        [
-          attempt,
-          MCQ,
-          JSON.stringify({ format: 'choice_single', choice: correct ? 'a' : 'b' }),
-          correct ? 1 : 0,
-        ],
-      )
-    }
+    // ┌───────────────────────────────────────────────────────────────────────┐
+    // │ FOUR STATEMENTS, NOT FOUR PER ATTEMPT.                                │
+    // │                                                                       │
+    // │ This loop used to issue one INSERT per attempt plus three more for its │
+    // │ questions and answers — about forty sequential round trips to a        │
+    // │ database in another region for a twelve-attempt fixture.               │
+    // │                                                                       │
+    // │ Run alone that fits inside the 30s testTimeout. Run as part of the     │
+    // │ whole suite it does not: six tests failed in the full run and the same │
+    // │ file passed 16/16 on its own, and the six were EXACTLY the ones that   │
+    // │ seed ten or more attempts. Nothing below nine ever failed.             │
+    // │                                                                       │
+    // │ vitest.config.ts already warns about this shape — its hookTimeout note │
+    // │ describes the same failure in beforeAll blocks. Set-based inserts fix  │
+    // │ the cause instead of raising the timeout, which would only move the    │
+    // │ threshold at which it comes back.                                     │
+    // └───────────────────────────────────────────────────────────────────────┘
+    await db.query(
+      `insert into public.attempts
+         (id, exam_id, candidate_id, company_id, status, attempt_number,
+          score, max_score, started_at, expires_at, submitted_at, submit_reason)
+       select ('00000000-0000-0000-0000-0000000e1' || lpad(i::text, 3, '0'))::uuid,
+              $1, $2, $3, 'published', i + 1,
+              case when i < $5 then 2 else 0 end, 2,
+              now(), now() + interval '1 hour', now(), 'user'
+         from generate_series(0, $4 - 1) i`,
+      [EXAM, CAND, fixtures.company, n, correctFor],
+    )
+
+    await db.query(
+      `insert into public.attempt_questions
+         (attempt_id, question_id, question_revision, snapshot, position, marks)
+       select a.id, q.question_id, 1, '{}'::jsonb, q.position, 1
+         from public.attempts a
+        cross join (values ($1::uuid, 1), ($2::uuid, 2)) as q(question_id, position)
+        where a.exam_id = $3`,
+      [EASY, MCQ, EXAM],
+    )
+
+    // The true/false question: right for the first `correctFor` attempts.
+    await db.query(
+      `insert into public.attempt_answers
+         (attempt_id, question_id, question_revision, answer, auto_grade_status, score)
+       select a.id, $1, 1, '{"format":"boolean","value":true}'::jsonb, 'graded',
+              case when a.attempt_number <= $2 then 1 else 0 end
+         from public.attempts a where a.exam_id = $3`,
+      [EASY, correctFor, EXAM],
+    )
+
+    // The MCQ. Everybody who gets it wrong picks 'b' — a distractor that
+    // outdraws the key, which is the signature of a mis-keyed question.
+    await db.query(
+      `insert into public.attempt_answers
+         (attempt_id, question_id, question_revision, answer, auto_grade_status, score)
+       select a.id, $1, 1,
+              jsonb_build_object('format', 'choice_single',
+                                 'choice', case when a.attempt_number <= $2 then 'a' else 'b' end),
+              'graded',
+              case when a.attempt_number <= $2 then 1 else 0 end
+         from public.attempts a where a.exam_id = $3`,
+      [MCQ, correctFor, EXAM],
+    )
   }
 
   const qualityOf = async (id: string) => {
