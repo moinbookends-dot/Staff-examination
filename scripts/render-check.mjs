@@ -608,6 +608,73 @@ try {
     'a live question appeared under deleted=1',
   )
 
+  // ── The grid ──────────────────────────────────────────────────────────────
+  //
+  // The columns M8 added to the database and the table never showed. Asserted
+  // by their header text, because the values themselves ('—', a date) appear
+  // all over the page and would match against a table that renders none of them.
+  for (const [label, name] of [
+    ['Languages', 'translation coverage'],
+    ['Health', 'question health'],
+    ['Created by', 'the author'],
+    ['Fixed papers', 'the usage counter'],
+  ]) {
+    check(list.html.includes(`>${label}<`), `the bank shows ${name}`, `no ${label} column`)
+  }
+
+  // The seeded question has a category and an answer key but no Bloom level and
+  // no published translations, so exactly two flags are expected. Asserted as a
+  // PAIR: the present ones prove badges render, the absent ones prove the rule
+  // discriminates rather than badging everything.
+  //
+  // MATCHED ON data-health, NOT ON THE LABEL. next-intl serialises the entire
+  // message bundle into the page, so `includes('No answer key')` is true
+  // whether or not a badge rendered — exactly the failure this file already
+  // records for 'Food Safety'. Both negatives below passed against the label
+  // and failed against the markup, which is how the trap was found.
+  check(
+    /data-health="no-bloom"/.test(list.html),
+    'a question with no Bloom level is flagged',
+    'the health column flagged nothing',
+  )
+  check(
+    /data-health="untranslated"/.test(list.html),
+    'a question with no published translation is flagged',
+    'the translation flag never fires',
+  )
+  check(
+    !/data-health="no-answer-key"/.test(list.html),
+    'a question WITH an answer key is not flagged as missing one',
+    'the health column flags every question — the badge means nothing',
+  )
+  check(
+    !/data-health="no-category"/.test(list.html),
+    'a categorised question is not flagged as uncategorised',
+    'the category flag fires regardless of the category',
+  )
+
+  // Selection is what the whole bulk toolbar hangs off. The toolbar itself only
+  // renders once something is selected, so it cannot appear in server HTML —
+  // the checkbox is the thing to assert.
+  check(
+    /aria-label="Select every question on this page"/.test(list.html),
+    'a chef is offered row selection',
+    'the select-all checkbox is missing, so nothing can be selected',
+  )
+  // Sortable headers are buttons, not links: sorting uses router.replace so
+  // that sorting four times does not cost four presses of Back.
+  check(
+    list.html.includes('Sorted A to Z. Choose again to reverse.') ||
+      list.html.includes('Sorted Z to A. Choose again to reverse.'),
+    'the sorted column says so in words, not only with an icon',
+    'the sort state is conveyed by the arrow icon alone',
+  )
+  check(
+    list.html.includes('Saved filters'),
+    'saved filters are offered',
+    'the saved-filter control is missing',
+  )
+
   // ── 4. The editor ──────────────────────────────────────────────────────────
   console.log('\n3. Editor')
   const create = await get('/en/questions/new')

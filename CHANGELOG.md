@@ -9,6 +9,52 @@ remembering, and anything left behind as debt.
 
 ## M8 — Question Bank & Metadata · *in progress*
 
+### Shipped — the question bank as the screen the bank is actually run from
+
+Sortable, multi-filterable, selectable and bulk-operable, with the columns M8
+added to the database and the old nine-column table never showed: translation
+coverage, author and editor, provenance, and completeness health.
+
+**`usage_count` counts fixed papers, and nothing else.** It has exactly one
+writer — `publish_exam`, joined through `exam_questions`, which exists only for
+fixed-mode exams (`0014_exams.sql:703`). Rule-based exams draw at the start of
+each attempt and never touch it. Since this bank is designed around rule-based
+selection, a company delivering every exam by rules has `usage_count = 0` on
+every question in it.
+
+That killed "never used" as a health flag: it would have fired on the entire
+bank and taught people to ignore the column the real flags live in. The number
+still ships as a column, labelled for what it counts. Health flags completeness
+only — no answer key, no category, no Bloom level, untranslated — and
+`questionHealth()` does not call `publishIssues` or reproduce any part of it.
+M9's statistical signals extend that function rather than replacing it.
+
+**Author names are "Unknown" for other outlets, on purpose.** A chef holds
+`users.read_team`, and `profiles_read_team` scopes to their own outlet, while
+the bank is company-scoped. Widening it would leak outlet membership through the
+question bank, so the embed degrades exactly as `listQuestionRevisions` has
+since M2.
+
+Sorting and page size are allowlists, not free text: `?sort=` reaches
+PostgREST's `.order()` as a column name, and `?pageSize=` becomes a `.range()`
+that also drives two batched reads over every id it returns.
+
+No virtualization. At 25–100 rows a real DOM table is faster to ship and better
+behaved — Ctrl+F finds rows, screen readers get a truthful row count, and the
+page prints. The grid owns its own scroll container rather than using
+`components/ui/table.tsx`, whose `overflow-x-auto` wrapper takes no `className`
+and therefore makes a sticky `<thead>` stick to a box that never scrolls.
+
+Two notes for whoever reads this next. `useSyncExternalStore`, not
+`useState` + `useEffect`, for both stores on this screen: reading
+session/localStorage during render breaks hydration, and the usual dodge renders
+one frame with the wrong state, which flickers the bulk toolbar on every
+navigation. And the render check asserts health badges on a `data-health`
+attribute rather than on their labels, because next-intl serialises the whole
+message bundle into the page — `includes('No answer key')` is true whether or
+not a badge rendered, which is the same trap that file already records for
+'Food Safety'.
+
 ### Fixed — "Question removed" for a question that was never removed
 
 `deleteQuestion` checked only the returned `error`. RLS does not raise when it

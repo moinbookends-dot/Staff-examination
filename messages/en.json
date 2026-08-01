@@ -101,7 +101,14 @@
       "status": "Status",
       "revision": "Rev",
       "bloom": "Bloom",
-      "source": "Source"
+      "source": "Source",
+      "translations": "Languages",
+      "updatedAt": "Updated",
+      "createdBy": "Created by",
+      "updatedBy": "Updated by",
+      "usage": "Fixed papers",
+      "health": "Health",
+      "importedFrom": "Imported from"
     },
     "status": {
       "draft": "Draft",
@@ -201,7 +208,83 @@
     "bloomNone": "Not set",
     "provenance": "Provenance",
     "provenanceHint": "Where this question came from. Recorded once and not editable — an edit does not make an imported question hand-written.",
-    "importedFrom": "Imported from {source}"
+    "importedFrom": "Imported from {source}",
+    "usageHint": "Times placed on a fixed paper. Rule-based exams draw at the start of each attempt and are not counted.",
+    "unknownAuthor": "Unknown",
+    "health": {
+      "ok": "Complete",
+      "no-answer-key": "No answer key",
+      "no-category": "No category",
+      "no-bloom": "No Bloom level",
+      "untranslated": "Not in {locales}",
+      "title": "Needs attention"
+    },
+    "sort": {
+      "label": "Sort by",
+      "ascending": "Sorted A to Z. Choose again to reverse.",
+      "descending": "Sorted Z to A. Choose again to reverse.",
+      "none": "Not sorted. Choose to sort."
+    },
+    "pageSize": {
+      "label": "Rows per page"
+    },
+    "columnsMenu": {
+      "label": "Columns",
+      "reset": "Show all"
+    },
+    "saved": {
+      "label": "Saved filters",
+      "none": "No saved filters yet",
+      "save": "Save this filter",
+      "namePrompt": "Name this filter",
+      "placeholder": "Needs Bloom",
+      "delete": "Remove",
+      "saved": "Filter saved.",
+      "deleted": "Filter removed.",
+      "nothingToSave": "Choose a filter before saving one."
+    },
+    "bulk": {
+      "selected": "{count, plural, one {# selected} other {# selected}}",
+      "selectAllPage": "Select all on this page",
+      "selectAllMatching": "Select all {total} matching",
+      "capped": "Selected the first {limit} of {total}. Narrow the filter to reach the rest.",
+      "clear": "Clear selection",
+      "publish": "Publish",
+      "setStatus": "Change status",
+      "remove": "Remove",
+      "restore": "Restore",
+      "applyTo": "Apply to {count}",
+      "cancel": "Cancel",
+      "confirmRemoveTitle": "Remove {count} questions?",
+      "confirmRemoveBody": "They stop appearing in the bank and can no longer be drawn. Past attempts that used them are unaffected, and you can restore them from the recycle bin.",
+      "confirmRestoreTitle": "Restore {count} questions?",
+      "confirmRestoreBody": "They return to the bank with the status they had when they were removed.",
+      "confirmPublishTitle": "Publish {count} questions?",
+      "confirmPublishBody": "Each one is validated first. Any that are not ready are left alone and listed back to you.",
+      "statusTitle": "Change the status of {count} questions",
+      "statusBody": "Moves that are not allowed from a question’s current status are skipped, not forced.",
+      "applied": "{count, plural, one {# updated} other {# updated}}",
+      "skipped": "{count, plural, one {# skipped} other {# skipped}}",
+      "notReady": "Not ready to publish",
+      "failed": "Nothing was changed.",
+      "working": "Working…",
+      "selectRow": "Select this question",
+      "selectAllRows": "Select every question on this page"
+    },
+    "bin": {
+      "open": "Recycle bin",
+      "leave": "Back to the bank",
+      "title": "Removed questions",
+      "empty": "Nothing has been removed."
+    },
+    "shortcuts": {
+      "label": "Keyboard shortcuts",
+      "search": "Focus search",
+      "move": "Move between rows",
+      "toggle": "Select the focused row",
+      "selectAll": "Select every row on this page",
+      "clear": "Clear the selection"
+    }
   },
   "exams": {
     "title": "Exams",

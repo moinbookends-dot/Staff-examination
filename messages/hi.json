@@ -262,7 +262,14 @@
     },
     "columns": {
       "bloom": "ब्लूम",
-      "source": "स्रोत"
+      "source": "स्रोत",
+      "translations": "भाषाएँ",
+      "updatedAt": "अद्यतन",
+      "createdBy": "बनाया",
+      "updatedBy": "बदला",
+      "usage": "नियत प्रश्नपत्र",
+      "health": "स्थिति",
+      "importedFrom": "आयात स्रोत"
     },
     "filters": {
       "anyBloom": "कोई भी ब्लूम स्तर",
@@ -273,6 +280,50 @@
     "bloomNone": "तय नहीं",
     "provenance": "स्रोत",
     "provenanceHint": "यह प्रश्न कहाँ से आया। एक बार दर्ज होता है और बदला नहीं जा सकता — संपादन से आयातित प्रश्न स्वलिखित नहीं हो जाता।",
-    "importedFrom": "{source} से आयातित"
+    "importedFrom": "{source} से आयातित",
+    "unknownAuthor": "अज्ञात",
+    "health": {
+      "ok": "पूर्ण",
+      "no-answer-key": "उत्तर कुंजी नहीं",
+      "no-category": "श्रेणी नहीं",
+      "no-bloom": "ब्लूम स्तर नहीं",
+      "untranslated": "{locales} में नहीं",
+      "title": "ध्यान चाहिए"
+    },
+    "sort": {
+      "label": "क्रम"
+    },
+    "pageSize": {
+      "label": "प्रति पृष्ठ पंक्तियाँ"
+    },
+    "columnsMenu": {
+      "label": "स्तंभ",
+      "reset": "सभी दिखाएँ"
+    },
+    "saved": {
+      "label": "सहेजे गए फ़िल्टर",
+      "none": "अभी कोई सहेजा गया फ़िल्टर नहीं",
+      "save": "यह फ़िल्टर सहेजें",
+      "delete": "हटाएँ"
+    },
+    "bulk": {
+      "selected": "{count} चयनित",
+      "selectAllPage": "इस पृष्ठ के सभी चुनें",
+      "selectAllMatching": "सभी {total} मेल खाते चुनें",
+      "clear": "चयन हटाएँ",
+      "publish": "प्रकाशित करें",
+      "setStatus": "स्थिति बदलें",
+      "remove": "हटाएँ",
+      "restore": "वापस लाएँ",
+      "cancel": "रद्द करें",
+      "applied": "{count} अद्यतन",
+      "skipped": "{count} छोड़े गए",
+      "working": "हो रहा है…"
+    },
+    "bin": {
+      "open": "रद्दी",
+      "title": "हटाए गए प्रश्न",
+      "empty": "कुछ भी नहीं हटाया गया।"
+    }
   }
 }

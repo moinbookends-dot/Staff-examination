@@ -262,7 +262,14 @@
     },
     "columns": {
       "bloom": "Bloom",
-      "source": "Source"
+      "source": "Source",
+      "translations": "Bhashayein",
+      "updatedAt": "Update",
+      "createdBy": "Banaya",
+      "updatedBy": "Badla",
+      "usage": "Fixed paper",
+      "health": "Sthiti",
+      "importedFrom": "Import se"
     },
     "filters": {
       "anyBloom": "Koi bhi Bloom level",
@@ -273,6 +280,50 @@
     "bloomNone": "Tay nahi",
     "provenance": "Source",
     "provenanceHint": "Yeh sawaal kahan se aaya. Ek baar record hota hai aur badla nahi ja sakta — edit karne se import kiya sawaal khud likha nahi ban jaata.",
-    "importedFrom": "{source} se import"
+    "importedFrom": "{source} se import",
+    "unknownAuthor": "Pata nahi",
+    "health": {
+      "ok": "Poora",
+      "no-answer-key": "Answer key nahi",
+      "no-category": "Category nahi",
+      "no-bloom": "Bloom level nahi",
+      "untranslated": "{locales} mein nahi",
+      "title": "Dhyaan chahiye"
+    },
+    "sort": {
+      "label": "Kram"
+    },
+    "pageSize": {
+      "label": "Prati page rows"
+    },
+    "columnsMenu": {
+      "label": "Columns",
+      "reset": "Sab dikhao"
+    },
+    "saved": {
+      "label": "Save kiye filter",
+      "none": "Abhi koi saved filter nahi",
+      "save": "Yeh filter save karein",
+      "delete": "Hataayein"
+    },
+    "bulk": {
+      "selected": "{count} chune",
+      "selectAllPage": "Is page ke sab chunein",
+      "selectAllMatching": "Sabhi {total} matching chunein",
+      "clear": "Selection hataayein",
+      "publish": "Publish karein",
+      "setStatus": "Status badlein",
+      "remove": "Hataayein",
+      "restore": "Wapas laayein",
+      "cancel": "Radd karein",
+      "applied": "{count} update",
+      "skipped": "{count} chhode",
+      "working": "Ho raha hai…"
+    },
+    "bin": {
+      "open": "Raddi",
+      "title": "Hataye gaye prashn",
+      "empty": "Kuch bhi hataya nahi gaya."
+    }
   }
 }

@@ -262,7 +262,14 @@
     },
     "columns": {
       "bloom": "બ્લૂમ",
-      "source": "સ્રોત"
+      "source": "સ્રોત",
+      "translations": "ભાષાઓ",
+      "updatedAt": "સુધાર્યું",
+      "createdBy": "બનાવ્યું",
+      "updatedBy": "બદલ્યું",
+      "usage": "નિયત પ્રશ્નપત્ર",
+      "health": "સ્થિતિ",
+      "importedFrom": "આયાત સ્રોત"
     },
     "filters": {
       "anyBloom": "કોઈપણ બ્લૂમ સ્તર",
@@ -273,6 +280,50 @@
     "bloomNone": "નક્કી નથી",
     "provenance": "સ્રોત",
     "provenanceHint": "આ પ્રશ્ન ક્યાંથી આવ્યો. એક વાર નોંધાય છે અને બદલી શકાતું નથી — સંપાદનથી આયાત કરેલો પ્રશ્ન સ્વલિખિત બની જતો નથી.",
-    "importedFrom": "{source} માંથી આયાત"
+    "importedFrom": "{source} માંથી આયાત",
+    "unknownAuthor": "અજ્ઞાત",
+    "health": {
+      "ok": "પૂર્ણ",
+      "no-answer-key": "ઉત્તર કૂંચી નથી",
+      "no-category": "શ્રેણી નથી",
+      "no-bloom": "બ્લૂમ સ્તર નથી",
+      "untranslated": "{locales} માં નથી",
+      "title": "ધ્યાન જોઈએ"
+    },
+    "sort": {
+      "label": "ક્રમ"
+    },
+    "pageSize": {
+      "label": "પ્રતિ પૃષ્ઠ પંક્તિઓ"
+    },
+    "columnsMenu": {
+      "label": "સ્તંભ",
+      "reset": "બધું બતાવો"
+    },
+    "saved": {
+      "label": "સાચવેલા ફિલ્ટર",
+      "none": "હજુ કોઈ સાચવેલ ફિલ્ટર નથી",
+      "save": "આ ફિલ્ટર સાચવો",
+      "delete": "દૂર કરો"
+    },
+    "bulk": {
+      "selected": "{count} પસંદ",
+      "selectAllPage": "આ પૃષ્ઠના બધા પસંદ કરો",
+      "selectAllMatching": "બધા {total} મેળ ખાતા પસંદ કરો",
+      "clear": "પસંદગી હટાવો",
+      "publish": "પ્રકાશિત કરો",
+      "setStatus": "સ્થિતિ બદલો",
+      "remove": "દૂર કરો",
+      "restore": "પાછું લાવો",
+      "cancel": "રદ કરો",
+      "applied": "{count} સુધાર્યા",
+      "skipped": "{count} છોડ્યા",
+      "working": "ચાલુ છે…"
+    },
+    "bin": {
+      "open": "કચરાપેટી",
+      "title": "દૂર કરેલા પ્રશ્નો",
+      "empty": "કંઈ દૂર કરાયું નથી."
+    }
   }
 }
