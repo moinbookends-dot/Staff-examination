@@ -478,7 +478,7 @@ export async function setQuestionStatus(input: unknown): Promise<MutationResult>
   if (error) return { ok: false, error: 'Could not change the status.' }
   // RLS refuses by returning zero rows, not by erroring. Without this the
   // action reports success for a question the caller was never allowed to
-  // touch — the bug deleteQuestion still has.
+  // touch. deleteQuestion carries the same check for the same reason.
   if (count === 0) return { ok: false, error: 'That question could not be changed.' }
 
   revalidatePath('/questions')
@@ -493,21 +493,37 @@ export async function setQuestionStatus(input: unknown): Promise<MutationResult>
  * 0010). A question referenced by a past attempt must never vanish or the
  * results that cite it become unexplainable. This is an UPDATE setting
  * deleted_at, and the update policy's `deleted_at is null` clause makes it
- * one-way from the application.
+ * one-way from the application. 0041's questions_restore is the way back.
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ THE COUNT IS THE POINT.                                                   │
+ * │                                                                           │
+ * │ This used to check only `error`. But RLS does not raise on a refusal — it │
+ * │ filters the row out and the UPDATE reports success having changed         │
+ * │ nothing. So a chef removing another brand's question, or one already      │
+ * │ removed, was told "Question removed" while the row sat untouched. They    │
+ * │ would find out the next time they looked at the bank, and by then the     │
+ * │ obvious conclusion is that the bank is broken.                            │
+ * │                                                                           │
+ * │ Same shape as setQuestionStatus above, and as approveRegistration in      │
+ * │ users.ts, which is where this codebase first wrote it down.               │
+ * └───────────────────────────────────────────────────────────────────────────┘
  */
 export async function deleteQuestion(id: string): Promise<MutationResult> {
   await requirePermission('questions.retire')
 
   const supabase = await createClient()
-  const { error } = await supabase
+  const { error, count } = await supabase
     .from('questions')
-    .update({ deleted_at: new Date().toISOString() })
+    .update({ deleted_at: new Date().toISOString() }, { count: 'exact' })
     .eq('id', id)
     .is('deleted_at', null)
 
   if (error) return { ok: false, error: 'Could not remove this question.' }
+  if (count === 0) return { ok: false, error: 'That question could not be removed.' }
 
   revalidatePath('/questions')
+  revalidatePath(`/questions/${id}`)
   return { ok: true }
 }
 

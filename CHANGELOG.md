@@ -9,6 +9,21 @@ remembering, and anything left behind as debt.
 
 ## M8 — Question Bank & Metadata · *in progress*
 
+### Fixed — "Question removed" for a question that was never removed
+
+`deleteQuestion` checked only the returned `error`. RLS does not raise when it
+refuses a write; it filters the row out, and the UPDATE then reports success
+having changed nothing. So a chef pressing Remove on another company's question,
+another brand's, or one already removed was told it had worked — and found out
+otherwise the next time they opened the bank, by which point the obvious
+conclusion is that the bank is broken.
+
+It now keys on the affected-row count, the same shape `setQuestionStatus` uses
+and that `approveRegistration` established. `tests/integration/question-delete-report.test.ts`
+pins all four cases, each paired with a positive control in the same
+transaction — "zero rows updated" also passes against a delete that is broken
+for everyone, which would be the worse bug.
+
 ### Shipped — the question lifecycle, and making `approved` mean something (0040)
 
 Migration 0037 added `review`, `approved`, `archived` and `deprecated` to
