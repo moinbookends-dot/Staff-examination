@@ -1018,6 +1018,33 @@ export type Database = {
         }
         Relationships: []
       }
+      "question_saved_filters": {
+        Row: {
+          "id": string
+          "company_id": string
+          "owner_id": string
+          "name": string
+          "query": string
+          "created_at": string
+        }
+        Insert: {
+          "id"?: string
+          "company_id": string
+          "owner_id": string
+          "name": string
+          "query": string
+          "created_at"?: string
+        }
+        Update: {
+          "id"?: string
+          "company_id"?: string
+          "owner_id"?: string
+          "name"?: string
+          "query"?: string
+          "created_at"?: string
+        }
+        Relationships: []
+      }
       "question_tags": {
         Row: {
           "question_id": string
