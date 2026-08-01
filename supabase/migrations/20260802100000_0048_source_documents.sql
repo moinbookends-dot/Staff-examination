@@ -193,6 +193,51 @@ create policy source_documents_read on public.source_documents
          or (select public.is_super_admin()))
   );
 
+-- ┌───────────────────────────────────────────────────────────────────────────┐
+-- │ SEEING WHAT YOU REMOVED — AND WHY SOFT DELETE DOES NOT WORK WITHOUT IT.   │
+-- │                                                                           │
+-- │ This looks like a convenience policy for an archive screen. It is not.    │
+-- │ Without it the soft delete itself is REFUSED.                             │
+-- │                                                                           │
+-- │ Proven by experiment on public.questions, whose policies are otherwise    │
+-- │ identical: the same chef, the same row, the same statement                │
+-- │                                                                           │
+-- │     update … set deleted_at = now()                                       │
+-- │                                                                           │
+-- │ succeeds when they hold questions.retire and fails with "new row violates │
+-- │ row-level security policy" when they do not — while an ordinary update on │
+-- │ that same row still succeeds either way. The only thing that changes is   │
+-- │ whether questions_read_deleted (0041) matches the resulting row.          │
+-- │                                                                           │
+-- │ THE RULE: on a table with RLS, an UPDATE that moves a row outside EVERY   │
+-- │ SELECT policy is rejected, even when the UPDATE policy's WITH CHECK is    │
+-- │ satisfied. source_documents_read carries `deleted_at is null`, so setting │
+-- │ deleted_at put the row where no policy could see it, and the write was    │
+-- │ refused rather than the row merely disappearing.                          │
+-- │                                                                           │
+-- │ This also explains something in 0041's own history. That migration        │
+-- │ described soft delete as "one-way by construction" and added this policy  │
+-- │ to enable RESTORE. It did more than that: before 0041 the forward delete  │
+-- │ was refused too, and deleteQuestion checked only `error` and not the row  │
+-- │ count — so it reported "Question removed" for a question it had never     │
+-- │ touched. That is the same defect fixed in 3b52dcc, seen from the other    │
+-- │ end.                                                                      │
+-- │                                                                           │
+-- │ Keyed on questions.import, the permission that manages documents, so the  │
+-- │ rule reads the same way 0041's does: whoever may remove a document can    │
+-- │ see the ones they removed.                                                │
+-- └───────────────────────────────────────────────────────────────────────────┘
+create policy source_documents_read_deleted on public.source_documents
+  for select to authenticated
+  using (
+    deleted_at is not null
+    and (select public.has_perm('questions.import'))
+    and company_id = (select public.my_company())
+    and (brand_id is null
+         or brand_id = (select public.my_brand())
+         or (select public.is_super_admin()))
+  );
+
 -- questions.import, not questions.create: uploading a cookbook is the import
 -- capability the seed already grants chefs, and it is the permission M11 was
 -- always going to key on.
@@ -208,6 +253,32 @@ create policy source_documents_update on public.source_documents
   for update to authenticated
   using (
     deleted_at is null
+    and (select public.has_perm('questions.import'))
+    and company_id = (select public.my_company())
+  )
+  with check (company_id = (select public.my_company()));
+
+-- ── Putting it back ──────────────────────────────────────────────────────────
+--
+-- The mirror of 0041's questions_restore, and needed for the same reason that
+-- migration gives: an UPDATE's USING clause is evaluated against the OLD row,
+-- and source_documents_update requires `deleted_at is null` there. So the
+-- reverse transition matches no policy and updates zero rows — silently, since
+-- RLS refuses by filtering rather than by raising.
+--
+-- Note this is a DIFFERENT failure from the one source_documents_read_deleted
+-- fixes, even though both involve deleted_at:
+--
+--   forward  (null -> now())  needed a SELECT policy covering the NEW row
+--   backward (now() -> null)  needs an UPDATE policy covering the OLD row
+--
+-- Removing a document and restoring it exercise opposite halves of RLS, which
+-- is why both directions are asserted in tests rather than one standing in for
+-- the other.
+create policy source_documents_restore on public.source_documents
+  for update to authenticated
+  using (
+    deleted_at is not null
     and (select public.has_perm('questions.import'))
     and company_id = (select public.my_company())
   )

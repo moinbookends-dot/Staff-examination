@@ -121,8 +121,16 @@ export function storagePathFor(
 ): string {
   const safe = filename
     .normalize('NFKD')
+    // Anything that is not a word character, dot or dash becomes a dash. This
+    // is what removes slashes, and with them any ability to add path segments.
     .replace(/[^\w.\-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
+    // Dots survive the class above, so `../../x` arrives here as `..-..-x` with
+    // its traversal tokens intact. They cannot escape the folder — there are no
+    // separators left — but a stored name containing `..` is one normalisation
+    // away from meaning something again, in a layer this file does not control.
+    // Collapsing runs of dots removes the token rather than trusting that.
+    .replace(/\.{2,}/g, '.')
+    .replace(/^[.\-]+|[.\-]+$/g, '')
     .slice(0, 120)
   return `${companyId}/${documentId}/${safe || 'document'}`
 }
