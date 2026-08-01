@@ -239,7 +239,9 @@ export async function resolveFilterToIds(
   const filters = parseQuestionFilters(input)
   const supabase = await createClient()
 
-  let query = supabase.from('questions').select('id', { count: 'exact' }).is('deleted_at', null)
+  let query = supabase.from('questions').select('id', { count: 'exact' })
+
+  query = filters.deleted ? query.not('deleted_at', 'is', null) : query.is('deleted_at', null)
 
   // Identical to listQuestions. A filter added there and not here means
   // "select all matching" quietly selects more than the screen showed.
@@ -253,8 +255,13 @@ export async function resolveFilterToIds(
     query = query.textSearch('search_tsv', filters.q, { type: 'websearch', config: 'simple' })
   }
 
+  // The SAME order as listQuestions, tiebreak included. It matters because the
+  // cap is a limit: when a filter matches more than BULK_LIMIT, "select all
+  // matching" holds the FIRST 1,000 in this order, and if that order differed
+  // from the screen's, the 1,000 it kept would not be the 1,000 anybody saw.
   const { data, error, count } = await query
-    .order('updated_at', { ascending: false })
+    .order(filters.sort, { ascending: filters.dir === 'asc' })
+    .order('id', { ascending: true })
     .limit(BULK_LIMIT)
 
   if (error) return { ids: [], total: 0, capped: false }

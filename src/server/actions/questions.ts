@@ -18,11 +18,8 @@ import {
   type BloomLevel,
   type QuestionSourceValue,
 } from '@/lib/questions/metadata'
-import {
-  parseQuestionFilters,
-  QUESTIONS_PAGE_SIZE,
-  type QuestionFilters,
-} from '@/lib/questions/filters'
+import { parseQuestionFilters, type QuestionFilters } from '@/lib/questions/filters'
+import { questionHealth, type QuestionHealth } from '@/lib/questions/health'
 import {
   questionContentDraftSchema,
   answerKeySchema,
@@ -84,6 +81,33 @@ export interface QuestionListItem {
   source: QuestionSource
   imported_from: string | null
   updated_at: string
+
+  /**
+   * Author names, or null when RLS hides the profile.
+   *
+   * ┌─────────────────────────────────────────────────────────────────────────┐
+   * │ NULL HERE IS CORRECT, NOT A BUG.                                        │
+   * │                                                                         │
+   * │ A chef holds users.read_team, and profiles_read_team (0005) scopes to   │
+   * │ their own OUTLET. The bank is company- and brand-scoped, so a question  │
+   * │ authored at another outlet comes back with no profile attached and the  │
+   * │ table shows "Unknown".                                                  │
+   * │                                                                         │
+   * │ Widening it is not on the table: which staff names a chef can resolve   │
+   * │ is exactly what profiles_read_team decides, and making it depend on who │
+   * │ happened to write a question would leak outlet membership through the   │
+   * │ question bank. listQuestionRevisions has embedded profiles this way and │
+   * │ rendered "Unknown" since M2; this matches it deliberately.              │
+   * └─────────────────────────────────────────────────────────────────────────┘
+   */
+  created_by_name: string | null
+  updated_by_name: string | null
+
+  /** Locales with a PUBLISHED translation. A draft one is not delivered. */
+  translated_locales: string[]
+  /** Whether a question_answer_keys row exists. Feeds questionHealth(). */
+  has_answer_key: boolean
+  health: QuestionHealth[]
 }
 
 export interface QuestionDetail {
@@ -131,22 +155,61 @@ export interface TagOption {
 // Reads
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * The bank's list, and everything the table renders.
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ THREE QUERIES, NOT ONE PER ROW.                                           │
+ * │                                                                           │
+ * │ Translation coverage and answer-key presence cannot be embedded in the    │
+ * │ main select — PostgREST would return the rows, not a count, and the       │
+ * │ filter/sort/paginate would then be running over a join fan-out. So they   │
+ * │ are two batched reads keyed on the ids of the page that was just fetched: │
+ * │ at most 100 ids each, both hitting an existing index, both scoped by the  │
+ * │ same policies as everything else.                                         │
+ * │                                                                           │
+ * │ What is NOT here: question_stats(). It is the most expensive read in the  │
+ * │ codebase — a company-wide correlation over every answer ever given — and  │
+ * │ it was kept off the dashboard for that reason. The health flags below are │
+ * │ completeness only; M9 is where the statistical ones arrive, and they will │
+ * │ not arrive in this query.                                                 │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ */
 export async function listQuestions(
   input: unknown,
 ): Promise<{ items: QuestionListItem[]; total: number; page: number; pageSize: number }> {
   await requirePermission('questions.read')
 
   const filters: QuestionFilters = parseQuestionFilters(input)
-  const from = (filters.page - 1) * QUESTIONS_PAGE_SIZE
+  const pageSize = filters.pageSize
+  const from = (filters.page - 1) * pageSize
+  const empty = { items: [], total: 0, page: filters.page, pageSize }
 
   const supabase = await createClient()
   let query = supabase
     .from('questions')
+    /*
+     * ONE STRING LITERAL, NOT A CONCATENATION.
+     *
+     * supabase-js parses this select at the TYPE level to work out the row
+     * shape, which needs a literal type. `'a, ' + 'b'` widens to `string`, the
+     * parser gives up, and every field access downstream fails with
+     * "Property 'id' does not exist on type 'GenericStringError'" — which
+     * reads like a database problem and is a TypeScript one.
+     *
+     * The two profile embeds are disambiguated by naming the COLUMN, since
+     * `questions` has two foreign keys to `profiles`. This is the form
+     * listQuestionRevisions has used since M2.
+     */
     .select(
-      'id, stem, type, response_format, status, difficulty, marks, revision, usage_count, category_id, bloom_level, source, imported_from, updated_at, categories(name)',
+      'id, stem, type, response_format, status, difficulty, marks, revision, usage_count, category_id, bloom_level, source, imported_from, updated_at, categories(name), author:created_by(full_name), editor:updated_by(full_name)',
       { count: 'exact' },
     )
-    .is('deleted_at', null)
+
+  // 0041's questions_read_deleted requires questions.retire, so a caller
+  // without it gets an empty recycle bin rather than an error — the policy
+  // refuses, not this line.
+  query = filters.deleted ? query.not('deleted_at', 'is', null) : query.is('deleted_at', null)
 
   if (filters.status) query = query.eq('status', filters.status)
   if (filters.type) query = query.eq('type', filters.type)
@@ -164,24 +227,72 @@ export async function listQuestions(
   }
 
   const { data, error, count } = await query
-    .order('updated_at', { ascending: false })
-    .range(from, from + QUESTIONS_PAGE_SIZE - 1)
+    // filters.sort is constrained to QUESTION_SORT_COLUMNS by the schema. It
+    // reaches PostgREST as a column name, so the allowlist is load-bearing.
+    .order(filters.sort, { ascending: filters.dir === 'asc' })
+    // A stable tiebreak. Without it, two questions sharing an updated_at can
+    // swap places between page 1 and page 2 and a row is seen twice or missed.
+    .order('id', { ascending: true })
+    .range(from, from + pageSize - 1)
 
-  if (error) return { items: [], total: 0, page: filters.page, pageSize: QUESTIONS_PAGE_SIZE }
+  if (error) return empty
 
-  const items = (data ?? []).map((row) => {
-    const { categories, ...rest } = row as typeof row & {
+  const rows = data ?? []
+  const ids = rows.map((row) => row.id)
+
+  const [{ data: translations }, { data: keys }] =
+    ids.length === 0
+      ? [{ data: [] }, { data: [] }]
+      : await Promise.all([
+          supabase
+            .from('question_translations')
+            .select('question_id, locale')
+            .in('question_id', ids)
+            // Matches question_translations_lookup_idx, which is partial on
+            // exactly this predicate. A draft translation is not delivered to
+            // anybody, so counting it as coverage would be a lie.
+            .eq('status', 'published'),
+          supabase.from('question_answer_keys').select('question_id').in('question_id', ids),
+        ])
+
+  const localesByQuestion = new Map<string, string[]>()
+  for (const row of translations ?? []) {
+    const list = localesByQuestion.get(row.question_id)
+    if (list) list.push(row.locale)
+    else localesByQuestion.set(row.question_id, [row.locale])
+  }
+  const keyed = new Set((keys ?? []).map((row) => row.question_id))
+
+  const items = rows.map((row) => {
+    const { categories, author, editor, ...rest } = row as typeof row & {
       categories: { name: string } | { name: string }[] | null
+      author: { full_name: string } | { full_name: string }[] | null
+      editor: { full_name: string } | { full_name: string }[] | null
     }
-    const category = Array.isArray(categories) ? categories[0] : categories
-    return { 
-      ...rest, 
-      category_name: category?.name ?? null,
-      source: rest.source as QuestionSource
+    const one = <T,>(value: T | T[] | null): T | null =>
+      Array.isArray(value) ? (value[0] ?? null) : value
+
+    const translated_locales = localesByQuestion.get(row.id) ?? []
+    const has_answer_key = keyed.has(row.id)
+
+    return {
+      ...rest,
+      category_name: one(categories)?.name ?? null,
+      created_by_name: one(author)?.full_name ?? null,
+      updated_by_name: one(editor)?.full_name ?? null,
+      translated_locales,
+      has_answer_key,
+      source: rest.source as QuestionSource,
+      health: questionHealth({
+        category_id: rest.category_id,
+        bloom_level: rest.bloom_level,
+        hasAnswerKey: has_answer_key,
+        translatedLocales: translated_locales,
+      }),
     } as QuestionListItem
   })
 
-  return { items, total: count ?? 0, page: filters.page, pageSize: QUESTIONS_PAGE_SIZE }
+  return { items, total: count ?? 0, page: filters.page, pageSize }
 }
 
 /**

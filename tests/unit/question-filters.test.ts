@@ -17,12 +17,15 @@ import { parseQuestionFilters } from '../../src/lib/questions/filters'
  */
 describe('parseQuestionFilters', () => {
   it('keeps a fully valid query', () => {
-    expect(parseQuestionFilters({ q: 'knife', difficulty: '4', status: 'active', page: '2' })).toEqual({
-      q: 'knife',
-      difficulty: 4,
-      status: 'active',
-      page: 2,
-    })
+    // Asserted field by field rather than with one toEqual on the whole object.
+    // The schema carries defaults now — sort, dir, pageSize, deleted — so a
+    // whole-object comparison breaks every time a field is added, which teaches
+    // whoever hits it to update the expectation without reading it.
+    const filters = parseQuestionFilters({ q: 'knife', difficulty: '4', status: 'active', page: '2' })
+    expect(filters.q).toBe('knife')
+    expect(filters.difficulty).toBe(4)
+    expect(filters.status).toBe('active')
+    expect(filters.page).toBe(2)
   })
 
   it('accepts every status the database has', () => {
@@ -47,7 +50,34 @@ describe('parseQuestionFilters', () => {
   })
 
   it('falls back to page one when there is nothing salvageable', () => {
-    expect(parseQuestionFilters(undefined)).toEqual({ page: 1 })
-    expect(parseQuestionFilters({})).toEqual({ page: 1 })
+    for (const input of [undefined, {}]) {
+      const filters = parseQuestionFilters(input)
+      expect(filters.page).toBe(1)
+      expect(filters.q).toBeUndefined()
+      expect(filters.status).toBeUndefined()
+    }
+  })
+
+  /**
+   * The fallback used to return the literal `{ page: 1 }`, which was correct
+   * exactly until the schema gained a default. A caller reading `filters.sort`
+   * off that object would have got `undefined` and passed it to .order(), and
+   * PostgREST answers an undefined column with a 400 — on the recovery path,
+   * which is the one nobody exercises by hand.
+   *
+   * It parses an empty object now, so the defaults can only ever come from the
+   * schema. Asserted by comparing against a query that needed no recovery.
+   */
+  it('gives the recovery path the same defaults as a clean parse', () => {
+    const recovered = parseQuestionFilters({ status: 'nonsense', difficulty: '99' })
+    const clean = parseQuestionFilters({})
+
+    expect(recovered.sort).toBe(clean.sort)
+    expect(recovered.dir).toBe(clean.dir)
+    expect(recovered.pageSize).toBe(clean.pageSize)
+    expect(recovered.deleted).toBe(clean.deleted)
+    // A positive control: these are real values, not two matching undefineds.
+    expect(clean.sort).toBeTruthy()
+    expect(clean.pageSize).toBeGreaterThan(0)
   })
 })

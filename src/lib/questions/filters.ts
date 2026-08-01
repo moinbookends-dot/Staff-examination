@@ -3,6 +3,14 @@ import { dbId } from '@/lib/db/id'
 import { questionTypeSchema } from './schemas'
 import { questionStatusSchema } from './status'
 import { bloomLevelSchema, questionSourceSchema } from './metadata'
+import {
+  DEFAULT_DIRECTION,
+  DEFAULT_PAGE_SIZE,
+  DEFAULT_SORT,
+  pageSizeSchema,
+  questionSortSchema,
+  sortDirectionSchema,
+} from './sort'
 
 /**
  * Question bank filters.
@@ -32,6 +40,24 @@ export const questionFiltersSchema = z.object({
   bloomLevel: bloomLevelSchema.optional(),
   source: questionSourceSchema.optional(),
   page: z.coerce.number().int().min(1).default(1),
+
+  // Display state, parsed by the same schema so a sorted view is as shareable
+  // as a filtered one. All three fall back rather than erroring — the recovery
+  // below drops only the offending key, so a stale `?sort=` costs its own
+  // column and not the whole query.
+  sort: questionSortSchema.default(DEFAULT_SORT),
+  dir: sortDirectionSchema.default(DEFAULT_DIRECTION),
+  pageSize: pageSizeSchema.default(DEFAULT_PAGE_SIZE),
+
+  /**
+   * The recycle bin. Requires questions.retire, which 0041's
+   * questions_read_deleted enforces — this flag only asks for the rows, it does
+   * not grant them, and a candidate setting it by hand sees nothing.
+   */
+  deleted: z
+    .union([z.boolean(), z.enum(['1', 'true', '0', 'false'])])
+    .transform((v) => v === true || v === '1' || v === 'true')
+    .default(false),
 })
 
 export type QuestionFilters = z.infer<typeof questionFiltersSchema>
@@ -74,7 +100,16 @@ export function parseQuestionFilters(input: unknown): QuestionFilters {
   }
 
   const retry = questionFiltersSchema.safeParse(kept)
-  return retry.success ? retry.data : { page: 1 }
+  if (retry.success) return retry.data
+
+  // Everything was offensive. Parsing an empty object rather than writing the
+  // defaults out by hand, so this can never disagree with the schema — the
+  // literal it used to return listed `page` alone, and would have been missing
+  // sort, dir and pageSize the moment they were added.
+  return questionFiltersSchema.parse({})
 }
 
-export const QUESTIONS_PAGE_SIZE = 25
+// QUESTIONS_PAGE_SIZE used to live here as a module constant. It is gone
+// because the page size is now chosen per request and validated against
+// QUESTION_PAGE_SIZES in ./sort — a constant and a parameter for the same
+// number is how the two end up disagreeing about what a page holds.

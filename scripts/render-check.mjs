@@ -569,6 +569,45 @@ try {
     'the filter stopped filtering — the check above proves nothing',
   )
 
+  // ── Sorting, page size, and the recycle bin ───────────────────────────────
+  //
+  // `?sort=` reaches PostgREST's .order() as a COLUMN NAME, so an unvalidated
+  // value is a 400 on every page load from a mistyped bookmark. The allowlist
+  // in src/lib/questions/sort.ts is what stops that, and this is the assertion
+  // that it is actually wired in rather than merely exported.
+  const sorted = await get('/en/questions?sort=difficulty&dir=asc')
+  check(sorted.status === 200 && sorted.html.includes(stem), 'the bank sorts by a chosen column', `status ${sorted.status}`)
+
+  const badSort = await get('/en/questions?sort=search_tsv&dir=sideways')
+  check(
+    badSort.status === 200 && badSort.html.includes(stem),
+    'an unusable sort column falls back instead of 500ing',
+    `status ${badSort.status} — the sort value reached the database`,
+  )
+
+  // The page size becomes a .range(), and one page also drives two batched
+  // reads keyed on every id it returned. Unbounded, it is a scan of the bank.
+  const hugePage = await get('/en/questions?pageSize=100000')
+  check(
+    hugePage.status === 200 && hugePage.html.includes(stem),
+    'a hand-edited page size falls back to a supported one',
+    `status ${hugePage.status}`,
+  )
+  const realPageSize = await get('/en/questions?pageSize=50')
+  check(realPageSize.status === 200, 'an offered page size is accepted', `status ${realPageSize.status}`)
+
+  // The recycle bin holds nothing yet — the question above is very much alive —
+  // so this asserts the view opens and does NOT show a live question. Whether a
+  // chef may see removed questions at all is 0041's policy, tested in the RLS
+  // suite; this only proves the flag is plumbed and does not leak.
+  const bin = await get('/en/questions?deleted=1')
+  check(bin.status === 200, '/en/questions?deleted=1 renders', `status ${bin.status}`)
+  check(
+    !bin.html.includes(stem),
+    'the recycle bin does not list questions that are still live',
+    'a live question appeared under deleted=1',
+  )
+
   // ── 4. The editor ──────────────────────────────────────────────────────────
   console.log('\n3. Editor')
   const create = await get('/en/questions/new')
