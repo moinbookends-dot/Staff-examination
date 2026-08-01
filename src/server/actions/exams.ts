@@ -643,19 +643,40 @@ export async function setExamStatus(input: unknown): Promise<MutationResult> {
   return { ok: true }
 }
 
+/**
+ * Archive an exam.
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ THIS DID NOT WORK AT ALL UNTIL 0049.                                      │
+ * │                                                                           │
+ * │ Both of 0015's read policies on `exams` carry `deleted_at is null`, and   │
+ * │ an UPDATE that moves a row outside every select policy is refused by      │
+ * │ Postgres — even though exams_update's WITH CHECK was satisfied. So this   │
+ * │ statement raised, every time, for everyone. 0049 adds the archived-row    │
+ * │ read policy that makes the transition legal, and its counterpart for the  │
+ * │ way back.                                                                 │
+ * │                                                                           │
+ * │ The count check below is the second half. RLS refuses by FILTERING, not   │
+ * │ by erroring, so archiving another company's exam matches zero rows and    │
+ * │ returns no error — and this reported success for an exam it never         │
+ * │ touched. Exactly the defect deleteQuestion had (3b52dcc).                 │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ */
 export async function deleteExam(id: string): Promise<MutationResult> {
   await requirePermission('exams.archive')
 
   const supabase = await createClient()
-  const { error } = await supabase
+  const { error, count } = await supabase
     .from('exams')
-    .update({ deleted_at: new Date().toISOString() })
+    .update({ deleted_at: new Date().toISOString() }, { count: 'exact' })
     .eq('id', id)
     .is('deleted_at', null)
 
   if (error) return { ok: false, error: friendlyWriteError(error) }
+  if (count === 0) return { ok: false, error: 'That exam could not be archived.' }
 
   revalidatePath('/exams')
+  revalidatePath(`/exams/${id}`)
   return { ok: true }
 }
 
