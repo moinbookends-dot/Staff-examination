@@ -359,5 +359,13 @@
         "none": "હજુ કોઈ જવાબ નથી."
       }
     }
+  },
+  "exams": {
+    "sections": {
+      "undo": "પૂર્વવત",
+      "redo": "ફરીથી",
+      "marksTotal": "{questions} પ્રશ્નો · {marks} ગુણ",
+      "marksPartial": "{questions} પ્રશ્નો · ઓછામાં ઓછા {known} ગુણ ({unknown} પ્રશ્નના પોતાના ગુણ લે છે)"
+    }
   }
 }

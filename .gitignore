@@ -48,3 +48,15 @@ supabase/.branches/
 # playwright
 /test-results/
 /playwright-report/
+
+# ── Source documents ─────────────────────────────────────────────────────────
+#
+# Cookbooks and other imported source material never belong in the repository.
+# They are proprietary, they are large — the two that were briefly committed
+# here totalled 115 MB — and this repository is public.
+#
+# From M11 they live in Supabase Storage, which gives them RLS, versioning and
+# signed URLs. Git gives them none of those and keeps them forever.
+assets/*.pdf
+assets/*.docx
+assets/*.xlsx

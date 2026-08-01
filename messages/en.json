@@ -410,7 +410,11 @@
       "howMany": "How many",
       "counting": "Counting…",
       "available": "{available} match this rule · {wanted} wanted",
-      "takenByEarlier": "{count} already taken by an earlier rule"
+      "takenByEarlier": "{count} already taken by an earlier rule",
+      "undo": "Undo",
+      "redo": "Redo",
+      "marksTotal": "{questions} questions · {marks} marks",
+      "marksPartial": "{questions} questions · at least {known} marks ({unknown} take each question’s own marks)"
     },
     "form": {
       "newTitle": "New exam",

@@ -359,5 +359,13 @@
         "none": "अभी कोई उत्तर नहीं।"
       }
     }
+  },
+  "exams": {
+    "sections": {
+      "undo": "पूर्ववत",
+      "redo": "फिर से",
+      "marksTotal": "{questions} प्रश्न · {marks} अंक",
+      "marksPartial": "{questions} प्रश्न · कम से कम {known} अंक ({unknown} प्रश्न के अपने अंक लेते हैं)"
+    }
   }
 }

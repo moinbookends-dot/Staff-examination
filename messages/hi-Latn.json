@@ -359,5 +359,13 @@
         "none": "Abhi koi jawab nahi."
       }
     }
+  },
+  "exams": {
+    "sections": {
+      "undo": "Undo",
+      "redo": "Redo",
+      "marksTotal": "{questions} prashn · {marks} ank",
+      "marksPartial": "{questions} prashn · kam se kam {known} ank ({unknown} apne ank lete hain)"
+    }
   }
 }

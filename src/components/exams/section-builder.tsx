@@ -13,7 +13,21 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { ArrowDownIcon, ArrowUpIcon, PlusIcon, XIcon } from 'lucide-react'
+import { ArrowDownIcon, ArrowUpIcon, PlusIcon, Redo2Icon, Undo2Icon, XIcon } from 'lucide-react'
+import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
+import { restrictToVerticalAxis, restrictToParentElement } from '@dnd-kit/modifiers'
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { SortableRow } from './sortable-row'
+import {
+  canRedo,
+  canUndo,
+  initHistory,
+  moveItem,
+  record,
+  redo,
+  undo,
+  type History,
+} from '@/lib/exams/history'
 
 /**
  * Sections and their selection rules.
@@ -66,33 +80,98 @@ export function SectionBuilder({
   const router = useRouter()
   const t = useTranslations('exams.sections')
   const [pending, startTransition] = useTransition()
-  const [sections, setSections] = useState<SectionDraft[]>(initialSections)
+  const [history, setHistory] = useState<History<SectionDraft[]>>(() =>
+    initHistory(initialSections),
+  )
+  const sections = history.present
   const [error, setError] = useState<string | null>(null)
 
   const counts = new Map(ruleCounts.map((c) => [c.rule_id, c]))
   const disabled = pending || Boolean(readOnly)
 
-  function updateSection(key: string, patch: Partial<SectionDraft>) {
-    setSections((current) => current.map((s) => (s.key === key ? { ...s, ...patch } : s)))
-  }
+  /**
+   * Every mutation goes through here, so nothing can change the draft without
+   * becoming undoable. `label` decides coalescing: a title being typed is one
+   * undo step, adding a section is another. See src/lib/exams/history.ts.
+   */
+  const commit = (next: SectionDraft[], label: string | null = null) =>
+    setHistory((current) => record(current, next, label))
 
-  function updateRule(sectionKey: string, ruleKey: string, patch: Partial<RuleDraft>) {
-    setSections((current) =>
-      current.map((s) =>
-        s.key === sectionKey
-          ? { ...s, rules: s.rules.map((r) => (r.key === ruleKey ? { ...r, ...patch } : r)) }
-          : s,
+  const setSections = (
+    updater: SectionDraft[] | ((current: SectionDraft[]) => SectionDraft[]),
+    label: string | null = null,
+  ) =>
+    setHistory((current) =>
+      record(
+        current,
+        typeof updater === 'function' ? updater(current.present) : updater,
+        label,
       ),
+    )
+
+  function updateSection(key: string, patch: Partial<SectionDraft>) {
+    // Labelled per section and per field group, so typing a title collapses to
+    // one step but editing two different sections stays two.
+    setSections(
+      (current) => current.map((s) => (s.key === key ? { ...s, ...patch } : s)),
+      `section:${key}:${Object.keys(patch).join(',')}`,
     )
   }
 
+  function updateRule(sectionKey: string, ruleKey: string, patch: Partial<RuleDraft>) {
+    setSections(
+      (current) =>
+        current.map((s) =>
+          s.key === sectionKey
+            ? { ...s, rules: s.rules.map((r) => (r.key === ruleKey ? { ...r, ...patch } : r)) }
+            : s,
+        ),
+      `rule:${ruleKey}:${Object.keys(patch).join(',')}`,
+    )
+  }
+
+  /** The buttons. Adjacent moves, and the same moveItem() a drag uses. */
   function moveSection(index: number, delta: number) {
     const target = index + delta
     if (target < 0 || target >= sections.length) return
-    const next = [...sections]
-    ;[next[index], next[target]] = [next[target], next[index]]
-    setSections(next)
+    commit(moveItem(sections, index, target))
   }
+
+  const sensors = useSensors(
+    // A small distance threshold, so a click on a field inside a section is not
+    // read as the start of a drag. Without it, editing becomes unreliable in
+    // exactly the way that makes people stop trusting drag-and-drop.
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+  )
+
+  function onDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const from = sections.findIndex((s) => s.key === active.id)
+    const to = sections.findIndex((s) => s.key === over.id)
+    if (from < 0 || to < 0) return
+    commit(moveItem(sections, from, to))
+  }
+
+  /**
+   * What the paper is worth, live.
+   *
+   * marksPerQuestion is nullable — null means "use the question's own marks",
+   * which cannot be known until the draw happens. So this is a floor, not a
+   * total, and the UI says so rather than printing a confident number that the
+   * published paper then disagrees with.
+   */
+  const marks = sections.reduce(
+    (acc, section) => {
+      for (const rule of section.rules) {
+        acc.questions += rule.questionCount
+        if (rule.marksPerQuestion === null) acc.unknown += rule.questionCount
+        else acc.known += rule.questionCount * rule.marksPerQuestion
+      }
+      return acc
+    },
+    { questions: 0, known: 0, unknown: 0 },
+  )
 
   function save() {
     setError(null)
@@ -136,8 +215,22 @@ export function SectionBuilder({
           <p className="py-6 text-center text-sm text-muted-foreground">{t('none')}</p>
         )}
 
+        <DndContext
+          sensors={sensors}
+          // Vertical only, and inside the list: a section dragged sideways or
+          // out of the card has nowhere meaningful to land, and letting it try
+          // just produces drops that silently do nothing.
+          modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+          onDragEnd={onDragEnd}
+        >
+          <SortableContext
+            items={sections.map((s) => s.key)}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="space-y-4">
         {sections.map((section, index) => (
-          <div key={section.key} className="space-y-3 rounded-md border p-4">
+          <SortableRow key={section.key} id={section.key} disabled={disabled}>
+          <div className="space-y-3 rounded-md border p-4">
             <div className="flex items-start gap-2">
               <div className="flex-1 space-y-2">
                 <Label htmlFor={`section-${section.key}`}>{t('sectionTitle')}</Label>
@@ -244,7 +337,29 @@ export function SectionBuilder({
               </Button>
             </div>
           </div>
+          </SortableRow>
         ))}
+            </div>
+          </SortableContext>
+        </DndContext>
+
+        {/*
+         * What the paper is worth so far. A rule with no marks-per-question
+         * takes each question's own marks, which is unknowable until the draw,
+         * so this reports a floor and names the unknown part rather than
+         * printing a confident total the published paper would contradict.
+         */}
+        {sections.length > 0 && (
+          <p className="text-sm text-muted-foreground" aria-live="polite">
+            {marks.unknown > 0
+              ? t('marksPartial', {
+                  questions: marks.questions,
+                  known: marks.known,
+                  unknown: marks.unknown,
+                })
+              : t('marksTotal', { questions: marks.questions, marks: marks.known })}
+          </p>
+        )}
 
         {!readOnly && (
           <div className="flex flex-wrap gap-2">
@@ -261,6 +376,34 @@ export function SectionBuilder({
             >
               <PlusIcon />
               {t('addSection')}
+            </Button>
+            {/*
+             * Undo and redo are real buttons rather than only Ctrl+Z, because
+             * this builder holds text inputs: inside one, Ctrl+Z belongs to the
+             * browser's own text history, and stealing it would make typing
+             * behave differently here than everywhere else on the web.
+             */}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={t('undo')}
+              title={t('undo')}
+              disabled={disabled || !canUndo(history)}
+              onClick={() => setHistory(undo)}
+            >
+              <Undo2Icon />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={t('redo')}
+              title={t('redo')}
+              disabled={disabled || !canRedo(history)}
+              onClick={() => setHistory(redo)}
+            >
+              <Redo2Icon />
             </Button>
             <Button onClick={save} disabled={disabled}>
               {t('save')}
