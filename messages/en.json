@@ -524,15 +524,13 @@
   },
   "nav": {
     "dashboard": "Dashboard",
-    "questions": "Question bank",
+    "questions": "Question Bank",
     "exams": "Exams",
     "evaluate": "Evaluate",
     "verify": "Verify",
     "results": "Results",
-    "learning": "Learning",
-    "reports": "Reports",
+    "reports": "Analytics",
     "approvals": "Approvals",
-    "admin": "Administration",
     "myExams": "My exams"
   },
   "errors": {

@@ -142,6 +142,82 @@ admins to define their own section types.
 recursive CTEs well, the graphs here are small, and adding an extension to
 serve one screen is not justified.
 
+### Navigation and naming
+
+Seven top-level items, and no more:
+
+```
+Dashboard · Guide (AI) · Question Bank · Exams · Evaluate · Analytics · Settings
+```
+
+**Document type is a filter, never a navigation item.** Cookbooks, SOPs,
+manuals, spreadsheets, presentations, images and question papers are values of
+`source_documents.kind`, surfaced as tabs inside Guide (AI). A sidebar entry
+per type would mean a nav item per CHECK-constraint value — the sidebar would
+grow every time a new format was supported, and each entry would render the same
+screen with one predicate changed.
+
+Tabs: All Documents · Cookbooks · Question Papers · SOPs & Manuals ·
+Spreadsheets · Presentations · Images · AI Generated. They are query parameters
+on one route, exactly as the bank's status filter is, so a tab is shareable and
+costs no new page.
+
+This also settles two dead links the M8 audit found: `/admin` and `/learning`
+are in the sidebar and 404. Under a seven-item navigation neither survives —
+admin belongs under Settings, and learning is not built.
+
+**Question Book and Guide (AI) are one module, not two.** The nav label carries
+both names; there is one repository, one upload path, one knowledge layer. A
+separate "Guide (AI)" section would be the duplicate repository the brief
+forbids in its own closing rule.
+
+### One provenance model, many extraction pipelines
+
+The module is **Question Book** — the knowledge repository — as distinct from
+the Question Bank, which holds approved questions.
+
+Every uploaded file is a `source_document` with a `kind`. The kind selects the
+extraction pipeline; it does **not** select a provenance model, because there is
+only one.
+
+```
+cookbook / sop / manual   OCR → knowledge units → generation → questions
+question_paper            OCR → detect sections, questions, answers, marks
+                              → questions directly
+```
+
+**The chain every question carries, whatever produced it:**
+
+```
+question → source_document_id + page_id     ALWAYS
+         → knowledge_unit_id                WHEN APPLICABLE
+```
+
+Linking questions to the **document and page directly** — rather than reaching
+them only through a knowledge unit — is what makes this one model instead of
+two. Three consequences, each worth the column:
+
+- "View Sources" resolves identically for an AI-generated question and an
+  imported one. No branch, no second screen.
+- Provenance survives the knowledge layer being reorganised. Knowledge units
+  will be merged, split and re-extracted as models improve; a citation that
+  depended on one would rot. A page number does not move.
+- A question imported from a past paper is not a second-class citizen with a
+  null where its provenance should be. It has `source_type = 'question_paper'`
+  and a real page, and the constraint says so rather than a comment.
+
+`source_type` is therefore a discriminator carrying meaning, not a nullable
+foreign key standing in for one. `knowledge_unit_id` is null for imported
+papers **by design**, and a CHECK enforces that the pair is coherent: a question
+claiming knowledge-unit provenance must have one, and one claiming
+question-paper provenance must not.
+
+0048 already carries the discriminator — `source_documents.kind` — and its CHECK
+needs widening from ('cookbook','sop','manual','policy','vendor','other') to
+include `question_paper`, `recipe_book`, `food_safety`, `training`,
+`spreadsheet`, `presentation` and `image`. That is a one-line migration, which
+is the point of having put the column there before knowing every value.
+
 ### Linking questions to knowledge (0052)
 
 ```

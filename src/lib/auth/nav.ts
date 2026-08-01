@@ -30,10 +30,8 @@ export type NavIcon =
   | 'evaluate'
   | 'verify'
   | 'results'
-  | 'learning'
   | 'reports'
   | 'approvals'
-  | 'admin'
 
 export interface NavItem {
   href: string
@@ -54,11 +52,37 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/evaluate', labelKey: 'evaluate', icon: 'evaluate', permissions: ['evaluation.evaluate'] },
   { href: '/verify', labelKey: 'verify', icon: 'verify', permissions: ['evaluation.verify'] },
   { href: '/results', labelKey: 'results', icon: 'results', permissions: ['attempts.read_own'] },
-  { href: '/learning', labelKey: 'learning', icon: 'learning', permissions: ['learning.read'] },
+  // Labelled Analytics rather than Reports: question quality (M9) moves in
+  // beside it, and naming it for the section rather than for the one page it
+  // currently holds means the label does not change again when it does.
   { href: '/reports', labelKey: 'reports', icon: 'reports', permissions: ['reports.read_own', 'reports.read_team', 'reports.read_all'] },
   { href: '/approvals', labelKey: 'approvals', icon: 'approvals', permissions: ['users.approve'] },
-  { href: '/admin', labelKey: 'admin', icon: 'admin', permissions: ['org.manage', 'roles.manage', 'settings.manage', 'audit.read'] },
 ]
+
+/**
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ TWO ENTRIES REMOVED HERE, AND THEY WERE BOTH 404s.                        │
+ * │                                                                           │
+ * │ /learning (learning.read) and /admin (org.manage, roles.manage,           │
+ * │ settings.manage, audit.read) have been in this list since M2 with no page │
+ * │ behind either. Anybody holding those permissions — every chef holds       │
+ * │ learning.read — saw a link that broke.                                    │
+ * │                                                                           │
+ * │ Nothing is lost by removing them: there was nothing there. When Settings  │
+ * │ is built it takes /admin's permission set, and the seeded roles regain a  │
+ * │ destination that works.                                                   │
+ * │                                                                           │
+ * │ GUIDE (AI) IS DELIBERATELY NOT ADDED YET. Adding a nav entry before its   │
+ * │ route exists is precisely the defect being removed above, and doing it in │
+ * │ the same commit that removes two of them would be hard to explain. It     │
+ * │ joins this list in the slice that ships the page.                         │
+ * │                                                                           │
+ * │ Still to merge, each needing page changes rather than a list edit:        │
+ * │   /my-exams  into Exams     — one route branching on attempts.take        │
+ * │   /verify    into Evaluate  — two stages of one queue, as tabs            │
+ * │   quality    into Analytics — already a sub-route of /questions           │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ */
 
 export function visibleNavItems(claims: AppClaims): NavItem[] {
   return NAV_ITEMS.filter(

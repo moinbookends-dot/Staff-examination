@@ -2,7 +2,6 @@
 
 import { useTranslations } from 'next-intl'
 import {
-  BookOpen,
   ChartNoAxesColumn,
   ClipboardCheck,
   FileCheck2,
@@ -10,7 +9,6 @@ import {
   GraduationCap,
   LayoutDashboard,
   Library,
-  Settings,
   ShieldCheck,
   UserRoundCheck,
   type LucideIcon,
@@ -32,10 +30,8 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   evaluate: ClipboardCheck,
   verify: FileCheck2,
   results: ShieldCheck,
-  learning: BookOpen,
   reports: ChartNoAxesColumn,
   approvals: UserRoundCheck,
-  admin: Settings,
 }
 
 /**
