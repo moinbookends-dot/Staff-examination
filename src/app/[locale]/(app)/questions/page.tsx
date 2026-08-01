@@ -14,7 +14,7 @@ import { BulkToolbar } from '@/components/questions/bulk-toolbar'
 import { SavedFilterMenu } from '@/components/questions/saved-filter-menu'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
-import { PlusIcon, Trash2Icon } from 'lucide-react'
+import { ActivityIcon, PlusIcon, Trash2Icon } from 'lucide-react'
 
 /**
  * The question bank — the screen the whole of M8 exists to serve.
@@ -69,6 +69,15 @@ export default async function QuestionsPage({
           <p className="text-sm text-muted-foreground">{t('subtitle')}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {!filters.deleted && (
+            <Link
+              href="/questions/quality"
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            >
+              <ActivityIcon />
+              {t('quality.title')}
+            </Link>
+          )}
           {/* Only offered to whoever can act on it. 0041's questions_read_deleted
               requires questions.retire, so without it the view is empty anyway —
               a link to an empty page is worse than no link. */}

@@ -7,6 +7,114 @@ remembering, and anything left behind as debt.
 
 ---
 
+## M9 — Question Quality Intelligence
+
+Three migrations, one dashboard, and one silent gap closed that had nothing to
+do with statistics.
+
+### Shipped — one definition of what makes a question weak (0044)
+
+`question_quality()` returns a verdict per question, derived entirely from
+`question_stats()`. `exam_health`, the quality dashboard and the bank all read
+it, so a question flagged on one screen is flagged identically on the others.
+
+Flags, not a score out of ten. A single number invites sorting the bank by it
+and retiring the tail, which is exactly the use these sample sizes cannot
+support — and `unproven` is a first-class verdict rather than an absence, so an
+empty flag list cannot be mistaken for a clean bill of health.
+
+**A duplication found on the way in.** 0030's `question_stats` wrote the
+facility→difficulty band expression out **twice** — once to return
+`observed_difficulty`, once inside `misrated`. Identical today, with nothing
+keeping them identical. Move one band from 0.90 to 0.92 and `misrated` starts
+disagreeing with `observed_difficulty` in the narrow window between them: the
+screen would show a question rated 1 against an observed 1 and call it misrated
+anyway. `observed_difficulty_band()` is that expression, once.
+
+`question_stats` was **extracted programmatically from 0030** and had exactly
+two substitutions applied, rather than being retyped. Retyping a function from
+memory is how 0039 silently lost a `set_config` call.
+
+`quality_min_sample()` exposes the sample floor that 0030 declared privately as
+`c_min_n`. Every consumer that wants to say "not enough data yet" now reads the
+same number instead of choosing its own.
+
+### Shipped — distractor analysis, and the shape of the bank (0045)
+
+`question_distractors()` reports how often each option was chosen. It produces
+the one finding no other statistic can: **a wrong option more popular than the
+key.** A genuinely misleading question and a mis-keyed one look identical in
+facility and in discrimination — both are just "hard" — and this separates them.
+It also names dead distractors: a four-option question with two options nobody
+ever picks is a two-option question being marked as though guessing gave one
+chance in four.
+
+`bank_quality()` and `bank_recommendations()` are **SECURITY INVOKER**. Every
+fact they return comes from `public.questions`, which RLS already scopes, so no
+bypass is introduced to compute a `COUNT(*)`. `question_distractors` is DEFINER
+with its own check, because it reads `attempt_answers`, which a chef has no
+policy on.
+
+`bank_recommendations()` returns `exam_health`'s exact `(code, severity,
+message, detail)` shape so one component and one remedy map render both — and
+`IssueList` was extracted from the exam health panel so that is actually true
+rather than merely claimed in a comment.
+
+### Shipped — exam health learns what the attempt data knew (0046)
+
+Four advisories on the drawn paper: `quality.negative_discrimination`,
+`quality.misrated`, `quality.non_discriminating`, `quality.bloom_narrow`. All
+read `question_quality()`; none recomputes anything.
+
+All **advisory**, never blocking. A chef may knowingly run a paper containing an
+ugly question, and blocking on a statistic would teach people to retire
+questions to get past the gate — 0035's argument applied to a new signal.
+
+**Deliberately absent: an "unproven" advisory.** On a young bank every question
+is unproven, so it would fire on every paper ever drawn. An advisory that is
+always on is one people learn to scroll past, taking the real ones with it. The
+dashboard reports coverage instead, which is where that number belongs.
+
+**Also absent: distractor analysis at publish time.** It is per-question and
+reads every settled answer; running it for each drawn MCQ would make publishing
+an exam pay for a report nobody asked for at that moment.
+
+0046 reproduces `exam_health` in full, again extracted from 0035 rather than
+retyped, with a build-time assertion that all thirteen existing branches
+survived the copy.
+
+### Fixed — four health codes that had shipped with no advice attached
+
+`remedyFor` returns null for an unknown code and the UI renders the problem with
+nothing under it. The screen looks finished; only the person who meets that
+specific code finds out.
+
+`key.missing` had been in that state since 0022, and all three of 0035's
+translation advisories since 0035 — one of them shipped by the same commit that
+wrote the map it was missing from.
+
+**Why nobody noticed: the test that should have caught it was reading the wrong
+file.** `exam-health.test.ts` swept migration 0014 alone for codes, and
+`exam_health` has since been replaced wholesale twice — by 0035 and again by
+0046. Codes added in those files were invisible to the regex, so *neither*
+direction of the parity check could see them, and the test stayed green
+throughout. It has been replaced by `health-codes.test.ts`, which reads every
+migration in the directory and additionally asserts that no code is ever given
+two different severities — a real hazard given that both 0035 and 0046 work by
+reproducing the whole function.
+
+### Performance
+
+No new indexes and no new tables. `bank_quality` and `bank_recommendations` are
+aggregates over the drawable bank, which is bounded by the size of the bank
+itself. `question_quality` costs exactly what `question_stats` costs, since it
+is a wrapper over it. `question_distractors` is per-question and deliberately
+kept off the publish path and out of the bank's list query — `question_stats`
+remains the most expensive read in the codebase and it is still not called from
+any list screen.
+
+---
+
 ## M8 — Question Bank & Metadata · *in progress*
 
 ### Shipped — the question bank as the screen the bank is actually run from

@@ -1346,6 +1346,14 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "bank_quality": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "bank_recommendations": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "blank_accept_list": {
         Args: Record<string, unknown>
         Returns: unknown
@@ -1546,6 +1554,10 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "observed_difficulty_band": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "preview_rule_count": {
         Args: Record<string, unknown>
         Returns: unknown
@@ -1562,11 +1574,27 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "quality_min_sample": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "question_distractors": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "question_is_drawable": {
         Args: Record<string, unknown>
         Returns: unknown
       }
       "question_pool": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "question_quality": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "question_quality_optional": {
         Args: Record<string, unknown>
         Returns: unknown
       }

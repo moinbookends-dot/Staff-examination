@@ -4,13 +4,8 @@ import { useState, useTransition } from 'react'
 import { useRouter } from '@/lib/i18n/navigation'
 import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
-import {
-  sortIssues,
-  blockingIssues,
-  canPublish,
-  remedyFor,
-  type HealthIssue,
-} from '@/lib/exams/health'
+import { blockingIssues, canPublish, type HealthIssue } from '@/lib/exams/health'
+import { HealthIssueList } from '@/components/health/issue-list'
 import { getExamHealth, publishExam, setExamStatus } from '@/server/actions/exams'
 import type { ExamStatus } from '@/lib/exams/rules'
 import { Button } from '@/components/ui/button'
@@ -26,7 +21,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { AlertTriangleIcon, CheckCircle2Icon, RefreshCwIcon, XCircleIcon } from 'lucide-react'
+import { CheckCircle2Icon, RefreshCwIcon, XCircleIcon } from 'lucide-react'
 
 /**
  * Exam Health, and the publish gate it guards.
@@ -131,7 +126,7 @@ export function ExamHealthPanel({
             <p className="text-sm font-medium text-destructive">
               {t('blockingCount', { count: blockers.length })}
             </p>
-            <IssueList issues={blockers} tone="blocking" />
+            <HealthIssueList issues={blockers} tone="blocking" />
           </div>
         )}
 
@@ -141,7 +136,7 @@ export function ExamHealthPanel({
             {/* Stated explicitly, because a warning that looks like an error
                 gets treated like one and a chef stops publishing good exams. */}
             <p className="text-sm text-muted-foreground">{t('advisoryHint')}</p>
-            <IssueList issues={advisories} tone="advisory" />
+            <HealthIssueList issues={advisories} tone="advisory" />
           </div>
         )}
 
@@ -213,36 +208,5 @@ export function ExamHealthPanel({
         </AlertDialogContent>
       </AlertDialog>
     </Card>
-  )
-}
-
-function IssueList({ issues, tone }: { issues: HealthIssue[]; tone: 'blocking' | 'advisory' }) {
-  return (
-    <ul className="space-y-2">
-      {sortIssues(issues).map((issue, index) => (
-        <li
-          key={`${issue.code}-${issue.rule_id ?? index}`}
-          className={`rounded-md border p-3 text-sm ${
-            tone === 'blocking' ? 'border-destructive/40' : ''
-          }`}
-        >
-          <div className="flex items-start gap-2">
-            {tone === 'blocking' ? (
-              <XCircleIcon className="mt-0.5 size-4 shrink-0 text-destructive" />
-            ) : (
-              <AlertTriangleIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-            )}
-            <div className="space-y-1">
-              <p>{issue.message}</p>
-              {/* The database says what is wrong; the remedy says what to do.
-                  Kept apart so a SQL message can stay short and factual. */}
-              {remedyFor(issue.code) && (
-                <p className="text-muted-foreground">{remedyFor(issue.code)}</p>
-              )}
-            </div>
-          </div>
-        </li>
-      ))}
-    </ul>
   )
 }

@@ -324,6 +324,40 @@
       "open": "रद्दी",
       "title": "हटाए गए प्रश्न",
       "empty": "कुछ भी नहीं हटाया गया।"
+    },
+    "quality": {
+      "title": "प्रश्न गुणवत्ता",
+      "subtitle": "प्रयासों के आँकड़े बैंक के बारे में क्या कहते हैं।",
+      "backToBank": "बैंक पर वापस",
+      "drawable": "उपलब्ध प्रश्न",
+      "measured": "मापे गए",
+      "needsAttention": "ध्यान चाहिए",
+      "recommendations": "सिफ़ारिशें",
+      "questions": "प्रश्न, सबसे ख़राब पहले",
+      "noQuestions": "अभी कोई उपलब्ध प्रश्न नहीं।",
+      "unset": "तय नहीं",
+      "dimension": {
+        "bloom": "ब्लूम स्तर",
+        "difficulty": "कठिनाई",
+        "category": "श्रेणी",
+        "type": "प्रश्न प्रकार"
+      },
+      "verdict": {
+        "negative_discrimination": "कुंजी ग़लत हो सकती है",
+        "misrated": "ग़लत श्रेणीबद्ध",
+        "non_discriminating": "कोई अंतर नहीं बताता",
+        "too_hard": "बहुत कठिन",
+        "too_easy": "बहुत आसान",
+        "sound": "ठीक",
+        "unproven": "अभी मापा नहीं"
+      },
+      "distractors": {
+        "title": "उम्मीदवारों ने कौन-सा विकल्प चुना",
+        "correct": "कुंजी",
+        "dead": "कभी नहीं चुना",
+        "outdraws": "कुंजी से अधिक लोकप्रिय",
+        "none": "अभी कोई उत्तर नहीं।"
+      }
     }
   }
 }

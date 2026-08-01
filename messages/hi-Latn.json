@@ -324,6 +324,40 @@
       "open": "Raddi",
       "title": "Hataye gaye prashn",
       "empty": "Kuch bhi hataya nahi gaya."
+    },
+    "quality": {
+      "title": "Prashn quality",
+      "subtitle": "Attempt data bank ke baare mein kya kehta hai.",
+      "backToBank": "Bank par wapas",
+      "drawable": "Available prashn",
+      "measured": "Maape gaye",
+      "needsAttention": "Dhyaan chahiye",
+      "recommendations": "Sifarishein",
+      "questions": "Prashn, sabse kharab pehle",
+      "noQuestions": "Abhi koi available prashn nahi.",
+      "unset": "Tay nahi",
+      "dimension": {
+        "bloom": "Bloom level",
+        "difficulty": "Kathinai",
+        "category": "Category",
+        "type": "Prashn prakaar"
+      },
+      "verdict": {
+        "negative_discrimination": "Key galat ho sakti hai",
+        "misrated": "Galat rating",
+        "non_discriminating": "Koi antar nahi batata",
+        "too_hard": "Bahut kathin",
+        "too_easy": "Bahut aasan",
+        "sound": "Theek",
+        "unproven": "Abhi maapa nahi"
+      },
+      "distractors": {
+        "title": "Candidates ne kaunsa option chuna",
+        "correct": "Key",
+        "dead": "Kabhi nahi chuna",
+        "outdraws": "Key se zyada popular",
+        "none": "Abhi koi jawab nahi."
+      }
     }
   }
 }

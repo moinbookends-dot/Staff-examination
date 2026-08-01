@@ -324,6 +324,40 @@
       "open": "કચરાપેટી",
       "title": "દૂર કરેલા પ્રશ્નો",
       "empty": "કંઈ દૂર કરાયું નથી."
+    },
+    "quality": {
+      "title": "પ્રશ્ન ગુણવત્તા",
+      "subtitle": "પ્રયાસોના આંકડા બેંક વિશે શું કહે છે.",
+      "backToBank": "બેંક પર પાછા",
+      "drawable": "ઉપલબ્ધ પ્રશ્નો",
+      "measured": "માપેલા",
+      "needsAttention": "ધ્યાન જોઈએ",
+      "recommendations": "ભલામણો",
+      "questions": "પ્રશ્નો, સૌથી ખરાબ પહેલા",
+      "noQuestions": "હજુ કોઈ ઉપલબ્ધ પ્રશ્ન નથી.",
+      "unset": "નક્કી નથી",
+      "dimension": {
+        "bloom": "બ્લૂમ સ્તર",
+        "difficulty": "કઠિનતા",
+        "category": "શ્રેણી",
+        "type": "પ્રશ્ન પ્રકાર"
+      },
+      "verdict": {
+        "negative_discrimination": "કૂંચી ખોટી હોઈ શકે",
+        "misrated": "ખોટું વર્ગીકૃત",
+        "non_discriminating": "કોઈ ભેદ બતાવતું નથી",
+        "too_hard": "ખૂબ કઠિન",
+        "too_easy": "ખૂબ સરળ",
+        "sound": "બરાબર",
+        "unproven": "હજુ માપ્યું નથી"
+      },
+      "distractors": {
+        "title": "ઉમેદવારોએ કયો વિકલ્પ પસંદ કર્યો",
+        "correct": "કૂંચી",
+        "dead": "ક્યારેય પસંદ નહીં",
+        "outdraws": "કૂંચી કરતાં વધુ લોકપ્રિય",
+        "none": "હજુ કોઈ જવાબ નથી."
+      }
     }
   }
 }

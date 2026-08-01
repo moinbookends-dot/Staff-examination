@@ -555,6 +555,22 @@ try {
   for (const [name, body] of [
     ['exam_paper', { p_exam_id: '00000000-0000-0000-0000-000000000001', p_seed: null }],
     ['exam_health', { p_exam_id: '00000000-0000-0000-0000-000000000001' }],
+    // ── The analytics family ───────────────────────────────────────────────
+    //
+    // All SECURITY DEFINER, all granted to `authenticated`, and all gated by
+    // their own analytics_scope() check rather than by a policy — they read
+    // attempt data across a whole outlet, which no caller has a policy on.
+    //
+    // question_stats has been in that position since 0030 and was never
+    // asserted here. M9 added two more that read the same tables, so the gap
+    // is closed for all three at once rather than for the new ones alone.
+    //
+    // The distinction this loop draws matters: these must refuse an employee
+    // BECAUSE THEY CHECK, not because they are unreachable. A 404 here would
+    // mean the grant was lost and every chef lost the feature too.
+    ['question_stats', {}],
+    ['question_quality', {}],
+    ['question_distractors', { p_question_id: '00000000-0000-0000-0000-000000000001' }],
   ]) {
     const res = await callRpc(name, body, refreshedSession.access_token)
     check(

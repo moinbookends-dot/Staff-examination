@@ -284,6 +284,57 @@
       "toggle": "Select the focused row",
       "selectAll": "Select every row on this page",
       "clear": "Clear the selection"
+    },
+    "quality": {
+      "title": "Question quality",
+      "subtitle": "What the attempt data says about the bank, and what is missing from it.",
+      "backToBank": "Back to the bank",
+      "drawable": "Drawable questions",
+      "drawableHint": "Active or approved, and not removed.",
+      "measured": "Measured",
+      "measuredHint": "Answered enough times for a statistic to mean anything.",
+      "needsAttention": "Need attention",
+      "needsAttentionHint": "Measured, and the numbers say something is wrong.",
+      "recommendations": "Recommendations",
+      "recommendationsHint": "About the bank as a whole, rather than any one question.",
+      "questions": "Questions, worst first",
+      "questionsHint": "Unmeasured questions sort last — they are not bad, only unknown.",
+      "noQuestions": "No drawable questions yet.",
+      "unset": "Not set",
+      "sampleSize": "n={n}",
+      "facility": "facility {value}",
+      "discrimination": "discrimination {value}",
+      "dimension": {
+        "bloom": "Bloom level",
+        "difficulty": "Difficulty",
+        "category": "Category",
+        "type": "Question type"
+      },
+      "dimensionHint": {
+        "bloom": "A bank that is all recall cannot test judgement.",
+        "difficulty": "A single difficulty cannot tell candidates apart.",
+        "category": "Rules draw by category, so an empty one can never be satisfied.",
+        "type": "Written questions need a human to mark them."
+      },
+      "verdict": {
+        "negative_discrimination": "Key may be wrong",
+        "misrated": "Misrated",
+        "non_discriminating": "Tells nobody apart",
+        "too_hard": "Very hard",
+        "too_easy": "Very easy",
+        "sound": "Sound",
+        "unproven": "Not measured yet"
+      },
+      "distractors": {
+        "title": "Which option candidates chose",
+        "hint": "From every settled attempt. The only report that separates a misleading question from a mis-keyed one.",
+        "correct": "Key",
+        "dead": "Never chosen",
+        "outdraws": "More popular than the key",
+        "none": "No responses yet.",
+        "notApplicable": "This question type has no options to analyse.",
+        "chosen": "{n} ({share}%)"
+      }
     }
   },
   "exams": {

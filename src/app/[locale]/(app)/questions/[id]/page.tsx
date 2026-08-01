@@ -8,6 +8,7 @@ import {
   listTags,
 } from '@/server/actions/questions'
 import { QuestionForm } from '@/components/questions/question-form'
+import { DistractorPanel } from '@/components/questions/distractor-panel'
 
 /**
  * Edit one question.
@@ -39,12 +40,20 @@ export default async function EditQuestionPage({
   if (!question) notFound()
 
   return (
-    <QuestionForm
-      question={question}
-      categories={categories}
-      tags={tags}
-      revisions={revisions}
-      canRetire={can(claims, 'questions.retire')}
-    />
+    <div className="space-y-6">
+      <QuestionForm
+        question={question}
+        categories={categories}
+        tags={tags}
+        revisions={revisions}
+        canRetire={can(claims, 'questions.retire')}
+      />
+      {/*
+       * Below the editor, not beside it: it is a read about the past, and the
+       * thing a chef came here to do is edit. It renders nothing at all for a
+       * question with no options, so an essay page is unchanged.
+       */}
+      <DistractorPanel questionId={id} />
+    </div>
   )
 }

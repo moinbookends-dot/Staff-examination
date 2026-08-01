@@ -882,6 +882,51 @@ try {
     'a blocked exam still offers an enabled Publish button',
   )
 
+  // ── M9: the quality dashboard ─────────────────────────────────────────────
+  //
+  // Every number on it is a query. The assertions below are about the SHAPE of
+  // the page rather than the figures, because the figures depend on how much
+  // attempt data happens to exist — and a check that only passes on a bank with
+  // ten answers per question is one that gets deleted the first time it fails.
+  const quality = await get('/en/questions/quality')
+  check(quality.status === 200, '/en/questions/quality renders', `status ${quality.status} → ${quality.location}`)
+  check(
+    !/MISSING_MESSAGE|IntlError/.test(quality.html),
+    'every message key resolves on the quality dashboard',
+    'a translation key is missing',
+  )
+  // Coverage before findings. "2 need attention" means something very
+  // different when 6 of 400 questions have ever been measured, and the
+  // denominator being present is what stops the page misleading.
+  check(
+    quality.html.includes('Measured') && /\d+ \/ \d+/.test(quality.html),
+    'the dashboard states how much of the bank has been measured',
+    'the coverage figure is missing, so the findings have no denominator',
+  )
+  for (const [label, what] of [
+    ['Bloom level', 'the Bloom distribution'],
+    ['Difficulty', 'the difficulty distribution'],
+    ['Category', 'the category distribution'],
+  ]) {
+    check(quality.html.includes(`>${label}<`), `the dashboard shows ${what}`, `no ${label} panel`)
+  }
+  // bank_recommendations returns exam_health's exact shape so ONE component and
+  // ONE remedy map render both. The seeded bank has no Bloom levels, so that
+  // advisory fires and brings its remedy with it — which is the assertion that
+  // the sharing actually happened rather than being claimed in a comment.
+  check(
+    quality.html.includes('no Bloom level'),
+    'a bank-wide advisory is surfaced',
+    'bank_recommendations produced nothing on a bank with no Bloom levels',
+  )
+  check(
+    quality.html.includes('so papers can be balanced for cognitive demand'),
+    'a bank advisory carries its remedy, from the same map exam health uses',
+    'the shared remedy map is not reaching the bank dashboard',
+  )
+  // The candidate is refused it too — asserted further down, where candGet is
+  // in scope.
+
   // Loosen the rules so the paper can actually be drawn, then re-read.
   await db.query(
     `update public.exam_rules set question_count = 1
@@ -1074,6 +1119,17 @@ try {
     const res = await fetch(`${APP}${path}`, { headers: { cookie: candCookie }, redirect: 'manual' })
     return { status: res.status, location: res.headers.get('location'), html: await res.text() }
   }
+
+  // M9: the quality dashboard reports how every candidate answered every
+  // question, aggregated across the outlet. A candidate holds neither
+  // questions.read nor an analytics scope, and must be turned away by the page
+  // guard before question_quality's own check ever runs.
+  const candQuality = await candGet('/en/questions/quality')
+  check(
+    candQuality.status !== 200,
+    'a candidate cannot open the quality dashboard',
+    `a candidate got ${candQuality.status} from /questions/quality`,
+  )
 
   const myExams = await candGet('/en/my-exams')
   check(
