@@ -675,6 +675,40 @@ try {
     'the saved-filter control is missing',
   )
 
+  // ── Guide (AI) ─────────────────────────────────────────────────────────────
+  //
+  // The document library (0048, kinds widened by 0050). Asserted BEFORE the nav
+  // entry exists, and that ordering is the point: /learning and /admin sat in
+  // the sidebar since M2 with no page behind them, and the fix for that landed
+  // in the same session as this page. A route earns its nav item by rendering.
+  const guide = await get('/en/guide')
+  check(guide.status === 200, '/en/guide renders', `status ${guide.status} → ${guide.location}`)
+  check(
+    !/MISSING_MESSAGE|IntlError/.test(guide.html),
+    'every message key resolves on Guide (AI)',
+    'a translation key is missing',
+  )
+  // The tabs are anchors, not client state, so a filtered shelf is shareable and
+  // needs no JavaScript. Asserted as hrefs rather than by label text, because
+  // next-intl serialises the whole message bundle into the page — the trap this
+  // file already records for 'Food Safety' and again for the health badges.
+  check(
+    /href="[^"]*\/guide\?[^"]*kind=cookbooks/.test(guide.html),
+    'the document-type tabs are real links',
+    'the tab strip is not navigable without JavaScript',
+  )
+  // An unknown tab must fall back rather than 500, exactly as an unknown
+  // question filter does. These arrive from URLs people edit and share.
+  const badTab = await get('/en/guide?kind=nonsense')
+  check(
+    badTab.status === 200,
+    'an unrecognised document tab falls back instead of erroring',
+    `status ${badTab.status}`,
+  )
+  // A candidate holds no questions.read. Source documents are the material the
+  // questions are drawn from; they have no business reading the library.
+  // (candGet is defined further down, so the refusal is asserted there.)
+
   // ── 4. The editor ──────────────────────────────────────────────────────────
   console.log('\n3. Editor')
   const create = await get('/en/questions/new')
@@ -1129,6 +1163,15 @@ try {
     candQuality.status !== 200,
     'a candidate cannot open the quality dashboard',
     `a candidate got ${candQuality.status} from /questions/quality`,
+  )
+
+  // Guide (AI) holds the cookbooks every question is drawn from. A candidate
+  // holds no questions.read and must be turned away by the page guard.
+  const candGuide = await candGet('/en/guide')
+  check(
+    candGuide.status !== 200,
+    'a candidate cannot open the Guide (AI) library',
+    `a candidate got ${candGuide.status} from /guide`,
   )
 
   const myExams = await candGet('/en/my-exams')

@@ -12,7 +12,8 @@
     "results": "Results",
     "reports": "Reports",
     "approvals": "Approvals",
-    "myExams": "Meri exams"
+    "myExams": "Meri exams",
+    "guide": "Guide (AI)"
   },
   "common": {
     "loading": "Load ho raha hai…",
@@ -365,5 +366,29 @@
       "marksTotal": "{questions} prashn · {marks} ank",
       "marksPartial": "{questions} prashn · kam se kam {known} ank ({unknown} apne ank lete hain)"
     }
+  },
+  "guide": {
+    "title": "Guide (AI)",
+    "subtitle": "Jin dastavezon se question bank banta hai — cookbooks, purane paper, manuals aur decks.",
+    "tabsLabel": "Dastavez ke prakar",
+    "tabs": {
+      "all": "Sabhi dastavez",
+      "cookbooks": "Cookbooks",
+      "questionPapers": "Prashn patra",
+      "manuals": "SOP aur manuals",
+      "spreadsheets": "Spreadsheets",
+      "presentations": "Presentations",
+      "images": "Tasveerein"
+    },
+    "columns": {
+      "document": "Dastavez",
+      "kind": "Prakar",
+      "status": "Sthiti",
+      "pages": "Panne",
+      "uploaded": "Upload"
+    },
+    "empty": "Abhi koi dastavez nahi",
+    "emptyFiltered": "Is prakar mein kuch nahi",
+    "showAll": "Sabhi dastavez dikhayein"
   }
 }

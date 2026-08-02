@@ -12,7 +12,8 @@
     "results": "परिणाम",
     "reports": "रिपोर्ट",
     "approvals": "स्वीकृतियाँ",
-    "myExams": "मेरी परीक्षाएँ"
+    "myExams": "मेरी परीक्षाएँ",
+    "guide": "गाइड (AI)"
   },
   "common": {
     "loading": "लोड हो रहा है…",
@@ -365,5 +366,29 @@
       "marksTotal": "{questions} प्रश्न · {marks} अंक",
       "marksPartial": "{questions} प्रश्न · कम से कम {known} अंक ({unknown} प्रश्न के अपने अंक लेते हैं)"
     }
+  },
+  "guide": {
+    "title": "गाइड (एआई)",
+    "subtitle": "जिन दस्तावेज़ों से प्रश्न बैंक बनता है — कुकबुक, पुराने पेपर, मैनुअल और डेक।",
+    "tabsLabel": "दस्तावेज़ के प्रकार",
+    "tabs": {
+      "all": "सभी दस्तावेज़",
+      "cookbooks": "कुकबुक",
+      "questionPapers": "प्रश्नपत्र",
+      "manuals": "एसओपी और मैनुअल",
+      "spreadsheets": "स्प्रेडशीट",
+      "presentations": "प्रेज़ेंटेशन",
+      "images": "तस्वीरें"
+    },
+    "columns": {
+      "document": "दस्तावेज़",
+      "kind": "प्रकार",
+      "status": "स्थिति",
+      "pages": "पृष्ठ",
+      "uploaded": "अपलोड"
+    },
+    "empty": "अभी कोई दस्तावेज़ नहीं",
+    "emptyFiltered": "इस प्रकार में कुछ नहीं",
+    "showAll": "सभी दस्तावेज़ दिखाएँ"
   }
 }

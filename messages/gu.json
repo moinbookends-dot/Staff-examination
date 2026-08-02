@@ -12,7 +12,8 @@
     "results": "પરિણામ",
     "reports": "રિપોર્ટ",
     "approvals": "મંજૂરીઓ",
-    "myExams": "મારી પરીક્ષાઓ"
+    "myExams": "મારી પરીક્ષાઓ",
+    "guide": "ગાઇડ (AI)"
   },
   "common": {
     "loading": "લોડ થાય છે…",
@@ -365,5 +366,29 @@
       "marksTotal": "{questions} પ્રશ્નો · {marks} ગુણ",
       "marksPartial": "{questions} પ્રશ્નો · ઓછામાં ઓછા {known} ગુણ ({unknown} પ્રશ્નના પોતાના ગુણ લે છે)"
     }
+  },
+  "guide": {
+    "title": "ગાઇડ (એઆઈ)",
+    "subtitle": "જે દસ્તાવેજોમાંથી પ્રશ્ન બેંક બને છે — કુકબુક, જૂના પેપર, મેન્યુઅલ અને ડેક.",
+    "tabsLabel": "દસ્તાવેજના પ્રકાર",
+    "tabs": {
+      "all": "બધા દસ્તાવેજ",
+      "cookbooks": "કુકબુક",
+      "questionPapers": "પ્રશ્નપત્ર",
+      "manuals": "એસઓપી અને મેન્યુઅલ",
+      "spreadsheets": "સ્પ્રેડશીટ",
+      "presentations": "પ્રેઝન્ટેશન",
+      "images": "તસવીરો"
+    },
+    "columns": {
+      "document": "દસ્તાવેજ",
+      "kind": "પ્રકાર",
+      "status": "સ્થિતિ",
+      "pages": "પાના",
+      "uploaded": "અપલોડ"
+    },
+    "empty": "હજી કોઈ દસ્તાવેજ નથી",
+    "emptyFiltered": "આ પ્રકારમાં કંઈ નથી",
+    "showAll": "બધા દસ્તાવેજ બતાવો"
   }
 }

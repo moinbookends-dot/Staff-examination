@@ -24,6 +24,7 @@ import { can } from './claims'
  */
 export type NavIcon =
   | 'dashboard'
+  | 'guide'
   | 'myExams'
   | 'questions'
   | 'exams'
@@ -47,6 +48,11 @@ export const NAV_ITEMS: NavItem[] = [
   // and gated on exams.read — an employee holds attempts.take and no more, so
   // the two audiences never share a screen.
   { href: '/my-exams', labelKey: 'myExams', icon: 'myExams', permissions: ['attempts.take'] },
+  // The knowledge repository every question is drawn from, so it sits above the
+  // bank: knowledge comes first, approved questions second. Gated on
+  // questions.read, the same permission source_documents_read keys on — a chef
+  // who may read the bank may read what the bank was built from.
+  { href: '/guide', labelKey: 'guide', icon: 'guide', permissions: ['questions.read'] },
   { href: '/questions', labelKey: 'questions', icon: 'questions', permissions: ['questions.read'] },
   { href: '/exams', labelKey: 'exams', icon: 'exams', permissions: ['exams.read'] },
   { href: '/evaluate', labelKey: 'evaluate', icon: 'evaluate', permissions: ['evaluation.evaluate'] },
@@ -72,10 +78,12 @@ export const NAV_ITEMS: NavItem[] = [
  * │ is built it takes /admin's permission set, and the seeded roles regain a  │
  * │ destination that works.                                                   │
  * │                                                                           │
- * │ GUIDE (AI) IS DELIBERATELY NOT ADDED YET. Adding a nav entry before its   │
- * │ route exists is precisely the defect being removed above, and doing it in │
- * │ the same commit that removes two of them would be hard to explain. It     │
- * │ joins this list in the slice that ships the page.                         │
+ * │ GUIDE (AI) IS IN THE LIST NOW, AND ONLY BECAUSE IT EARNED IT. The route   │
+ * │ was written first and kept out of here until scripts/render-check.mjs     │
+ * │ proved it returns 200 for a chef, resolves every message key, renders its │
+ * │ tabs as real links, and refuses a candidate. That order is the whole      │
+ * │ lesson of the two entries above: a nav item is a promise about a route,   │
+ * │ and the route has to keep it before the promise is made.                  │
  * │                                                                           │
  * │ Still to merge, each needing page changes rather than a list edit:        │
  * │   /my-exams  into Exams     — one route branching on attempts.take        │

@@ -337,6 +337,60 @@
       }
     }
   },
+  "guide": {
+    "title": "Guide (AI)",
+    "subtitle": "The documents the question bank is built from — cookbooks, past papers, manuals and decks.",
+    "tabsLabel": "Document types",
+    "tabs": {
+      "all": "All documents",
+      "cookbooks": "Cookbooks",
+      "questionPapers": "Question papers",
+      "manuals": "SOPs & manuals",
+      "spreadsheets": "Spreadsheets",
+      "presentations": "Presentations",
+      "images": "Images"
+    },
+    "columns": {
+      "document": "Document",
+      "kind": "Type",
+      "status": "Status",
+      "pages": "Pages",
+      "uploaded": "Uploaded"
+    },
+    "kinds": {
+      "cookbook": "Cookbook",
+      "recipe_book": "Recipe book",
+      "question_paper": "Question paper",
+      "sop": "SOP",
+      "manual": "Manual",
+      "kitchen_manual": "Kitchen manual",
+      "training": "Training material",
+      "food_safety": "Food safety",
+      "policy": "Policy",
+      "vendor": "Vendor document",
+      "spreadsheet": "Spreadsheet",
+      "presentation": "Presentation",
+      "image": "Image",
+      "other": "Other"
+    },
+    "status": {
+      "uploaded": "Waiting",
+      "processing": "Processing",
+      "processed": "Processed",
+      "failed": "Failed",
+      "archived": "Archived"
+    },
+    "sizeMb": "{size} MB",
+    "sizeKb": "{size} KB",
+    "empty": "No documents yet",
+    "emptyHint": "Cookbooks, past question papers, SOPs and training decks live here. Questions are generated from what is uploaded.",
+    "emptyFiltered": "Nothing on this shelf",
+    "emptyFilteredHint": "No document matches what you asked for. Another type may have it.",
+    "showAll": "Show all documents",
+    "previous": "Previous",
+    "next": "Next",
+    "pagination": "Page {page} of {lastPage} · {total} documents"
+  },
   "exams": {
     "title": "Exams",
     "subtitle": "Papers drawn from the question bank, scheduled and assigned to staff.",
@@ -531,7 +585,8 @@
     "results": "Results",
     "reports": "Analytics",
     "approvals": "Approvals",
-    "myExams": "My exams"
+    "myExams": "My exams",
+    "guide": "Guide (AI)"
   },
   "errors": {
     "notFound": "That page doesn’t exist.",

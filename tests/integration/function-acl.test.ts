@@ -118,6 +118,90 @@ describeDb('function privileges', () => {
     })
   })
 
+  /**
+   * ┌─────────────────────────────────────────────────────────────────────────┐
+   * │ THE ASSERTION BELOW ONLY LOOKS AT DEFINER FUNCTIONS, AND THAT LEFT A    │
+   * │ GAP THIS ONE CLOSES.                                                    │
+   * │                                                                         │
+   * │ 0020 recorded that this database AUTO-GRANTS EXECUTE on every new       │
+   * │ function to anon and authenticated, so `grant … to authenticated` adds  │
+   * │ nothing — it reads like a decision and changes no privilege. Three      │
+   * │ migrations have now shipped anon-executable that way: 0044 and 0045 in  │
+   * │ M9, and claim_job in 0051.                                              │
+   * │                                                                         │
+   * │ Each was SECURITY INVOKER or otherwise guarded, so none was an          │
+   * │ incident. That is exactly why none was caught: the DEFINER sweep below  │
+   * │ has no opinion about them, and "harmless because something else stops   │
+   * │ it" is the reasoning that eventually gets applied to the one that is    │
+   * │ not harmless.                                                           │
+   * │                                                                         │
+   * │ ALLOWED_ANON is the deliberate list. Everything Supabase needs before a │
+   * │ session exists lives there; anything else reaching anon is an           │
+   * │ auto-grant nobody revoked.                                              │
+   * └─────────────────────────────────────────────────────────────────────────┘
+   */
+  it('grants anon EXECUTE only where somebody decided to', async () => {
+    /**
+     * ┌───────────────────────────────────────────────────────────────────────┐
+     * │ THIS IS A BASELINE, NOT AN ENDORSEMENT.                               │
+     * │                                                                       │
+     * │ Fifty-one functions hold the auto-grant today, thirty of them         │
+     * │ SECURITY DEFINER. None is an incident: the DEFINER sweep below passes,│
+     * │ so every one of those thirty carries its own has_perm / auth.uid() /  │
+     * │ my_company check and refuses anon at runtime. Nothing here is         │
+     * │ reachable by an anonymous caller in any way that matters.             │
+     * │                                                                       │
+     * │ It is still not the model 0020 describes — "granted to authenticated  │
+     * │ AND checks, or granted to nobody" has no third option — and shrinking │
+     * │ the list is a migration that must verify, one function at a time,     │
+     * │ that `authenticated` keeps what the app actually calls. Revoking too  │
+     * │ broadly breaks the product; doing it blind is worse than the gap.     │
+     * │                                                                       │
+     * │ So this list freezes the debt instead of hiding it. A NEW function    │
+     * │ that ships anon-executable fails this test immediately — which is the │
+     * │ thing that was missing when 0044, 0045 and claim_job each slipped     │
+     * │ through. Entries come OFF this list as migrations revoke them; none   │
+     * │ should ever be added.                                                 │
+     * └───────────────────────────────────────────────────────────────────────┘
+     */
+    const ALLOWED_ANON: string[] = [
+      // SECURITY DEFINER, all guarded — see the sweep below.
+      'attempt_evaluation_items', 'attempt_paper', 'attempt_review',
+      'candidate_category_stats', 'candidate_stats', 'complete_evaluation',
+      'duplicate_exam', 'exam_health', 'exam_paper', 'exam_rule_counts',
+      'exam_stats', 'get_question_revision', 'is_exam_assigned_to_me',
+      'me_status', 'my_attempt_state', 'my_attempts', 'my_result_detail',
+      'my_results', 'my_standing', 'preview_rule_count', 'publish_attempt',
+      'publish_exam', 'question_stats', 'save_answer', 'save_blank_accepts',
+      'save_evaluation', 'start_attempt', 'submit_attempt', 'team_stats',
+      'verify_attempt',
+      // SECURITY INVOKER — RLS answers before these do.
+      'assignment_matches', 'bulk_set_question_deleted', 'bulk_update_questions',
+      'exam_status_transition_allowed', 'has_perm', 'has_role', 'is_approved',
+      'is_super_admin', 'jwt_app', 'locale_chain', 'localise_snapshot',
+      'my_brand', 'my_company', 'my_department', 'my_outlet',
+      'question_is_drawable', 'question_status_transition_allowed',
+      'save_question', 'save_question_translation', 'validate_question_content',
+      'validate_translation_shape',
+    ]
+
+    const { rows } = await db.query(`
+      select p.proname
+        from pg_proc p
+        join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname = 'public'
+         and p.prokind = 'f'
+         and p.prorettype::regtype::text <> 'trigger'
+         and has_function_privilege('anon', p.oid, 'EXECUTE')
+       order by p.proname`)
+
+    const unexpected = rows.map((r) => r.proname).filter((n) => !ALLOWED_ANON.includes(n))
+    expect(
+      unexpected,
+      `anon holds EXECUTE on these. If that is deliberate, add it to ALLOWED_ANON with a reason; otherwise the migration needs\n  revoke all on function … from public, anon, authenticated;\nbefore its grant — a bare grant does not remove the auto-grant.\n  ${unexpected.join('\n  ')}`,
+    ).toEqual([])
+  })
+
   it('no SECURITY DEFINER function is both anon-reachable and unguarded', async () => {
     // The general form of the rule, so a function added later is caught even if
     // nobody remembers to list it above.

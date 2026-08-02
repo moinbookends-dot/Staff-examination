@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl'
 import {
   ChartNoAxesColumn,
   ClipboardCheck,
+  Sparkles,
   FileCheck2,
   FileText,
   GraduationCap,
@@ -24,6 +25,7 @@ import { cn } from '@/lib/utils'
  */
 const ICONS: Record<NavIcon, LucideIcon> = {
   dashboard: LayoutDashboard,
+  guide: Sparkles,
   myExams: GraduationCap,
   questions: Library,
   exams: FileText,
