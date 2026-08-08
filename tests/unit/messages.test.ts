@@ -91,5 +91,54 @@ describe('message bundles', () => {
 
       expect(mismatched, mismatched.join('\n  ')).toEqual([])
     })
+
+  })
+
+  /**
+   * ╔═══════════════════════════════════════════════════════════════════════════╗
+   * ║ NO KEY MAY CONTAIN A DOT. next-intl RESERVES IT FOR NESTING.              ║
+   * ║                                                                           ║
+   * ║ A flat key named "reason.malformed" is not a key with a dot in it — it is ║
+   * ║ a namespace error, and next-intl refuses the whole bundle:                ║
+   * ║                                                                           ║
+   * ║   INVALID_KEY: Namespace keys cannot contain the character "."            ║
+   * ║                                                                           ║
+   * ║ The import screen shipped nine of them for the rejection categories.      ║
+   * ║ Every page threw in the browser console and not one category label        ║
+   * ║ resolved — on the panel whose entire job is explaining why rows were      ║
+   * ║ rejected. Found by screenshotting the page and reading the console.       ║
+   * ║                                                                           ║
+   * ║ ────────────────────────────────────────────────────────────────────────  ║
+   * ║ THIS SITS OUTSIDE describe.each(LOCALES), AND THAT PLACEMENT IS THE TEST. ║
+   * ║                                                                           ║
+   * ║ LOCALES is ['hi', 'gu'] — English is the REFERENCE and is never walked by ║
+   * ║ the per-locale block. The first version of this assertion lived in there  ║
+   * ║ and passed happily with a dotted key injected into en.json, because it    ║
+   * ║ never read en.json at all. Verified by injecting one and watching it go   ║
+   * ║ green.                                                                    ║
+   * ║                                                                           ║
+   * ║ The parity test cannot catch this either: all three locales were broken   ║
+   * ║ identically, so they agreed perfectly.                                    ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   */
+  describe.each(['en', ...LOCALES])('%s key names', (locale) => {
+    it('has no key containing a dot', () => {
+      // paths() joins segments with '.', so a dotted key is indistinguishable
+      // from real nesting once flattened. The raw object has to be walked.
+      const dotted: string[] = []
+      const walk = (node: unknown, prefix: string) => {
+        if (!node || typeof node !== 'object' || Array.isArray(node)) return
+        for (const [key, value] of Object.entries(node)) {
+          if (key.includes('.')) dotted.push(prefix ? `${prefix} → ${key}` : key)
+          walk(value, prefix ? `${prefix}.${key}` : key)
+        }
+      }
+      walk(load(locale), '')
+
+      expect(
+        dotted,
+        `${locale}.json has keys containing "." (next-intl reserves it for nesting):\n  ${dotted.join('\n  ')}`,
+      ).toEqual([])
+    })
   })
 })

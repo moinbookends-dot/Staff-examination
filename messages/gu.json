@@ -703,19 +703,21 @@
     "balanceTitle": "સ્તર પ્રમાણે સંતુલન",
     "row": "પંક્તિ {row}",
     "downgraded": "ડ્રાફ્ટ રખાયો",
-    "reason.malformed": "પ્રશ્ન જેવું નથી",
-    "reason.invalid-difficulty": "અમાન્ય મુશ્કેલી",
-    "reason.invalid-type": "અમાન્ય પ્રશ્ન પ્રકાર",
-    "reason.invalid-status": "અમાન્ય સ્થિતિ",
-    "reason.missing-english": "અંગ્રેજી ગુમ",
-    "reason.invalid-option-structure": "અમાન્ય વિકલ્પો",
-    "reason.invalid-answer": "અમાન્ય જવાબ",
-    "reason.unknown-topic": "અજાણ્યો વિષય",
-    "reason.invalid-reference": "અમાન્ય સંદર્ભ",
     "failed": "આયાત નિષ્ફળ ગયું અને કંઈ સાચવાયું નથી.",
     "partial": "{total} માંથી {done} બેચ પછી આયાત અટક્યું. એ જ ફાઇલ ફરી ચલાવો — પહેલેથી સચવાયેલા પ્રશ્નો અપડેટ થશે, ડુપ્લિકેટ નહીં.",
     "exportTitle": "આ બ્રાન્ડનું નિકાસ",
     "exportHint": "બધા પ્રશ્નો એ જ JSON ફોર્મેટમાં ડાઉનલોડ કરો જે આ સ્ક્રીન આયાત કરે છે.",
-    "exportButton": "JSON ડાઉનલોડ કરો"
+    "exportButton": "JSON ડાઉનલોડ કરો",
+    "reason": {
+      "malformed": "પ્રશ્ન જેવું નથી",
+      "invalid-difficulty": "અમાન્ય મુશ્કેલી",
+      "invalid-type": "અમાન્ય પ્રશ્ન પ્રકાર",
+      "invalid-status": "અમાન્ય સ્થિતિ",
+      "missing-english": "અંગ્રેજી ગુમ",
+      "invalid-option-structure": "અમાન્ય વિકલ્પો",
+      "invalid-answer": "અમાન્ય જવાબ",
+      "unknown-topic": "અજાણ્યો વિષય",
+      "invalid-reference": "અમાન્ય સંદર્ભ"
+    }
   }
 }

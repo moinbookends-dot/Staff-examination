@@ -1205,19 +1205,21 @@
     "balanceTitle": "Balance by level",
     "row": "Row {row}",
     "downgraded": "Held as draft",
-    "reason.malformed": "Not shaped like a question",
-    "reason.invalid-difficulty": "Invalid difficulty",
-    "reason.invalid-type": "Invalid question type",
-    "reason.invalid-status": "Invalid status",
-    "reason.missing-english": "Missing English",
-    "reason.invalid-option-structure": "Invalid options",
-    "reason.invalid-answer": "Invalid answer",
-    "reason.unknown-topic": "Unknown topic",
-    "reason.invalid-reference": "Invalid reference",
     "failed": "The import failed and nothing was written.",
     "partial": "The import stopped after {done} of {total} batches. Re-run the same file to finish — questions that already landed will be updated, not duplicated.",
     "exportTitle": "Export this brand",
     "exportHint": "Downloads every question as a JSON file in the same format this screen imports.",
-    "exportButton": "Download JSON"
+    "exportButton": "Download JSON",
+    "reason": {
+      "malformed": "Not shaped like a question",
+      "invalid-difficulty": "Invalid difficulty",
+      "invalid-type": "Invalid question type",
+      "invalid-status": "Invalid status",
+      "missing-english": "Missing English",
+      "invalid-option-structure": "Invalid options",
+      "invalid-answer": "Invalid answer",
+      "unknown-topic": "Unknown topic",
+      "invalid-reference": "Invalid reference"
+    }
   }
 }

@@ -12,9 +12,28 @@ import { resolve } from 'node:path'
 const MESSAGES = resolve('messages')
 
 /**
- * The eight rejection categories are keyed by their contract slug, so
+ * The rejection categories are keyed by their contract slug, so
  * REJECTION_REASONS can be mapped straight to a label without a lookup table
  * that could fall out of step with the frozen list.
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ NESTED UNDER `reason`, NOT FLAT KEYS NAMED "reason.malformed".            │
+ * │                                                                           │
+ * │ next-intl reserves `.` for nesting and REFUSES a key containing one:      │
+ * │                                                                           │
+ * │   INVALID_KEY: Namespace keys cannot contain the character "." as this is │
+ * │   used to express nesting.                                                │
+ * │                                                                           │
+ * │ Flat dotted keys threw that on every page load and left the import        │
+ * │ report unable to resolve a single category label — the one part of the    │
+ * │ screen that explains why rows were rejected.                              │
+ * │                                                                           │
+ * │ Invisible to tests/unit/messages.test.ts, which checks that the three     │
+ * │ locales carry the SAME keys; identical broken keys pass. Found by         │
+ * │ screenshotting the page and reading the browser console.                  │
+ * │                                                                           │
+ * │ t(`reason.${slug}`) resolves against this nesting unchanged.              │
+ * └───────────────────────────────────────────────────────────────────────────┘
  */
 const IMPORT = {
   en: {
@@ -53,16 +72,18 @@ const IMPORT = {
     row: 'Row {row}',
     downgraded: 'Held as draft',
 
-    // The eight frozen categories.
-    'reason.malformed': 'Not shaped like a question',
-    'reason.invalid-difficulty': 'Invalid difficulty',
-    'reason.invalid-type': 'Invalid question type',
-    'reason.invalid-status': 'Invalid status',
-    'reason.missing-english': 'Missing English',
-    'reason.invalid-option-structure': 'Invalid options',
-    'reason.invalid-answer': 'Invalid answer',
-    'reason.unknown-topic': 'Unknown topic',
-    'reason.invalid-reference': 'Invalid reference',
+    // The eight frozen categories, NESTED — see the box above.
+    reason: {
+      'malformed': 'Not shaped like a question',
+      'invalid-difficulty': 'Invalid difficulty',
+      'invalid-type': 'Invalid question type',
+      'invalid-status': 'Invalid status',
+      'missing-english': 'Missing English',
+      'invalid-option-structure': 'Invalid options',
+      'invalid-answer': 'Invalid answer',
+      'unknown-topic': 'Unknown topic',
+      'invalid-reference': 'Invalid reference',
+    },
 
     failed: 'The import failed and nothing was written.',
     partial: 'The import stopped after {done} of {total} batches. Re-run the same file to finish — questions that already landed will be updated, not duplicated.',
@@ -102,16 +123,18 @@ const IMPORT = {
 
     row: 'पंक्ति {row}',
     downgraded: 'ड्राफ़्ट रखा गया',
-
-    'reason.malformed': 'प्रश्न जैसा नहीं है',
-    'reason.invalid-difficulty': 'अमान्य कठिनाई',
-    'reason.invalid-type': 'अमान्य प्रश्न प्रकार',
-    'reason.invalid-status': 'अमान्य स्थिति',
-    'reason.missing-english': 'अंग्रेज़ी अनुपलब्ध',
-    'reason.invalid-option-structure': 'अमान्य विकल्प',
-    'reason.invalid-answer': 'अमान्य उत्तर',
-    'reason.unknown-topic': 'अज्ञात विषय',
-    'reason.invalid-reference': 'अमान्य संदर्भ',
+    // The eight frozen categories, NESTED — see the box above.
+    reason: {
+      'malformed': 'प्रश्न जैसा नहीं है',
+      'invalid-difficulty': 'अमान्य कठिनाई',
+      'invalid-type': 'अमान्य प्रश्न प्रकार',
+      'invalid-status': 'अमान्य स्थिति',
+      'missing-english': 'अंग्रेज़ी अनुपलब्ध',
+      'invalid-option-structure': 'अमान्य विकल्प',
+      'invalid-answer': 'अमान्य उत्तर',
+      'unknown-topic': 'अज्ञात विषय',
+      'invalid-reference': 'अमान्य संदर्भ',
+    },
 
     failed: 'आयात विफल रहा और कुछ भी सहेजा नहीं गया।',
     partial: '{total} में से {done} बैच के बाद आयात रुक गया। वही फ़ाइल दोबारा चलाएँ — पहले से सहेजे प्रश्न अपडेट होंगे, दोहराए नहीं जाएँगे।',
@@ -151,16 +174,18 @@ const IMPORT = {
 
     row: 'પંક્તિ {row}',
     downgraded: 'ડ્રાફ્ટ રખાયો',
-
-    'reason.malformed': 'પ્રશ્ન જેવું નથી',
-    'reason.invalid-difficulty': 'અમાન્ય મુશ્કેલી',
-    'reason.invalid-type': 'અમાન્ય પ્રશ્ન પ્રકાર',
-    'reason.invalid-status': 'અમાન્ય સ્થિતિ',
-    'reason.missing-english': 'અંગ્રેજી ગુમ',
-    'reason.invalid-option-structure': 'અમાન્ય વિકલ્પો',
-    'reason.invalid-answer': 'અમાન્ય જવાબ',
-    'reason.unknown-topic': 'અજાણ્યો વિષય',
-    'reason.invalid-reference': 'અમાન્ય સંદર્ભ',
+    // The eight frozen categories, NESTED — see the box above.
+    reason: {
+      'malformed': 'પ્રશ્ન જેવું નથી',
+      'invalid-difficulty': 'અમાન્ય મુશ્કેલી',
+      'invalid-type': 'અમાન્ય પ્રશ્ન પ્રકાર',
+      'invalid-status': 'અમાન્ય સ્થિતિ',
+      'missing-english': 'અંગ્રેજી ગુમ',
+      'invalid-option-structure': 'અમાન્ય વિકલ્પો',
+      'invalid-answer': 'અમાન્ય જવાબ',
+      'unknown-topic': 'અજાણ્યો વિષય',
+      'invalid-reference': 'અમાન્ય સંદર્ભ',
+    },
 
     failed: 'આયાત નિષ્ફળ ગયું અને કંઈ સાચવાયું નથી.',
     partial: '{total} માંથી {done} બેચ પછી આયાત અટક્યું. એ જ ફાઇલ ફરી ચલાવો — પહેલેથી સચવાયેલા પ્રશ્નો અપડેટ થશે, ડુપ્લિકેટ નહીં.',

@@ -185,7 +185,18 @@ export function ImportPanel({
               disabled={pending}
             >
               <SelectTrigger id="import-brand" className="w-full sm:w-80">
-                <SelectValue />
+                {/*
+                  A render function, NOT a bare <SelectValue />.
+
+                  Base UI renders the raw `value` when given no children, and
+                  the value here is a brand UUID — so the trigger read
+                  "00000000-0000-0000-0000-00000000b001" instead of "Aiko".
+                  Caught by screenshotting the page; every HTML assertion
+                  passed, because the UUID is genuinely in the markup.
+                */}
+                <SelectValue>
+                  {(value) => brands.find((brand) => brand.id === value)?.name ?? ''}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {brands.map((brand) => (

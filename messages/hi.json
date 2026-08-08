@@ -703,19 +703,21 @@
     "balanceTitle": "स्तर के अनुसार संतुलन",
     "row": "पंक्ति {row}",
     "downgraded": "ड्राफ़्ट रखा गया",
-    "reason.malformed": "प्रश्न जैसा नहीं है",
-    "reason.invalid-difficulty": "अमान्य कठिनाई",
-    "reason.invalid-type": "अमान्य प्रश्न प्रकार",
-    "reason.invalid-status": "अमान्य स्थिति",
-    "reason.missing-english": "अंग्रेज़ी अनुपलब्ध",
-    "reason.invalid-option-structure": "अमान्य विकल्प",
-    "reason.invalid-answer": "अमान्य उत्तर",
-    "reason.unknown-topic": "अज्ञात विषय",
-    "reason.invalid-reference": "अमान्य संदर्भ",
     "failed": "आयात विफल रहा और कुछ भी सहेजा नहीं गया।",
     "partial": "{total} में से {done} बैच के बाद आयात रुक गया। वही फ़ाइल दोबारा चलाएँ — पहले से सहेजे प्रश्न अपडेट होंगे, दोहराए नहीं जाएँगे।",
     "exportTitle": "इस ब्रांड का निर्यात",
     "exportHint": "सभी प्रश्न उसी JSON प्रारूप में डाउनलोड करें जिसे यह स्क्रीन आयात करती है।",
-    "exportButton": "JSON डाउनलोड करें"
+    "exportButton": "JSON डाउनलोड करें",
+    "reason": {
+      "malformed": "प्रश्न जैसा नहीं है",
+      "invalid-difficulty": "अमान्य कठिनाई",
+      "invalid-type": "अमान्य प्रश्न प्रकार",
+      "invalid-status": "अमान्य स्थिति",
+      "missing-english": "अंग्रेज़ी अनुपलब्ध",
+      "invalid-option-structure": "अमान्य विकल्प",
+      "invalid-answer": "अमान्य उत्तर",
+      "unknown-topic": "अज्ञात विषय",
+      "invalid-reference": "अमान्य संदर्भ"
+    }
   }
 }
