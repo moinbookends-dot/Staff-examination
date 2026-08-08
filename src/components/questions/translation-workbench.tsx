@@ -37,7 +37,7 @@ import { AlertTriangleIcon, CheckIcon } from 'lucide-react'
  * paper says.
  */
 
-const TARGETS: Locale[] = ['hi', 'gu', 'hi-Latn']
+const TARGETS: Locale[] = ['hi', 'gu']
 
 export function TranslationWorkbench({
   data,

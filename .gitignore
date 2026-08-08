@@ -49,6 +49,15 @@ supabase/.branches/
 /test-results/
 /playwright-report/
 
+# ── PDF spikes and rendered samples ──────────────────────────────────────────
+#
+# scripts/pdf-sample.test.ts and scripts/pdf-to-png.mjs write real PDFs and
+# PNGs here so a person can LOOK at a generated paper. Three separate footer
+# bugs were found that way, each of which produced a perfectly valid PDF and
+# was invisible to every text assertion — so the tooling earns its place, but
+# its output is regenerated on demand and is never worth committing.
+scripts/.spike/
+
 # ── Source documents ─────────────────────────────────────────────────────────
 #
 # Cookbooks and other imported source material never belong in the repository.

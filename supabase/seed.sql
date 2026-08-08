@@ -54,11 +54,30 @@ insert into public.roles (id, company_id, key, name, description, is_system, sor
   ('00000000-0000-0000-0000-00000000e003', null, 'hr', 'HR Manager',
    'Read-only access to reports, analytics and employee profiles.', true, 3),
   ('00000000-0000-0000-0000-00000000e004', null, 'employee', 'Employee',
-   'Takes assigned exams, studies materials, tracks own performance.', true, 4)
+   'Takes assigned exams, studies materials, tracks own performance.', true, 4),
+  -- The examination system's authoring role. Sorted second because in the new
+  -- product it is the role that does the most work: nothing can be generated
+  -- until an Editor has filled the bank.
+  ('00000000-0000-0000-0000-00000000e005', null, 'editor', 'Question Editor',
+   'Owns the examination question bank: writes, imports, archives and exports questions in all three languages.', true, 5)
 on conflict do nothing;
 
 -- ── Permissions ──────────────────────────────────────────────────────────────
 insert into public.permissions (key, module, action, description) values
+  -- examination question bank (bank_questions). Deliberately NOT the
+  -- 'questions.*' keys below: a chef holds questions.read today, and the new
+  -- bank's access story depends on a chef being unable to read it.
+  ('bank.read',            'bank',       'read',        'View the examination question bank'),
+  ('bank.write',           'bank',       'write',       'Create and edit examination questions'),
+  ('bank.archive',         'bank',       'archive',     'Archive and restore examination questions'),
+  ('bank.delete',          'bank',       'delete',      'Delete and restore examination questions'),
+  ('bank.import',          'bank',       'import',      'Bulk import examination questions'),
+  ('bank.export',          'bank',       'export',      'Bulk export examination questions'),
+  ('bank.read_uuid',       'bank',       'read_uuid',   'See the internal UUID of a question'),
+  -- generated papers
+  ('papers.generate',      'papers',     'generate',    'Generate a question paper and answer key'),
+  ('papers.read_history',  'papers',     'read_history','View generated papers and download them'),
+  ('papers.reset_history', 'papers',     'reset_history','Allow previously generated papers to be generated again'),
   -- questions
   ('questions.read',       'questions',  'read',        'View the question bank'),
   ('questions.create',     'questions',  'create',      'Create questions'),
@@ -114,11 +133,36 @@ on conflict (key) do nothing;
 -- once would lock the platform owner out of their own feature.
 -- ═════════════════════════════════════════════════════════════════════════════
 
+-- Editor — the examination question bank, and nothing outside it.
+--
+-- papers.generate is here on purpose: an Editor is the only person able to
+-- judge whether a paper the bank produces is any good, and withholding it
+-- would mean filling 6,000 questions without ever seeing one come out.
+--
+-- papers.reset_history is granted to NOBODY, here or anywhere. Resetting lets
+-- an already-issued paper be generated again; super_admin reaches it via the
+-- has_perm() short-circuit, which is conspicuous in the audit log.
+insert into public.role_permissions (role_id, permission_id)
+select '00000000-0000-0000-0000-00000000e005', p.id
+  from public.permissions p
+ where p.key in (
+   'bank.read','bank.write','bank.archive','bank.delete',
+   'bank.import','bank.export','bank.read_uuid',
+   'papers.generate','papers.read_history'
+ )
+on conflict do nothing;
+
 -- Chef
+--
+-- The two papers.* keys are ADDED beside the legacy set rather than replacing
+-- it. The old authoring screens are still live and still gated on the old
+-- keys; revoking them before their replacements exist would lock a chef out of
+-- a working application. The narrowing ships with the drop migration.
 insert into public.role_permissions (role_id, permission_id)
 select '00000000-0000-0000-0000-00000000e002', p.id
   from public.permissions p
  where p.key in (
+   'papers.generate','papers.read_history',
    'questions.read','questions.create','questions.update','questions.retire',
    'questions.import','questions.translate',
    'exams.read','exams.create','exams.update','exams.publish','exams.assign','exams.archive',
@@ -135,6 +179,7 @@ insert into public.role_permissions (role_id, permission_id)
 select '00000000-0000-0000-0000-00000000e003', p.id
   from public.permissions p
  where p.key in (
+   'papers.read_history',
    'users.read_all',
    'attempts.read_all',
    'reports.read_all','reports.read_own','reports.export',

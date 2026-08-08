@@ -20,6 +20,17 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      /*
+       * `server-only` throws unless it is imported from a React Server
+       * Component, and vitest's node environment is neither that nor a client
+       * bundle — so any module carrying the guard is untestable without this.
+       *
+       * Stubbed rather than removed from the modules that use it: on the PDF
+       * engine that import is what stops a 2 MB font and a filesystem read
+       * being pulled into a browser bundle. Deleting a production safeguard to
+       * satisfy the test runner would be the wrong way round.
+       */
+      'server-only': fileURLToPath(new URL('./tests/stubs/server-only.ts', import.meta.url)),
     },
   },
   test: {

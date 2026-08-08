@@ -1,8 +1,15 @@
 import 'server-only'
-import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
-import { dbId } from '@/lib/db/id'
-import type { Permission, RoleKey } from './permissions'
+import { appClaimsSchema, DENY_ALL, type AppClaims } from './can'
+
+/*
+ * The schema and the pure predicates live in ./can, which imports no client
+ * and no environment. They are re-exported here so every existing
+ * `from '@/lib/auth/claims'` import keeps working — see the box in that file
+ * for why the split was necessary rather than cosmetic.
+ */
+export { hasRole, isSuperAdmin, can, appClaimsSchema, DENY_ALL } from './can'
+export type { AppClaims } from './can'
 
 /**
  * Reading the `app` claim injected by the custom access token hook (migration 0004).
@@ -17,39 +24,6 @@ import type { Permission, RoleKey } from './permissions'
  * │ initialize() IS NOT OPTIONAL. See below, and do not "tidy" it away.       │
  * └───────────────────────────────────────────────────────────────────────────┘
  */
-
-// dbId(), not z.string().uuid(): these arrive from uuid columns, and Zod 4's
-// strict uuid() rejects the seeded org ids outright. See src/lib/db/id.ts —
-// that mismatch is what made every signed-in user look unapproved.
-const appClaimsSchema = z.object({
-  approved: z.boolean().default(false),
-  company_id: dbId().nullable().default(null),
-  brand_id: dbId().nullable().default(null),
-  outlet_id: dbId().nullable().default(null),
-  department_id: dbId().nullable().default(null),
-  roles: z.array(z.string()).default([]),
-  perms: z.array(z.string()).default([]),
-})
-
-/**
- * `userId` comes from the standard `sub` claim, not from the `app` object the
- * hook injects. Carried here so callers that need to record "who did this"
- * (approved_by, evaluator_id, created_by) do not need a second round trip to
- * getUser() on every mutation.
- */
-export type AppClaims = z.infer<typeof appClaimsSchema> & { userId: string | null }
-
-/** Fails closed. Every field absent, approved false, no roles, no permissions. */
-const DENY_ALL: AppClaims = {
-  userId: null,
-  approved: false,
-  company_id: null,
-  brand_id: null,
-  outlet_id: null,
-  department_id: null,
-  roles: [],
-  perms: [],
-}
 
 /**
  * Verified app claims for the current request, or DENY_ALL.
@@ -97,26 +71,4 @@ export async function getAppClaims(): Promise<AppClaims> {
   // access token hook is not enabled on the project. Symptom: every screen
   // empty, no errors anywhere. Run scripts/verify-auth-hook.mjs.
   return parsed.success ? { ...parsed.data, userId } : { ...DENY_ALL, userId }
-}
-
-export function hasRole(claims: AppClaims, role: RoleKey): boolean {
-  return claims.roles.includes(role)
-}
-
-export function isSuperAdmin(claims: AppClaims): boolean {
-  return hasRole(claims, 'super_admin')
-}
-
-/**
- * Mirrors public.has_perm() in migration 0004 exactly — including the approval
- * gate and the super-admin short-circuit.
- *
- * These two implementations MUST stay in step. If they diverge, the UI shows
- * actions the database then refuses, or worse, hides actions the database
- * would allow. Change one, change the other.
- */
-export function can(claims: AppClaims, permission: Permission): boolean {
-  if (!claims.approved) return false
-  if (isSuperAdmin(claims)) return true
-  return claims.perms.includes(permission)
 }

@@ -23,7 +23,7 @@ import { resolve } from 'node:path'
  */
 
 const root = resolve(__dirname, '../..')
-const LOCALES = ['hi', 'gu', 'hi-Latn'] as const
+const LOCALES = ['hi', 'gu'] as const
 
 type Bundle = { [key: string]: string | Bundle }
 

@@ -159,7 +159,7 @@ try {
   // below shipped and went unnoticed for exactly that reason.
   console.log('\n0b. Signed out')
 
-  for (const locale of ['en', 'hi', 'gu', 'hi-Latn']) {
+  for (const locale of ['en', 'hi', 'gu']) {
     for (const path of ['/login', '/register', '/forgot-password', '/reset-password']) {
       const res = await fetch(`${APP}/${locale}${path}`, { redirect: 'manual' })
       const html = await res.text()
@@ -409,7 +409,7 @@ try {
     'the dashboard is still dumping role slugs and a permission count',
   )
 
-  for (const locale of ['en', 'hi', 'gu', 'hi-Latn']) {
+  for (const locale of ['en', 'hi', 'gu']) {
     const page = await get(`/${locale}/dashboard`)
     check(
       page.status === 200 && !/MISSING_MESSAGE|IntlError/.test(page.html),
@@ -1951,7 +1951,6 @@ try {
   for (const [locale, translated] of [
     ['hi', 'मेरी परीक्षाएँ'],
     ['gu', 'મારી પરીક્ષાઓ'],
-    ['hi-Latn', 'Meri exams'],
   ]) {
     const page = await candGet(`/${locale}/results`)
     check(

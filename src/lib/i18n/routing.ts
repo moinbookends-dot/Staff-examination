@@ -15,17 +15,25 @@ import { defineRouting } from 'next-intl/routing'
  *  3. Debuggable. A non-technical user reporting a translation bug can just
  *     send the URL.
  *
- * ON 'hi-Latn': this is Hinglish — Hindi written in Latin script. It is the
- * correct BCP-47 form (script subtag), not an invented code like "hinglish".
- * Using the standard tag means Intl falls back to Hindi rules for numbers and
- * dates, which is what you want.
- *
- * NOTE: PRD §2.2 says trilingual (EN/HI/GU) while §4.10 says four modes
- * including Hinglish. Four are declared here; §9's cut list drops gu and
- * hi-Latn first if velocity slips.
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ THREE LOCALES, NOT FOUR. HINGLISH WAS REMOVED, AND THE REASON IS THE      │
+ * │ QUESTION BANK RATHER THAN THIS FILE.                                      │
+ * │                                                                           │
+ * │ 'hi-Latn' — Hindi in Latin script — shipped here from M7 and was a        │
+ * │ defensible fourth UI language while candidates sat exams in the app. The  │
+ * │ new examination system stores every question in exactly three languages   │
+ * │ (en, hi, gu) and refuses to activate one that is missing any of them, so  │
+ * │ a fourth UI locale would be a language a chef could switch the app into   │
+ * │ and then never see a question paper in.                                   │
+ * │                                                                           │
+ * │ Removing it here is only half. profiles.preferred_locale still has a      │
+ * │ CHECK admitting 'hi-Latn' (0003), and a profile carrying it would route   │
+ * │ to a locale that no longer exists — migration 0053 moves those rows to    │
+ * │ 'hi' and tightens the constraint. Neither half is safe alone.             │
+ * └───────────────────────────────────────────────────────────────────────────┘
  */
 export const routing = defineRouting({
-  locales: ['en', 'hi', 'gu', 'hi-Latn'],
+  locales: ['en', 'hi', 'gu'],
   defaultLocale: 'en',
 
   // Always prefix, including the default. Mixed prefixing (`/exams` for English
@@ -46,7 +54,6 @@ export const LOCALE_LABELS: Record<Locale, string> = {
   en: 'English',
   hi: 'हिन्दी',
   gu: 'ગુજરાતી',
-  'hi-Latn': 'Hinglish',
 }
 
 export function isLocale(value: string): value is Locale {

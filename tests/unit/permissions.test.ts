@@ -7,6 +7,7 @@ import {
   ROLE_KEYS,
   splitPermission,
   type Permission,
+  type RoleKey,
 } from '@/lib/auth/permissions'
 
 /**
@@ -54,11 +55,21 @@ function grantedKeysFor(roleId: string): string[] {
   return [...match[1].matchAll(/'([a-z_]+\.[a-z_]+)'/g)].map((m) => m[1])
 }
 
-const ROLE_IDS = {
+/**
+ * Typed as Record<…, string> rather than left to inference.
+ *
+ * As a bare `as const` object this map was structurally typed, so adding a role
+ * to ROLE_KEYS and forgetting it here was a TYPE error at the indexing site
+ * below — which is a fine way to find out, but it reports as "property 'editor'
+ * does not exist" several lines from the actual omission. The explicit Record
+ * puts the error on this object, where the fix is.
+ */
+const ROLE_IDS: Record<Exclude<RoleKey, 'super_admin'>, string> = {
+  editor: '00000000-0000-0000-0000-00000000e005',
   chef: '00000000-0000-0000-0000-00000000e002',
   hr: '00000000-0000-0000-0000-00000000e003',
   employee: '00000000-0000-0000-0000-00000000e004',
-} as const
+}
 
 describe('permission registry ↔ seed.sql', () => {
   it('seeds exactly the keys declared in PERMISSIONS', () => {

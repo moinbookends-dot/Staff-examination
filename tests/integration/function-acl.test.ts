@@ -127,7 +127,8 @@ describeDb('function privileges', () => {
    * │ function to anon and authenticated, so `grant … to authenticated` adds  │
    * │ nothing — it reads like a decision and changes no privilege. Three      │
    * │ migrations have now shipped anon-executable that way: 0044 and 0045 in  │
-   * │ M9, and claim_job in 0051.                                              │
+   * │ M9, and claim_job in the jobs queue — which was deleted unapplied when   │
+   * │ the examination system dropped OCR, so only the M9 pair remain findable. │
    * │                                                                         │
    * │ Each was SECURITY INVOKER or otherwise guarded, so none was an          │
    * │ incident. That is exactly why none was caught: the DEFINER sweep below  │

@@ -7,12 +7,24 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  /* Was `var(--font-sans)` — self-referential, so it resolved to nothing and
-     every `font-sans` in the app silently fell back to the Tailwind default
-     stack. The layout publishes Geist as --font-geist-sans. */
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-geist-sans);
+
+  /* ─────────────────────────────────────────────────────────────────────────
+     Type stacks, per DESIGN.md.
+
+     Was `var(--font-sans)` — self-referential, so it resolved to nothing and
+     every `font-sans` in the app silently fell back to the Tailwind default.
+
+     THE INDIC FACES ARE PART OF THE STACK, NOT A SEPARATE UTILITY. A browser
+     picks a face PER GLYPH from the list, so a Hindi question rendered inside
+     an otherwise-English screen — which the Question Bank does, showing all
+     three languages — gets Noto Devanagari for its Devanagari runs and Hanken
+     Grotesk for everything else, with no per-locale class to remember.
+     ───────────────────────────────────────────────────────────────────────── */
+  --font-sans: var(--font-sans-latin), var(--font-devanagari), var(--font-gujarati),
+    ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-mono-latin), ui-monospace, monospace;
+  --font-heading: var(--font-sans-latin), var(--font-devanagari), var(--font-gujarati),
+    ui-sans-serif, system-ui, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -58,13 +70,32 @@
   --color-brand-capiche: var(--brand-capiche);
   --color-brand-aiko: var(--brand-aiko);
 
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  /* ─────────────────────────────────────────────────────────────────────────
+     Shape, per DESIGN.md.
+
+     Absolute values, not multiples of a single --radius. The scale it replaced
+     derived everything from one number, so `rounded-xl` was 1.05rem and
+     `rounded-2xl` 1.35rem — close enough to each other to be indistinguishable,
+     and neither matching the "8px on controls, 24px on cards" rule the design
+     system states.
+
+     The two that carry the look: DEFAULT (8px) on buttons, inputs and chips,
+     and xl (24px) on cards and dashboard widgets.
+     ───────────────────────────────────────────────────────────────────────── */
+  --radius-sm: 0.25rem;
+  --radius: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  --radius-2xl: 2rem;
+  --radius-full: 9999px;
+
+  /* ─────────────────────────────────────────────────────────────────────────
+     Elevation. Ambient rather than directional — a wide, very soft shadow that
+     reads as depth without the drop-shadow look that dates an interface.
+     ───────────────────────────────────────────────────────────────────────── */
+  --shadow-surface: 0 4px 20px -2px rgb(15 23 42 / 0.05);
+  --shadow-overlay: 0 12px 32px -4px rgb(15 23 42 / 0.14);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -240,6 +271,90 @@
   background-color: color-mix(in oklab, var(--card) 72%, transparent);
   -webkit-backdrop-filter: blur(16px) saturate(140%);
   backdrop-filter: blur(16px) saturate(140%);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Typography roles, per DESIGN.md.
+
+   ┌───────────────────────────────────────────────────────────────────────────┐
+   │ ROLES, NOT SIZES. A screen writes `text-headline-lg`, never               │
+   │ `text-[32px] font-semibold tracking-[-0.01em] leading-10`.                │
+   │                                                                           │
+   │ The design system defines seven roles with specific weight, leading and   │
+   │ tracking. Spelled out at each call site they drift — one page ends up at  │
+   │ 30px, another forgets the negative tracking on a headline, and the        │
+   │ interface stops looking like one system. Naming them once also means a    │
+   │ change to the scale is a change to this file.                            │
+   └───────────────────────────────────────────────────────────────────────────┘
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@utility text-display-lg {
+  font-size: 3rem;
+  font-weight: 700;
+  line-height: 3.5rem;
+  letter-spacing: -0.02em;
+}
+
+@utility text-headline-lg {
+  font-size: 2rem;
+  font-weight: 600;
+  line-height: 2.5rem;
+  letter-spacing: -0.01em;
+  /* DESIGN.md carries a separate mobile size for this role. Applied as a query
+     rather than a second utility so a page cannot use the desktop size on a
+     phone by forgetting to add the responsive variant. */
+  @media (width < 48rem) {
+    font-size: 1.5rem;
+    line-height: 2rem;
+  }
+}
+
+@utility text-title-md {
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.75rem;
+}
+
+@utility text-body-md {
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.5rem;
+}
+
+@utility text-body-sm {
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.25rem;
+}
+
+/*
+ * The one role that changes typeface.
+ *
+ * JetBrains Mono, uppercase, wide tracking — used for metadata, IDs, status
+ * chips and table headers, where a technical contrast against the editorial
+ * body text is wanted. It is deliberately small and never used for prose.
+ */
+@utility text-label-caps {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/*
+ * Level 1 in the elevation scale: a content card.
+ *
+ * A 1px border AND an ambient shadow, not one or the other. The border does
+ * the work in dark mode and on a printed page where the shadow disappears;
+ * the shadow does it in light mode where a bare border reads as a wireframe.
+ */
+@utility surface-1 {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background-color: var(--card);
+  box-shadow: var(--shadow-surface);
 }
 
 @layer base {

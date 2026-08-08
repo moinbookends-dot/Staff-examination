@@ -66,7 +66,11 @@ export const translationContentSchema: z.ZodType<TranslationContent> = z
   })
   .strict()
 
-export const LOCALES = ['en', 'hi', 'gu', 'hi-Latn'] as const
+// Three, not four. Hinglish was removed with the examination rebuild — see the
+// box in src/lib/i18n/routing.ts. question_translations.locale still admits
+// 'hi-Latn' at the database level and any existing rows are left alone; this
+// list is what the workbench offers, and it offers nothing that has no UI.
+export const LOCALES = ['en', 'hi', 'gu'] as const
 export type Locale = (typeof LOCALES)[number]
 export type TranslationStatus = 'draft' | 'review' | 'published'
 

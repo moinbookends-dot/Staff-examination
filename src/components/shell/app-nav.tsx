@@ -2,15 +2,16 @@
 
 import { useTranslations } from 'next-intl'
 import {
-  ChartNoAxesColumn,
-  ClipboardCheck,
-  Sparkles,
-  FileCheck2,
-  FileText,
-  GraduationCap,
+  Database,
+  FilePlus2,
+  History,
   LayoutDashboard,
-  Library,
+  Settings,
   ShieldCheck,
+  TagsIcon,
+  UploadIcon,
+  Sparkles,
+  UserRound,
   UserRoundCheck,
   type LucideIcon,
 } from 'lucide-react'
@@ -19,58 +20,61 @@ import type { NavIcon, NavItem } from '@/lib/auth/nav'
 import { cn } from '@/lib/utils'
 
 /**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * Primary navigation, per the Stitch design.
+ *
+ * Items are computed server-side from the user's claims and passed in — the
+ * client never receives links it is not entitled to, and the permission logic
+ * stays in one place (src/lib/auth/nav.ts).
+ *
+ * Rendered in two places by two components:
+ *   SidebarNav  — the desktop rail, with an active pill and a right-edge tab
+ *   MobileTabBar — the fixed bottom bar below `md`
+ *
+ * They are separate components rather than one with an `orientation` prop.
+ * The previous single component took that prop and the horizontal instance
+ * inherited `flex-col`, so eleven links stacked into a column inside a
+ * container that only scrolled sideways. The two layouts share nothing but an
+ * icon map, and pretending otherwise produced a nav several screens tall.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+
+/**
  * The string → component map nav.ts deliberately does not hold: NAV_ITEMS
  * crosses the server/client boundary and a component reference would not
- * survive it.
+ * survive serialisation.
  */
 const ICONS: Record<NavIcon, LucideIcon> = {
   dashboard: LayoutDashboard,
+  bank: Database,
+  generate: FilePlus2,
+  history: History,
+  editors: ShieldCheck,
+  settings: Settings,
   guide: Sparkles,
-  myExams: GraduationCap,
-  questions: Library,
-  exams: FileText,
-  evaluate: ClipboardCheck,
-  verify: FileCheck2,
-  results: ShieldCheck,
-  reports: ChartNoAxesColumn,
   approvals: UserRoundCheck,
+  topics: TagsIcon,
+  import: UploadIcon,
+  profile: UserRound,
 }
 
-/**
- * Primary navigation. Items are computed server-side from the user's claims
- * and passed in — the client never sees links it isn't entitled to, and the
- * permission logic stays in one place.
- *
- * Rendered twice per page: as a sidebar rail above `md`, and as a scrolling
- * strip along the bottom below it. The horizontal instance used to inherit
- * `flex-col`, so eleven links stacked into a column inside a container that
- * only scrolls sideways — the mobile nav was several screens tall and the
- * overflow went the wrong way.
- */
-export function AppNav({
-  items,
-  orientation = 'vertical',
-}: {
-  items: NavItem[]
-  orientation?: 'vertical' | 'horizontal'
-}) {
-  const t = useTranslations('nav')
+/** Exact match for /dashboard, prefix elsewhere so /questions/123 stays lit. */
+function useIsActive() {
   const pathname = usePathname()
-  const horizontal = orientation === 'horizontal'
+  return (href: string) =>
+    href === '/dashboard'
+      ? pathname === href
+      : pathname === href || pathname.startsWith(`${href}/`)
+}
+
+export function SidebarNav({ items }: { items: NavItem[] }) {
+  const t = useTranslations('nav')
+  const isActive = useIsActive()
 
   return (
-    <nav
-      className={cn('flex gap-1', horizontal ? 'flex-row' : 'flex-col')}
-      aria-label="Main"
-    >
+    <nav className="flex flex-col gap-1" aria-label="Main">
       {items.map((item) => {
-        // Exact match for /dashboard, prefix match elsewhere so
-        // /exams/123/builder still highlights "Exams".
-        const active =
-          item.href === '/dashboard'
-            ? pathname === item.href
-            : pathname === item.href || pathname.startsWith(`${item.href}/`)
-
+        const active = isActive(item.href)
         const Icon = ICONS[item.icon]
 
         return (
@@ -79,31 +83,90 @@ export function AppNav({
             href={item.href}
             aria-current={active ? 'page' : undefined}
             className={cn(
-              'group relative flex items-center rounded-lg text-sm transition-colors',
-              horizontal
-                ? 'shrink-0 flex-col gap-1 px-3 py-1.5 text-xs'
-                : 'gap-2.5 px-3 py-2',
+              'group relative flex items-center gap-3 rounded-md px-3 py-2.5 text-body-sm transition-colors',
               active
-                ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
-                : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground',
+                ? 'bg-accent font-medium text-accent-foreground'
+                : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
             )}
           >
-            {/* A rail on the active item, so the current section is legible at
-                a glance rather than only by a slight change in background. */}
-            {active && !horizontal && (
-              <span
-                aria-hidden
-                className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-primary"
-              />
-            )}
             <Icon
               aria-hidden
               className={cn(
-                'size-4 shrink-0 transition-colors',
-                active ? 'text-primary' : 'text-muted-foreground/70 group-hover:text-foreground',
+                'size-5 shrink-0 transition-colors',
+                active ? 'text-primary' : 'text-muted-foreground/80 group-hover:text-foreground',
               )}
             />
             {t(item.labelKey)}
+
+            {/* The tab on the right edge of the active item, which the Stitch
+                sidebar uses instead of a left rail. Decorative — `aria-current`
+                above is what a screen reader announces. */}
+            {active && (
+              <span
+                aria-hidden
+                className="absolute -right-3 top-1/2 h-8 w-1.5 -translate-y-1/2 rounded-l-full bg-primary"
+              />
+            )}
+          </Link>
+        )
+      })}
+    </nav>
+  )
+}
+
+/**
+ * The fixed bottom bar below `md`.
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ THE TAB COUNT VARIES, AND THE LAYOUT MUST NOT ASSUME FIVE.                │
+ * │                                                                           │
+ * │ A Chef holds no bank.* permission, so the Questions tab is absent for     │
+ * │ them — four tabs, not five. `flex-1` on each item distributes whatever    │
+ * │ arrives, so neither case reads as though something failed to load.        │
+ * │                                                                           │
+ * │ A grid with five fixed columns would leave a Chef staring at an empty     │
+ * │ slot.                                                                     │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ */
+export function MobileTabBar({ items }: { items: NavItem[] }) {
+  const t = useTranslations('nav')
+  const isActive = useIsActive()
+
+  return (
+    <nav className="flex items-stretch" aria-label="Main">
+      {items.map((item) => {
+        const active = isActive(item.href)
+        const Icon = ICONS[item.icon]
+
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            aria-current={active ? 'page' : undefined}
+            className="flex flex-1 flex-col items-center justify-center gap-1 px-1 py-2"
+          >
+            {/*
+              The active tab is a filled pill around the ICON only, with the
+              label beneath it — the Stitch mobile bar's treatment. Applying the
+              fill to the whole cell instead makes the bar look like a segmented
+              control and the labels become hard to read at this size.
+            */}
+            <span
+              className={cn(
+                'flex h-8 w-12 items-center justify-center rounded-full transition-colors',
+                active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground',
+              )}
+            >
+              <Icon aria-hidden className="size-5" />
+            </span>
+            <span
+              className={cn(
+                'text-[0.6875rem] leading-none',
+                active ? 'font-medium text-foreground' : 'text-muted-foreground',
+              )}
+            >
+              {t(item.labelKey)}
+            </span>
           </Link>
         )
       })}

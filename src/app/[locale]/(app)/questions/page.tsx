@@ -1,194 +1,212 @@
 import { getTranslations } from 'next-intl/server'
-import { requirePermission } from '@/lib/auth/guards'
-import { can } from '@/lib/auth/claims'
+import { DatabaseIcon, DownloadIcon, PlusIcon, UploadIcon } from 'lucide-react'
+import { getAppClaims } from '@/lib/auth/claims'
+import { requireApproved } from '@/lib/auth/guards'
+import { AuthorizationError } from '@/lib/auth/guards'
+import { canEditQuestions, canOpenQuestionBank } from '@/lib/auth/bank-access'
+import { can } from '@/lib/auth/can'
 import { Link } from '@/lib/i18n/navigation'
-import { listQuestions, listCategories } from '@/server/actions/questions'
-import { listSavedFilters } from '@/server/actions/saved-filters'
-import { parseQuestionFilters } from '@/lib/questions/filters'
-import { filtersToSearchParams } from '@/lib/search-params'
-import { QUESTION_URL_DEFAULTS } from '@/lib/questions/sort'
-import { QuestionFilters } from './question-filters'
-import { QuestionSelectionProvider } from '@/components/questions/selection-provider'
-import { QuestionTable } from '@/components/questions/question-table'
-import { BulkToolbar } from '@/components/questions/bulk-toolbar'
-import { SavedFilterMenu } from '@/components/questions/saved-filter-menu'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { PageHeader } from '@/components/ui/page-header'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ActivityIcon, PlusIcon, Trash2Icon } from 'lucide-react'
+import { buttonVariants } from '@/components/ui/button'
+import { QuestionList } from '@/components/bank/question-list'
+import { loadFormOptions, loadQuestionPage } from '@/server/papers/bank-data'
+import { cn } from '@/lib/utils'
 
 /**
- * The question bank — the screen the whole of M8 exists to serve.
+ * ═══════════════════════════════════════════════════════════════════════════
+ * Question Bank — Editor only.
  *
- * FILTERS LIVE IN THE URL, not in component state. A chef can bookmark "active
- * knife-skills questions at difficulty 4" and send it to another chef; state
- * would make that unshareable and lose the filter on every back-navigation.
- * Sorting, page size and the recycle-bin flag joined them for the same reason,
- * and are validated by the same schema.
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║ THIS ROUTE WAS REACHABLE BY A CHEF AND THAT WAS A REAL HOLE.              ║
+ * ║                                                                           ║
+ * ║ The page that stood here belonged to the old nine-format question bank    ║
+ * ║ and gated on requirePermission('questions.read') — a permission the chef  ║
+ * ║ role holds. So while the navigation correctly offered no link, typing the ║
+ * ║ URL rendered the whole bank at 200.                                       ║
+ * ║                                                                           ║
+ * ║ Found by scripts/check-shell.mjs asserting the route as well as the nav.  ║
+ * ║ A hidden link is not an access control; the route has to refuse.          ║
+ * ║                                                                           ║
+ * ║ THE GATE IS canOpenQuestionBank, NOT requirePermission('bank.read'):      ║
+ * ║ has_perm() short-circuits true for super_admin, so a permission check     ║
+ * ║ alone would admit the one role that is deliberately excluded. The         ║
+ * ║ predicate is the governance boundary and it is the same function the nav  ║
+ * ║ and the server actions call.                                              ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
  *
- * It is also the shape M3's exam builder needs: rule-based selection is a saved
- * filter, chosen over pool membership tables because membership goes stale —
- * a question added next week belongs to no pool until somebody remembers.
- *
- * This file composes and does not decide. Every permission below is a courtesy
- * that hides a control which would fail anyway: the actions re-check each one
- * and the RPCs behind them are SECURITY INVOKER, so RLS is the boundary.
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ THE EMPTY STATE IS NOW CONDITIONAL, AND IT USED TO BE UNCONDITIONAL.      │
+ * │                                                                           │
+ * │ This page rendered EmptyState whatever the bank held — it never queried   │
+ * │ the database at all. That was correct while bank_questions did not exist, │
+ * │ and became a bug the moment the migrations landed: importing 3,000        │
+ * │ questions left the Question Bank still reading "empty", which is the one  │
+ * │ thing a data screen must never do.                                        │
+ * │                                                                           │
+ * │ Caught by the stabilization audit, which found zero database references   │
+ * │ in a file whose whole purpose is to list rows.                            │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ * ═══════════════════════════════════════════════════════════════════════════
  */
-export default async function QuestionsPage({
+export default async function QuestionBankPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>
+  searchParams: Promise<{ page?: string }>
 }) {
-  const claims = await requirePermission('questions.read')
-  const t = await getTranslations('questions')
+  await requireApproved()
 
-  const raw = await searchParams
-  // Unparseable parameters fall back to defaults rather than erroring: these
-  // arrive from URLs people edit, share and truncate.
-  const filters = parseQuestionFilters(raw)
+  const claims = await getAppClaims()
+  if (!canOpenQuestionBank(claims)) {
+    throw new AuthorizationError('The Question Bank is available to Editors only.', 'bank.read')
+  }
 
-  const canUpdate = can(claims, 'questions.update')
-  const canRetire = can(claims, 'questions.retire')
+  const t = await getTranslations('bank')
+  const { page } = await searchParams
 
-  const [{ items, total, page, pageSize }, categories, savedFilters] = await Promise.all([
-    listQuestions(filters),
-    listCategories(),
-    listSavedFilters(),
+  // Number('abc') is NaN and Number('') is 0, so both fall back to page 1
+  // rather than reaching the loader as a nonsense range.
+  const requested = Number(page)
+  const current = Number.isFinite(requested) && requested >= 1 ? Math.floor(requested) : 1
+
+  const [questions, options] = await Promise.all([
+    loadQuestionPage({ page: current }),
+    loadFormOptions(),
   ])
 
-  const lastPage = Math.max(1, Math.ceil(total / pageSize))
-  const href = (patch: Record<string, string | number | boolean>) =>
-    `/questions?${filtersToSearchParams({ ...filters, ...patch }, QUESTION_URL_DEFAULTS)}`
+  const canWrite = canEditQuestions(claims)
+  const canExport = can(claims, 'bank.export')
+
+  // Their own brand when pinned, otherwise the first they can see. The handler
+  // re-decides this server-side — a pinned Editor cannot widen it by editing
+  // the query string — so this only has to produce a link that works.
+  const exportBrandId =
+    (claims.brand_id && options.brands.some((b) => b.id === claims.brand_id)
+      ? claims.brand_id
+      : options.brands[0]?.id) ?? null
+  const lastPage = Math.max(1, Math.ceil(questions.total / questions.pageSize))
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {filters.deleted ? t('bin.title') : t('title')}
-          </h1>
-          <p className="text-sm text-muted-foreground">{t('subtitle')}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {!filters.deleted && (
-            <Link
-              href="/questions/quality"
-              className={buttonVariants({ variant: 'outline', size: 'sm' })}
-            >
-              <ActivityIcon />
-              {t('quality.title')}
-            </Link>
-          )}
-          {/* Only offered to whoever can act on it. 0041's questions_read_deleted
-              requires questions.retire, so without it the view is empty anyway —
-              a link to an empty page is worse than no link. */}
-          {canRetire && (
-            <Link
-              href={filters.deleted ? '/questions' : href({ deleted: true, page: 1 })}
-              className={buttonVariants({ variant: 'outline', size: 'sm' })}
-            >
-              <Trash2Icon />
-              {filters.deleted ? t('bin.leave') : t('bin.open')}
-            </Link>
-          )}
-          {/* buttonVariants on a Link, not <Button asChild> — Base UI's Button
-              has no asChild, and a real anchor keeps middle-click and
-              open-in-new-tab working. */}
-          {can(claims, 'questions.create') && !filters.deleted && (
-            <Link href="/questions/new" className={buttonVariants()}>
-              <PlusIcon />
-              {t('new')}
-            </Link>
-          )}
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title={t('title')}
+        description={
+          questions.total > 0 ? t('countLabel', { count: questions.total }) : t('subtitle')
+        }
+        actions={
+          canWrite ? (
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href="/questions/import"
+                className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+              >
+                <UploadIcon />
+                {t('import')}
+              </Link>
 
-      {!filters.deleted && (
-        <>
-          <QuestionFilters categories={categories} />
-          <SavedFilterMenu filters={savedFilters} />
-        </>
-      )}
+              {/*
+                The export is an /api route, not a page — it answers with a file
+                and a Content-Disposition header. This linked to /questions/export,
+                which has never existed, so the button 404d. Found in the
+                stabilization audit; nav.ts already carries the rule it broke:
+                a link is a promise about a route, and the route has to keep it.
 
-      {/*
-       * The provider wraps the toolbar AND the table, because the toolbar shows
-       * what the table selected. It is above both so a soft navigation — every
-       * filter, sort and page change is one — cannot remount the selection away.
-       */}
-      <QuestionSelectionProvider>
-        {(canUpdate || canRetire) && (
-          <BulkToolbar canUpdate={canUpdate} canRetire={canRetire} inBin={filters.deleted} />
-        )}
+                A plain <a>, not <Link>: next/link prefetches and client-navigates,
+                neither of which is meaningful for a download.
+              */}
+              {/*
+                A plain <a>, not <Link>: /api/bank/export is a Route Handler that
+                answers with a file and a Content-Disposition header. <Link> would
+                client-navigate and the download would never start.
 
-        {items.length === 0 ? (
-          <EmptyState message={filters.deleted ? t('bin.empty') : t('empty')} />
-        ) : (
-          <QuestionTable items={items} canSelect={canUpdate || canRetire} />
-        )}
-      </QuestionSelectionProvider>
-
-      <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-        <span className="text-muted-foreground">{t('pagination', { page, lastPage, total })}</span>
-
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-1.5 text-muted-foreground">
-            {t('pageSize.label')}
-            {/*
-             * Links, not a <select> with an onChange — this is a server
-             * component, and a real anchor keeps the choice shareable and
-             * needs no JavaScript to work.
-             */}
-            <span className="flex gap-1">
-              {[25, 50, 100].map((size) => (
-                <Link
-                  key={size}
-                  href={href({ pageSize: size, page: 1 })}
-                  aria-current={pageSize === size ? 'true' : undefined}
-                  className={
-                    pageSize === size
-                      ? 'rounded px-1.5 font-medium text-foreground underline underline-offset-4'
-                      : 'rounded px-1.5 hover:text-foreground'
-                  }
+                THE BRAND IS EXPLICIT because the handler answers 400 without one.
+                A brand-pinned Editor has theirs forced server-side regardless of
+                what the query says; an unscoped Editor needs a brand named here or
+                the button fails. This linked to /questions/export — a route that has
+                never existed — until the stabilization audit found the 404.
+              */}
+              {canExport && questions.total > 0 && exportBrandId && (
+                <a
+                  href={`/api/bank/export?brand=${encodeURIComponent(exportBrandId)}`}
+                  className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
                 >
-                  {size}
-                </Link>
-              ))}
-            </span>
-          </label>
+                  <DownloadIcon />
+                  {t('export')}
+                </a>
+              )}
+
+              <Link href="/questions/new" className={cn(buttonVariants({ size: 'sm' }))}>
+                <PlusIcon />
+                {t('create')}
+              </Link>
+            </div>
+          ) : undefined
+        }
+      />
+
+      {questions.total === 0 ? (
+        <EmptyState
+          icon={DatabaseIcon}
+          message={t('empty')}
+          hint={t('emptyHint')}
+          action={
+            canWrite ? (
+              <Link href="/questions/import" className={cn(buttonVariants({ size: 'sm' }))}>
+                <UploadIcon />
+                {t('import')}
+              </Link>
+            ) : undefined
+          }
+        />
+      ) : (
+        <>
+          <QuestionList
+            rows={questions.rows}
+            difficultyLabels={options.difficultyLabels}
+            typeLabels={{ mcq: t('type.mcq'), short_answer: t('type.short_answer') }}
+            labels={{
+              question: t('colQuestion'),
+              difficulty: t('colDifficulty'),
+              type: t('colType'),
+              topic: t('colTopic'),
+              status: t('colStatus'),
+              languages: t('colLanguages'),
+              uuid: t('colUuid'),
+              untitled: t('untitled'),
+            }}
+          />
 
           {lastPage > 1 && (
-            /* At the ends of the range the control becomes a disabled button
-               rather than a dead link. An anchor cannot be disabled — styling
-               one to look inert still leaves it clickable, focusable and in
-               the tab order. */
-            <div className="flex gap-2">
-              {page > 1 ? (
-                <Link
-                  href={href({ page: page - 1 })}
-                  className={buttonVariants({ variant: 'outline', size: 'sm' })}
-                >
-                  {t('previous')}
-                </Link>
-              ) : (
-                <Button variant="outline" size="sm" disabled>
-                  {t('previous')}
-                </Button>
-              )}
-              {page < lastPage ? (
-                <Link
-                  href={href({ page: page + 1 })}
-                  className={buttonVariants({ variant: 'outline', size: 'sm' })}
-                >
-                  {t('next')}
-                </Link>
-              ) : (
-                <Button variant="outline" size="sm" disabled>
-                  {t('next')}
-                </Button>
-              )}
-            </div>
+            <nav className="flex items-center justify-between gap-3" aria-label="Pagination">
+              <Link
+                href={`/questions?page=${current - 1}`}
+                aria-disabled={current <= 1}
+                className={cn(
+                  buttonVariants({ variant: 'outline', size: 'sm' }),
+                  current <= 1 && 'pointer-events-none opacity-50',
+                )}
+              >
+                {t('prev')}
+              </Link>
+
+              <span className="text-body-sm text-muted-foreground">
+                {t('pageOf', { page: current, total: lastPage })}
+              </span>
+
+              <Link
+                href={`/questions?page=${current + 1}`}
+                aria-disabled={current >= lastPage}
+                className={cn(
+                  buttonVariants({ variant: 'outline', size: 'sm' }),
+                  current >= lastPage && 'pointer-events-none opacity-50',
+                )}
+              >
+                {t('next')}
+              </Link>
+            </nav>
           )}
-        </div>
-      </div>
+        </>
+      )}
     </div>
   )
 }

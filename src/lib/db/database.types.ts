@@ -259,6 +259,115 @@ export type Database = {
         }
         Relationships: []
       }
+      "bank_question_texts": {
+        Row: {
+          "question_id": string
+          "brand_id": string
+          "difficulty": Database["public"]["Enums"]["bank_difficulty"]
+          "qtype": Database["public"]["Enums"]["bank_question_type"]
+          "locale": string
+          "question": string
+          "option_a": string | null
+          "option_b": string | null
+          "option_c": string | null
+          "option_d": string | null
+          "answer_text": string | null
+          "explanation": string | null
+          "created_at": string
+          "updated_at": string
+          "search_tsv": string | null
+        }
+        Insert: {
+          "question_id": string
+          "brand_id": string
+          "difficulty": Database["public"]["Enums"]["bank_difficulty"]
+          "qtype": Database["public"]["Enums"]["bank_question_type"]
+          "locale": string
+          "question": string
+          "option_a"?: string | null
+          "option_b"?: string | null
+          "option_c"?: string | null
+          "option_d"?: string | null
+          "answer_text"?: string | null
+          "explanation"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+        }
+        Update: {
+          "question_id"?: string
+          "brand_id"?: string
+          "difficulty"?: Database["public"]["Enums"]["bank_difficulty"]
+          "qtype"?: Database["public"]["Enums"]["bank_question_type"]
+          "locale"?: string
+          "question"?: string
+          "option_a"?: string | null
+          "option_b"?: string | null
+          "option_c"?: string | null
+          "option_d"?: string | null
+          "answer_text"?: string | null
+          "explanation"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+        }
+        Relationships: []
+      }
+      "bank_questions": {
+        Row: {
+          "id": string
+          "company_id": string
+          "brand_id": string
+          "difficulty": Database["public"]["Enums"]["bank_difficulty"]
+          "qtype": Database["public"]["Enums"]["bank_question_type"]
+          "topic_id": string | null
+          "correct_option": string | null
+          "reference_document_id": string | null
+          "reference_page": number | null
+          "status": Database["public"]["Enums"]["bank_question_status"]
+          "created_by": string
+          "updated_by": string | null
+          "deleted_at": string | null
+          "created_at": string
+          "updated_at": string
+          "external_id": string | null
+        }
+        Insert: {
+          "id"?: string
+          "company_id": string
+          "brand_id": string
+          "difficulty": Database["public"]["Enums"]["bank_difficulty"]
+          "qtype": Database["public"]["Enums"]["bank_question_type"]
+          "topic_id"?: string | null
+          "correct_option"?: string | null
+          "reference_document_id"?: string | null
+          "reference_page"?: number | null
+          "status"?: Database["public"]["Enums"]["bank_question_status"]
+          "created_by": string
+          "updated_by"?: string | null
+          "deleted_at"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          "external_id"?: string | null
+        }
+        Update: {
+          "id"?: string
+          "company_id"?: string
+          "brand_id"?: string
+          "difficulty"?: Database["public"]["Enums"]["bank_difficulty"]
+          "qtype"?: Database["public"]["Enums"]["bank_question_type"]
+          "topic_id"?: string | null
+          "correct_option"?: string | null
+          "reference_document_id"?: string | null
+          "reference_page"?: number | null
+          "status"?: Database["public"]["Enums"]["bank_question_status"]
+          "created_by"?: string
+          "updated_by"?: string | null
+          "deleted_at"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          "external_id"?: string | null
+        }
+        Relationships: []
+      }
       "brands": {
         Row: {
           "id": string
@@ -403,6 +512,45 @@ export type Database = {
         }
         Relationships: []
       }
+      "difficulty_levels": {
+        Row: {
+          "id": string
+          "company_id": string
+          "name": string
+          "min_level": number
+          "max_level": number
+          "sort_order": number
+          "is_default": boolean
+          "created_by": string
+          "created_at": string
+          "updated_at": string
+        }
+        Insert: {
+          "id"?: string
+          "company_id": string
+          "name": string
+          "min_level": number
+          "max_level": number
+          "sort_order"?: number
+          "is_default"?: boolean
+          "created_by": string
+          "created_at"?: string
+          "updated_at"?: string
+        }
+        Update: {
+          "id"?: string
+          "company_id"?: string
+          "name"?: string
+          "min_level"?: number
+          "max_level"?: number
+          "sort_order"?: number
+          "is_default"?: boolean
+          "created_by"?: string
+          "created_at"?: string
+          "updated_at"?: string
+        }
+        Relationships: []
+      }
       "document_pages": {
         Row: {
           "id": string
@@ -532,6 +680,99 @@ export type Database = {
         }
         Relationships: []
       }
+      "exam_paper_files": {
+        Row: {
+          "paper_id": string
+          "locale": string
+          "kind": string
+          "storage_path": string
+          "byte_size": number | null
+          "created_at": string
+        }
+        Insert: {
+          "paper_id": string
+          "locale": string
+          "kind": string
+          "storage_path": string
+          "byte_size"?: number | null
+          "created_at"?: string
+        }
+        Update: {
+          "paper_id"?: string
+          "locale"?: string
+          "kind"?: string
+          "storage_path"?: string
+          "byte_size"?: number | null
+          "created_at"?: string
+        }
+        Relationships: []
+      }
+      "exam_paper_questions": {
+        Row: {
+          "paper_id": string
+          "question_id": string
+          "question_no": number
+          "section": Database["public"]["Enums"]["bank_question_type"]
+        }
+        Insert: {
+          "paper_id": string
+          "question_id": string
+          "question_no": number
+          "section": Database["public"]["Enums"]["bank_question_type"]
+        }
+        Update: {
+          "paper_id"?: string
+          "question_id"?: string
+          "question_no"?: number
+          "section"?: Database["public"]["Enums"]["bank_question_type"]
+        }
+        Relationships: []
+      }
+      "exam_papers": {
+        Row: {
+          "id": string
+          "company_id": string
+          "brand_id": string
+          "paper_no": number
+          "difficulty": Database["public"]["Enums"]["bank_difficulty"]
+          "marks": number
+          "mcq_n": number
+          "short_n": number
+          "combination_hash": string
+          "epoch": number
+          "generated_by": string
+          "generated_at": string
+        }
+        Insert: {
+          "id"?: string
+          "company_id": string
+          "brand_id": string
+          "paper_no": number
+          "difficulty": Database["public"]["Enums"]["bank_difficulty"]
+          "marks": number
+          "mcq_n": number
+          "short_n": number
+          "combination_hash": string
+          "epoch": number
+          "generated_by": string
+          "generated_at"?: string
+        }
+        Update: {
+          "id"?: string
+          "company_id"?: string
+          "brand_id"?: string
+          "paper_no"?: number
+          "difficulty"?: Database["public"]["Enums"]["bank_difficulty"]
+          "marks"?: number
+          "mcq_n"?: number
+          "short_n"?: number
+          "combination_hash"?: string
+          "epoch"?: number
+          "generated_by"?: string
+          "generated_at"?: string
+        }
+        Relationships: []
+      }
       "exam_questions": {
         Row: {
           "exam_id": string
@@ -656,6 +897,48 @@ export type Database = {
           "instructions"?: string | null
           "sort_order"?: number
           "duration_minutes"?: number | null
+          "created_at"?: string
+          "updated_at"?: string
+        }
+        Relationships: []
+      }
+      "exam_settings": {
+        Row: {
+          "company_id": string
+          "required_locales": string[]
+          "label_easy": string
+          "label_medium": string
+          "label_hard": string
+          "pdf_header": string | null
+          "pdf_footer": string | null
+          "passing_percent": number | null
+          "updated_by": string | null
+          "created_at": string
+          "updated_at": string
+        }
+        Insert: {
+          "company_id": string
+          "required_locales"?: string[]
+          "label_easy"?: string
+          "label_medium"?: string
+          "label_hard"?: string
+          "pdf_header"?: string | null
+          "pdf_footer"?: string | null
+          "passing_percent"?: number | null
+          "updated_by"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+        }
+        Update: {
+          "company_id"?: string
+          "required_locales"?: string[]
+          "label_easy"?: string
+          "label_medium"?: string
+          "label_hard"?: string
+          "pdf_header"?: string | null
+          "pdf_footer"?: string | null
+          "passing_percent"?: number | null
+          "updated_by"?: string | null
           "created_at"?: string
           "updated_at"?: string
         }
@@ -808,6 +1091,66 @@ export type Database = {
         }
         Relationships: []
       }
+      "jobs": {
+        Row: {
+          "id": string
+          "company_id": string
+          "kind": string
+          "payload": Json
+          "status": string
+          "attempts": number
+          "max_attempts": number
+          "run_after": string
+          "locked_at": string | null
+          "locked_by": string | null
+          "last_error": string | null
+          "source_document_id": string | null
+          "import_batch_id": string | null
+          "document_page_id": string | null
+          "created_by": string
+          "created_at": string
+          "updated_at": string
+        }
+        Insert: {
+          "id"?: string
+          "company_id": string
+          "kind": string
+          "payload": Json
+          "status"?: string
+          "attempts"?: number
+          "max_attempts"?: number
+          "run_after"?: string
+          "locked_at"?: string | null
+          "locked_by"?: string | null
+          "last_error"?: string | null
+          "source_document_id"?: string | null
+          "import_batch_id"?: string | null
+          "document_page_id"?: string | null
+          "created_by": string
+          "created_at"?: string
+          "updated_at"?: string
+        }
+        Update: {
+          "id"?: string
+          "company_id"?: string
+          "kind"?: string
+          "payload"?: Json
+          "status"?: string
+          "attempts"?: number
+          "max_attempts"?: number
+          "run_after"?: string
+          "locked_at"?: string | null
+          "locked_by"?: string | null
+          "last_error"?: string | null
+          "source_document_id"?: string | null
+          "import_batch_id"?: string | null
+          "document_page_id"?: string | null
+          "created_by"?: string
+          "created_at"?: string
+          "updated_at"?: string
+        }
+        Relationships: []
+      }
       "notifications": {
         Row: {
           "id": string
@@ -887,6 +1230,57 @@ export type Database = {
           "timezone"?: string
           "is_active"?: boolean
           "deleted_at"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+        }
+        Relationships: []
+      }
+      "paper_counters": {
+        Row: {
+          "company_id": string
+          "next_paper_no": number
+          "current_epoch": number
+          "updated_at": string
+        }
+        Insert: {
+          "company_id": string
+          "next_paper_no"?: number
+          "current_epoch"?: number
+          "updated_at"?: string
+        }
+        Update: {
+          "company_id"?: string
+          "next_paper_no"?: number
+          "current_epoch"?: number
+          "updated_at"?: string
+        }
+        Relationships: []
+      }
+      "paper_settings": {
+        Row: {
+          "company_id": string
+          "marks": number
+          "mcq_n": number
+          "short_n": number
+          "updated_by": string | null
+          "created_at": string
+          "updated_at": string
+        }
+        Insert: {
+          "company_id": string
+          "marks": number
+          "mcq_n": number
+          "short_n": number
+          "updated_by"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+        }
+        Update: {
+          "company_id"?: string
+          "marks"?: number
+          "mcq_n"?: number
+          "short_n"?: number
+          "updated_by"?: string | null
           "created_at"?: string
           "updated_at"?: string
         }
@@ -1150,6 +1544,39 @@ export type Database = {
         Update: {
           "question_id"?: string
           "tag_id"?: string
+        }
+        Relationships: []
+      }
+      "question_topics": {
+        Row: {
+          "id": string
+          "company_id": string
+          "name": string
+          "slug": string
+          "sort_order": number
+          "deleted_at": string | null
+          "created_at": string
+          "updated_at": string
+        }
+        Insert: {
+          "id"?: string
+          "company_id": string
+          "name": string
+          "slug": string
+          "sort_order"?: number
+          "deleted_at"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+        }
+        Update: {
+          "id"?: string
+          "company_id"?: string
+          "name"?: string
+          "slug"?: string
+          "sort_order"?: number
+          "deleted_at"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
         }
         Relationships: []
       }
@@ -1502,7 +1929,27 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "bank_import_commit": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "bank_pool_counts": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "bank_quality": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "bank_question_completeness_guard": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "bank_question_missing_locales": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "bank_question_texts_completeness_guard": {
         Args: Record<string, unknown>
         Returns: unknown
       }
@@ -1511,6 +1958,10 @@ export type Database = {
         Returns: unknown
       }
       "blank_accept_list": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "brand_unscoped": {
         Args: Record<string, unknown>
         Returns: unknown
       }
@@ -1543,6 +1994,10 @@ export type Database = {
         Returns: unknown
       }
       "capture_question_revision": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "claim_job": {
         Args: Record<string, unknown>
         Returns: unknown
       }
@@ -1770,6 +2225,10 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "required_locales_for": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "save_answer": {
         Args: Record<string, unknown>
         Returns: unknown
@@ -1828,6 +2287,9 @@ export type Database = {
       "assignment_target": "outlet" | "department" | "brand" | "role" | "user"
       "attempt_status": "in_progress" | "submitted" | "auto_graded" | "evaluating" | "evaluated" | "verifying" | "verified" | "returned" | "published" | "expired" | "voided"
       "auto_grade_status": "not_applicable" | "pending" | "graded" | "needs_review"
+      "bank_difficulty": "easy" | "medium" | "hard"
+      "bank_question_status": "draft" | "active" | "archived"
+      "bank_question_type": "mcq" | "short_answer"
       "bloom_taxonomy": "remember" | "understand" | "apply" | "analyze" | "evaluate" | "create"
       "exam_kind": "official" | "practice" | "quiz" | "monthly" | "annual" | "practical"
       "exam_status": "draft" | "scheduled" | "active" | "completed" | "archived" | "cancelled"

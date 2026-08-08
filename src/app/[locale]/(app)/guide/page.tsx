@@ -1,5 +1,6 @@
 import { getTranslations, getFormatter } from 'next-intl/server'
 import { requirePermission } from '@/lib/auth/guards'
+import { can } from '@/lib/auth/claims'
 import { Link } from '@/lib/i18n/navigation'
 import { listSourceDocuments } from '@/server/actions/source-documents'
 import {
@@ -24,6 +25,7 @@ import {
 } from '@/components/ui/table'
 import { EmptyState } from '@/components/ui/empty-state'
 import { PageHeader } from '@/components/ui/page-header'
+import { UploadDialog } from '@/components/guide/upload-dialog'
 import { FileTextIcon } from 'lucide-react'
 
 /**
@@ -92,10 +94,15 @@ function knownStatus(status: string): SourceDocumentStatus | null {
  * │ it, so regrouping a shelf never touches the page.                         │
  * └───────────────────────────────────────────────────────────────────────────┘
  *
- * No `can()` calls, and no actions in the header: there is nothing on this
- * screen a reader could be offered and refused. Uploading is questions.import
- * and its action does not exist yet — a button that 404s is the defect nav.ts
- * spent two milestones removing, so it arrives with the action, not before it.
+ * ONE `can()` CALL, AND IT IS A COURTESY. Uploading is questions.import, which
+ * questions.read does not imply, so a reader gets the library and no button —
+ * the same pattern the question bank uses for questions.create. Hiding it is
+ * not the boundary: createUploadTicket and finaliseUpload both re-check the
+ * permission, and 0048's policies are SECURITY INVOKER — for the bucket as well
+ * as the tables, so even the signed upload URL is minted under them and a forged
+ * POST is refused by the database.
+ * What this removes is a control that could only ever fail for the person
+ * offered it.
  *
  * Search and status are parsed and preserved but have no control yet. They are
  * honoured from the URL today and every tab link carries them through, so the
@@ -106,9 +113,11 @@ export default async function GuidePage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
-  await requirePermission('questions.read')
+  const claims = await requirePermission('questions.read')
   const t = await getTranslations('guide')
   const format = await getFormatter()
+
+  const canImport = can(claims, 'questions.import')
 
   const raw = await searchParams
   // Unparseable parameters fall back to defaults rather than erroring: these
@@ -134,7 +143,11 @@ export default async function GuidePage({
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t('title')} description={t('subtitle')} />
+      <PageHeader
+        title={t('title')}
+        description={t('subtitle')}
+        actions={canImport ? <UploadDialog /> : undefined}
+      />
 
       {/* A plain <nav> of links, deliberately not role="tablist": that role
           promises arrow-key navigation between tabs and panels that belong to
@@ -172,9 +185,11 @@ export default async function GuidePage({
               message={narrowed ? t('emptyFiltered') : t('empty')}
               hint={narrowed ? t('emptyFilteredHint') : t('emptyHint')}
               // Offered only where it does something. Clearing filters is the
-              // one action on this page anybody who can see it may perform;
-              // uploading is not, so the untouched-library state gets advice
-              // and no button.
+              // one action anybody who can see this page may perform, so it is
+              // the only one here. Uploading is not repeated into the empty
+              // state: the header's button is a few centimetres above it and
+              // already visible on an empty table, and a second mount of the
+              // same dialog would be a second open state to keep in step.
               action={
                 narrowed ? (
                   <Link

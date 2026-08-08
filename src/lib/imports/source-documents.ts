@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { dbId } from '@/lib/db/id'
 
 /**
  * Shapes and limits for uploading a source document.
@@ -147,18 +148,27 @@ export const kindGroupSchema = z.enum(KIND_GROUP_NAMES)
  * What may be uploaded.
  *
  * ┌───────────────────────────────────────────────────────────────────────────┐
- * │ AN ALLOWLIST, AND IT IS CHECKED AGAINST THE BYTES AS WELL AS THE NAME.    │
+ * │ AN ALLOWLIST. THE LIST IS BINDING; THE BYTE CHECK NO LONGER CAN BE.       │
  * │                                                                           │
  * │ A browser-supplied MIME type is a claim by the client, and the extension  │
  * │ is a claim by whoever named the file. Neither is evidence. The magic      │
  * │ number is the only thing in an upload that the uploader cannot casually   │
- * │ lie about, so sniffMimeType below reads the first bytes and the action    │
- * │ compares the two.                                                         │
+ * │ lie about, so sniffMimeType below reads the first bytes and mimeTypeAgrees│
+ * │ reconciles the two.                                                       │
  * │                                                                           │
- * │ This is not virus scanning and does not pretend to be. It stops the       │
- * │ ordinary mistake — a .docx renamed to .pdf, an image saved with the wrong │
- * │ extension — reaching a 113-page OCR pipeline that would fail confusingly  │
- * │ at page one.                                                             │
+ * │ WHERE THAT RECONCILIATION NOW RUNS: in the browser, because the browser   │
+ * │ is the only place the bytes exist. The upload path is a signed URL        │
+ * │ straight to Storage (src/server/actions/upload-document.ts) and the       │
+ * │ server never receives the file. So the sniff catches the ordinary mistake │
+ * │ early — a .docx renamed to .pdf, an image saved with the wrong extension, │
+ * │ which would otherwise fail at page one of an OCR run started long after   │
+ * │ the person who uploaded it walked away — and it is a COURTESY, not a      │
+ * │ control. Anyone with a console can skip it.                               │
+ * │                                                                           │
+ * │ This list, checked against the declared type, is what the server still    │
+ * │ enforces. That check is binding and is the reason the list is short.      │
+ * │                                                                           │
+ * │ This is not virus scanning and does not pretend to be.                    │
  * └───────────────────────────────────────────────────────────────────────────┘
  */
 export const ACCEPTED_MIME_TYPES = [
@@ -175,19 +185,65 @@ export const ACCEPTED_MIME_TYPES = [
 ] as const
 
 /**
- * 150 MB. The larger cookbook provided is 92 MB, so the ceiling has to clear
- * that with room for a bigger one; beyond this an upload stops being something
- * a chef does from a phone in a kitchen and needs a different mechanism.
+ * 0048's bucket, named once.
+ *
+ * Both ends of the upload address it — the server action to mint a signed URL,
+ * the browser to PUT against that URL — and a bucket id spelled twice is a
+ * bucket id that can be spelled differently. Storage answers a wrong bucket
+ * with a 404 that says nothing about which of the two callers is wrong.
  */
-export const MAX_UPLOAD_BYTES = 150 * 1024 * 1024
+export const SOURCE_DOCUMENTS_BUCKET = 'source-documents'
+
+/**
+ * 50 MB, and this number is not ours to choose.
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ IT MATCHES THE SUPABASE PROJECT UPLOAD LIMIT, ON PURPOSE.                 │
+ * │                                                                           │
+ * │ The `source-documents` bucket sets no file_size_limit of its own, so the  │
+ * │ project-wide ceiling applies — 50 MB on the current plan. Storage refuses │
+ * │ anything larger, and it refuses it at the PUT, which in this design is    │
+ * │ the very last step.                                                       │
+ * │                                                                           │
+ * │ So a ceiling above the real one is not generous, it is a trap. A chef     │
+ * │ picking a 92 MB file would pass the browser check, wait through a hash of │
+ * │ 92 MB, receive a ticket, watch a progress bar climb for minutes — and     │
+ * │ only then be told no, with a row already reserved and a tombstone left    │
+ * │ holding its sha256. Every one of those steps costs them time we knew in   │
+ * │ advance would be wasted.                                                  │
+ * │                                                                           │
+ * │ Refusing at the file picker costs nothing and says the true thing.        │
+ * │                                                                           │
+ * │ WHAT THIS MEANS FOR THE PROVIDED COOKBOOKS: the AIKO manual (28 MB) fits. │
+ * │ The Capiche manual (88 MiB) DOES NOT, and no code change here admits it — │
+ * │ it needs splitting into sections before upload, or a plan that raises the │
+ * │ project limit. That is a deliberate product decision, not an oversight,   │
+ * │ and this constant is where it is written down.                           │
+ * │                                                                           │
+ * │ If the project limit is ever raised, raise this WITH it, and check the    │
+ * │ bucket's own file_size_limit at the same time — the bucket's null is what │
+ * │ makes the project value authoritative today.                             │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ */
+export const MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 export const uploadSchema = z.object({
   kind: z.enum(SOURCE_DOCUMENT_KINDS),
   title: z.string().trim().min(1, 'Give the document a title.').max(300),
   description: z.string().trim().max(2000).optional(),
-  brandId: z.string().uuid().nullable().optional(),
+  // dbId(), not z.string().uuid(): both of these arrive from uuid columns
+  // (source_documents.brand_id, source_documents.supersedes_id), and Zod 4's
+  // .uuid() enforces RFC 4122 where Postgres enforces nothing. Every fixed id
+  // in supabase/seed.sql looks like 00000000-0000-0000-0000-00000000c001 —
+  // Postgres stores it, z.string().uuid() rejects it. See src/lib/db/id.ts.
+  //
+  // This was not theoretical. The upload action surfaces issues[0].message as
+  // the whole result, so a posted brandId belonging to a seeded brand failed
+  // the parse and took the entire upload down over a field the form filled in
+  // for the user. It had not fired only because the dialog never sent one.
+  brandId: dbId().nullable().optional(),
   /** Replacing an earlier version. The old row is kept and pointed at. */
-  supersedesId: z.string().uuid().nullable().optional(),
+  supersedesId: dbId().nullable().optional(),
 })
 
 export type UploadInput = z.infer<typeof uploadSchema>
@@ -235,12 +291,75 @@ const ZIP_CONTAINER_MIME_TYPES: readonly string[] = [
 ]
 
 /**
+ * The allowlisted formats that HAVE a magic number.
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ A MAGIC NUMBER IS EVIDENCE WHERE ONE EXISTS. DEMANDING EVIDENCE THAT      │
+ * │ CANNOT EXIST REFUSES EVERY VALID FILE.                                    │
+ * │                                                                           │
+ * │ text/csv is on ACCEPTED_MIME_TYPES and has no signature — it is text, and │
+ * │ a valid CSV may begin with any byte at all. sniffMimeType therefore       │
+ * │ returned null for every CSV ever written, mimeTypeAgrees('text/csv',      │
+ * │ null) was false unconditionally, and the upload action carried a bespoke  │
+ * │ sentence refusing CSV outright. An allowlist entry that nothing can       │
+ * │ satisfy is not a control; it is a promise the product does not keep.      │
+ * │                                                                           │
+ * │ So the question splits in two. "Is this format one we can read evidence   │
+ * │ about?" is answered here, once. "Does the evidence agree with the claim?" │
+ * │ is answered below, and only for the formats where the first answer is     │
+ * │ yes. A format with no signature is admitted on its declared type alone —  │
+ * │ which is exactly as much as anyone could ever know about it — and that is │
+ * │ stated rather than smuggled in as a special case in a consumer.           │
+ * │                                                                           │
+ * │ THE BINARY FORMATS STAY STRICT. A .pdf whose bytes are a ZIP is still     │
+ * │ refused, and a JPEG named .png still is. Nothing about CSV loosens them.  │
+ * │                                                                           │
+ * │ WHAT THIS DOES ADMIT, SAID PLAINLY: a PDF renamed to .csv now passes,     │
+ * │ because "not sniffable" is answered from the DECLARED type before the     │
+ * │ bytes are consulted at all. That is the cost of the rule and it is        │
+ * │ bounded — the sniff runs in the browser and catches honest mistakes, and  │
+ * │ nothing downstream treats its verdict as a control. A dishonest uploader  │
+ * │ never needed this door: they could declare application/pdf and send       │
+ * │ anything, because the server has no bytes to check either way.            │
+ * │                                                                           │
+ * │ Typed as members of ACCEPTED_MIME_TYPES so a renamed allowlist entry      │
+ * │ fails to compile here. The direction that has no compiler help is the     │
+ * │ dangerous one: a NEW binary format added to the allowlist and forgotten   │
+ * │ here would be waved through on its declared type with its signature never │
+ * │ read. Adding a format is therefore a two-line change, and this comment is │
+ * │ the second line's reason for existing.                                    │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ */
+const SNIFFABLE: readonly (typeof ACCEPTED_MIME_TYPES)[number][] = [
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'image/jpeg',
+  'image/png',
+]
+
+/** Everything on the allowlist except text/csv, which has no magic number. */
+export const SNIFFABLE_MIME_TYPES: ReadonlySet<string> = new Set(SNIFFABLE)
+
+/**
  * Is the sniffed type consistent with what the client declared?
  *
- * ZIP is accepted for any of the Office formats because the signature cannot
- * distinguish them and all are allowed. Anything else must match exactly.
+ * Three rules, in order:
+ *
+ *  1. A declared type that is not on the allowlist never agrees with anything.
+ *     Callers check the allowlist themselves — they need to say WHY in their
+ *     own words — but this function will not quietly bless a type nobody
+ *     admits just because its bytes happen to match its name.
+ *  2. A declared type with no signature is taken at its word, because no
+ *     evidence about it can exist. See the box above.
+ *  3. Everything else must match: exactly, or as ZIP against one of the Office
+ *     formats, which the signature cannot tell apart and all of which are
+ *     allowed.
  */
 export function mimeTypeAgrees(declared: string, sniffed: string | null): boolean {
+  if (!(ACCEPTED_MIME_TYPES as readonly string[]).includes(declared)) return false
+  if (!SNIFFABLE_MIME_TYPES.has(declared)) return true
   if (sniffed === null) return false
   if (sniffed === declared) return true
   return sniffed === 'application/zip' && ZIP_CONTAINER_MIME_TYPES.includes(declared)
