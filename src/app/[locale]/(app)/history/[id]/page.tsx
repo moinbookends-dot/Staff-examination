@@ -66,9 +66,6 @@ export default async function PaperDetailPage({
     hard: t('difficulty.hard'),
   }
 
-  const filesFor = (locale: string) =>
-    paper.availableFiles.filter((f) => f.locale === locale)
-
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div>
@@ -169,44 +166,46 @@ export default async function PaperDetailPage({
       <section className="rounded-xl border bg-card p-5">
         <h2 className="text-title-md">{t('downloadsFor')}</h2>
 
-        {paper.availableFiles.length === 0 ? (
-          <p className="mt-3 text-body-sm text-muted-foreground">{t('regenerateFiles')}</p>
-        ) : (
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            {BANK_LOCALES.map((locale) => {
-              const files = filesFor(locale)
-              if (files.length === 0) return null
-
-              return (
-                <div key={locale} className="rounded-lg border p-3">
-                  <span className="text-label-caps text-muted-foreground">
-                    {BANK_LOCALE_LABELS[locale]}
-                  </span>
-                  <div className="mt-2 flex flex-col gap-1.5">
-                    {files.some((f) => f.kind === 'paper') && (
-                      <a
-                        href={`/api/papers/${paper.id}/${locale}/paper.pdf`}
-                        className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
-                      >
-                        <FileTextIcon />
-                        {t('downloadPaper')}
-                      </a>
-                    )}
-                    {files.some((f) => f.kind === 'key') && (
-                      <a
-                        href={`/api/papers/${paper.id}/${locale}/key.pdf`}
-                        className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
-                      >
-                        <KeyRoundIcon />
-                        {t('downloadKey')}
-                      </a>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
+        {/*
+          ┌───────────────────────────────────────────────────────────────────┐
+          │ ALL SIX ARE ALWAYS OFFERED, AND THIS USED TO OFFER NONE.          │
+          │                                                                   │
+          │ These links were gated on paper.availableFiles, which reads       │
+          │ exam_paper_files — a table nothing has ever written. It was       │
+          │ therefore always empty, so this section permanently showed the    │
+          │ "files need regenerating" message and the downloads never         │
+          │ appeared at all.                                                  │
+          │                                                                   │
+          │ The route renders on demand from exam_paper_questions, which      │
+          │ never changes for a paper, so every one of the six documents can  │
+          │ always be produced. There is nothing left to gate on.             │
+          └───────────────────────────────────────────────────────────────────┘
+        */}
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          {BANK_LOCALES.map((locale) => (
+            <div key={locale} className="rounded-lg border p-3">
+              <span className="text-label-caps text-muted-foreground">
+                {BANK_LOCALE_LABELS[locale]}
+              </span>
+              <div className="mt-2 flex flex-col gap-1.5">
+                <a
+                  href={`/api/papers/${paper.id}/${locale}/paper.pdf`}
+                  className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+                >
+                  <FileTextIcon />
+                  {t('downloadPaper')}
+                </a>
+                <a
+                  href={`/api/papers/${paper.id}/${locale}/key.pdf`}
+                  className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+                >
+                  <KeyRoundIcon />
+                  {t('downloadKey')}
+                </a>
+              </div>
+            </div>
+          ))}
+        </div>
       </section>
     </div>
   )

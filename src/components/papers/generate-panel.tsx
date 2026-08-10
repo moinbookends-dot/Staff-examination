@@ -76,16 +76,32 @@ export interface GeneratePanelProps {
   availability: GenerateAvailability
   difficultyLabels: Record<Difficulty, string>
   /**
+   * The brands this caller may draw from.
+   *
+   * A brand-pinned Chef receives exactly one and is shown no chooser — there
+   * is no decision to make, and offering one would imply otherwise. An
+   * unscoped Editor receives all of them and must pick, because a paper
+   * belongs to exactly one brand's bank.
+   */
+  brands: { id: string; name: string }[]
+  defaultBrandId: string | null
+  /**
    * The server action. Absent while the data adapter is unwired, which is what
    * disables the button rather than a separate "is it connected" flag — one
    * source of truth for whether generating is possible.
    */
-  onGenerate?: (input: { difficulty: Difficulty; marks: number }) => Promise<GenerateOutcome>
+  onGenerate?: (input: {
+    difficulty: Difficulty
+    marks: number
+    brandId?: string
+  }) => Promise<GenerateOutcome>
 }
 
 export function GeneratePanel({
   availability,
   difficultyLabels,
+  brands,
+  defaultBrandId,
   onGenerate,
 }: GeneratePanelProps) {
   const t = useTranslations('papers')
@@ -93,6 +109,7 @@ export function GeneratePanel({
 
   const [difficulty, setDifficulty] = useState<Difficulty | null>(null)
   const [marks, setMarks] = useState<number | null>(availability.sizes[0] ?? null)
+  const [brandId, setBrandId] = useState<string | null>(defaultBrandId)
   const [outcome, setOutcome] = useState<GenerateOutcome | null>(null)
 
   const level = useMemo(
@@ -101,18 +118,47 @@ export function GeneratePanel({
   )
 
   const combinations = level && marks ? (level.combinationsBySize[marks] ?? 0) : 0
-  const ready = Boolean(difficulty && marks && onGenerate && combinations > 0)
+  const ready = Boolean(difficulty && marks && brandId && onGenerate && combinations > 0)
 
   const submit = () => {
     if (!difficulty || !marks || !onGenerate) return
     setOutcome(null)
     startTransition(async () => {
-      setOutcome(await onGenerate({ difficulty, marks }))
+      // brandId is advisory: a pinned caller has theirs forced server-side and
+      // this value is never reached.
+      setOutcome(await onGenerate({ difficulty, marks, brandId: brandId ?? undefined }))
     })
   }
 
   return (
     <div className="space-y-6">
+      {/*
+        ── Brand ───────────────────────────────────────────────────────────
+        Only when there is a choice. A brand-pinned Chef gets no step and no
+        step number, because being shown a control with one option and no
+        alternative is worse than being shown nothing.
+      */}
+      {brands.length > 1 && (
+        <section className="space-y-2">
+          <label className="text-label-caps text-muted-foreground" htmlFor="generate-brand">
+            {t('brand')}
+          </label>
+          <select
+            id="generate-brand"
+            value={brandId ?? ''}
+            onChange={(e) => setBrandId(e.target.value || null)}
+            disabled={pending}
+            className="w-full rounded-md border bg-card px-3 py-2 text-body-sm sm:w-80"
+          >
+            {brands.map((brand) => (
+              <option key={brand.id} value={brand.id}>
+                {brand.name}
+              </option>
+            ))}
+          </select>
+        </section>
+      )}
+
       {/* ── Step 1 — difficulty ─────────────────────────────────────────── */}
       <Step index={1} title={t('stepDifficulty')}>
         <div

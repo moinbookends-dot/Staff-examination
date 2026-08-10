@@ -1929,6 +1929,10 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "bank_draw_question_ids": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "bank_import_commit": {
         Args: Record<string, unknown>
         Returns: unknown
@@ -1958,6 +1962,10 @@ export type Database = {
         Returns: unknown
       }
       "blank_accept_list": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "brand_in_my_company": {
         Args: Record<string, unknown>
         Returns: unknown
       }
@@ -2042,6 +2050,10 @@ export type Database = {
         Returns: unknown
       }
       "exam_paper": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "exam_paper_content": {
         Args: Record<string, unknown>
         Returns: unknown
       }
@@ -2169,6 +2181,10 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "paper_generation_state": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "preview_rule_count": {
         Args: Record<string, unknown>
         Returns: unknown
@@ -2238,6 +2254,10 @@ export type Database = {
         Returns: unknown
       }
       "save_evaluation": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "save_exam_paper": {
         Args: Record<string, unknown>
         Returns: unknown
       }
