@@ -33,6 +33,16 @@ import { resolve } from 'node:path'
 import pg from 'pg'
 
 const APP = process.env.APP_URL ?? 'http://localhost:3000'
+
+/*
+ * A closing time, two hours out.
+ *
+ * Migration 0064 made this MANDATORY for a paper-backed exam: without one the
+ * exam never reaches 'closed', and an on_close results policy would never
+ * fire. This script published with null and started failing the moment that
+ * validation landed — which is the validation doing its job.
+ */
+const CLOSES_AT = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
 const PASSWORD = 'Sample-2026!'
 
 const env = {}
@@ -147,7 +157,8 @@ try {
    */
   const [paper] = (
     await db.query(
-      `select p.id, p.paper_no, p.marks, p.mcq_n, p.short_n, p.status
+      `select p.id, p.paper_no, p.marks, p.mcq_n, p.short_n,
+              p.status, p.status_changed_at, p.status_changed_by
          from public.exam_papers p
         where p.status <> 'retired'
           and not exists (
@@ -164,7 +175,18 @@ try {
     )
   }
   paperId = paper.id
-  paperWas = paper.status
+  /*
+   * The WHOLE status triple, not just the status.
+   *
+   * This captured only `status` and restored it with the other two columns set
+   * to null — so every run silently erased "who set this paper live, and when"
+   * from a paper it did not own. Restoring state means restoring all of it.
+   */
+  paperWas = {
+    status: paper.status,
+    at: paper.status_changed_at,
+    by: paper.status_changed_by,
+  }
 
   console.log(`\n  Paper #${paper.paper_no} — ${paper.marks} marks (${paper.mcq_n} MCQ + ${paper.short_n} short)`)
 
@@ -172,14 +194,14 @@ try {
   console.log('\n=== who may publish ===')
   const asEmployee = await rpc(employee, 'publish_paper_as_exam', {
     p_paper_id: paper.id, p_title: 'x', p_duration_minutes: 30,
-    p_opens_at: null, p_closes_at: null, p_max_attempts: 1,
+    p_opens_at: null, p_closes_at: CLOSES_AT, p_max_attempts: 1,
     p_pass_mark_percent: 60, p_instructions: null,
   })
   check('an employee cannot publish', !asEmployee.ok, `${asEmployee.status}`)
 
   const asEditor = await rpc(editor, 'publish_paper_as_exam', {
     p_paper_id: paper.id, p_title: 'x', p_duration_minutes: 30,
-    p_opens_at: null, p_closes_at: null, p_max_attempts: 1,
+    p_opens_at: null, p_closes_at: CLOSES_AT, p_max_attempts: 1,
     p_pass_mark_percent: 60, p_instructions: null,
   })
   check('an editor cannot publish — they author, chefs run exams', !asEditor.ok, `${asEditor.status}`)
@@ -187,7 +209,7 @@ try {
   const published = await rpc(chef, 'publish_paper_as_exam', {
     p_paper_id: paper.id,
     p_title: `Delivery check — paper ${paper.paper_no}`,
-    p_duration_minutes: 45, p_opens_at: null, p_closes_at: null,
+    p_duration_minutes: 45, p_opens_at: null, p_closes_at: CLOSES_AT,
     p_max_attempts: 1, p_pass_mark_percent: 60, p_instructions: null,
   })
   check('a chef can publish', published.ok, JSON.stringify(published.error ?? '').slice(0, 120))
@@ -214,7 +236,7 @@ try {
 
   const twice = await rpc(chef, 'publish_paper_as_exam', {
     p_paper_id: paper.id, p_title: 'again', p_duration_minutes: 30,
-    p_opens_at: null, p_closes_at: null, p_max_attempts: 1,
+    p_opens_at: null, p_closes_at: CLOSES_AT, p_max_attempts: 1,
     p_pass_mark_percent: 60, p_instructions: null,
   })
   check('the same paper cannot be open as two exams', !twice.ok, `${twice.status}`)
@@ -407,9 +429,9 @@ try {
     if (paperId && paperWas) {
       await db.query(
         `update public.exam_papers
-            set status = $2, status_changed_at = null, status_changed_by = null
+            set status = $2, status_changed_at = $3, status_changed_by = $4
           where id = $1`,
-        [paperId, paperWas],
+        [paperId, paperWas.status, paperWas.at, paperWas.by],
       )
     }
     console.log('  exam and attempt removed, paper status restored')

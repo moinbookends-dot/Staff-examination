@@ -33,6 +33,7 @@ export type NavIcon =
   | 'results'
   | 'exams'
   | 'evaluate'
+  | 'liveExams'
 
 /**
  * ╔═══════════════════════════════════════════════════════════════════════════╗
@@ -158,30 +159,42 @@ const NAV_ITEMS: NavItemConfig[] = [
     labelKey: 'history',
     icon: 'history',
     permissions: ['papers.read_history'],
-    mobile: true,
+    /*
+     * NOT in the mobile bar, since Live exams took the fifth slot.
+     *
+     * The bar holds five and adding Live exams made six for a Chef and an
+     * Editor. Exam History is the one that gives way: it is where papers are
+     * reviewed, downloaded and printed — a desk task, at a desk, next to a
+     * printer. Live exams is the opposite: the thing somebody checks on a
+     * phone, mid-service, to see whether their staff have sat the paper.
+     *
+     * tests/unit/nav.test.ts asserts the cap so this cannot creep back.
+     */
   },
   /*
    * ┌─────────────────────────────────────────────────────────────────────────┐
-   * │ /guide IS DELIBERATELY ABSENT, AND THIS IS THE NOTE EXPLAINING WHY.     │
+   * │ /guide IS HERE NOW, AND THE NOTE THAT USED TO SIT IN ITS PLACE SAID     │
+   * │ EXACTLY WHY IT COULD NOT BE.                                            │
    * │                                                                         │
-   * │ In the new model the cookbook library is the EDITOR's reference material │
-   * │ while writing questions — so it belongs under bank.read beside the       │
-   * │ Question Bank.                                                          │
+   * │ The cookbook library is the EDITOR's reference material while writing    │
+   * │ questions, so it belongs under bank.read beside the Question Bank. It    │
+   * │ could not go there while the route and all eight of 0048's row and       │
+   * │ storage policies were keyed on questions.read / questions.import — keys  │
+   * │ a Chef holds and an Editor does not. A nav entry would have handed an    │
+   * │ Editor a link that 500s, and relaxing only the route check would have    │
+   * │ shown them an empty library with no error at all.                        │
    * │                                                                         │
-   * │ It cannot go there yet. The route calls requirePermission('questions.    │
-   * │ read'), and 0048's storage and row policies are keyed on questions.read  │
-   * │ and questions.import. An Editor holds bank.* and NEITHER of those, so a  │
-   * │ nav entry under bank.read would hand them a link that 403s — and even    │
-   * │ if the route check were relaxed, RLS would filter every document to      │
-   * │ nothing and the page would render an empty library with no error.        │
-   * │                                                                         │
-   * │ Moving it is a migration that re-keys those policies onto bank.read /    │
-   * │ bank.import, and it belongs with the legacy drop where the questions.*   │
-   * │ vocabulary disappears anyway. Until then this list stays honest: a nav   │
-   * │ item is a promise about a route, and /learning and /admin sat here for   │
-   * │ two milestones as 404s because that rule was not followed.               │
+   * │ 0065 re-keyed all eight policies to accept EITHER vocabulary and         │
+   * │ src/lib/auth/guide-access.ts does the same at the application boundary,  │
+   * │ so the promise this list makes is now one the route keeps for both.      │
    * └─────────────────────────────────────────────────────────────────────────┘
    */
+  {
+    href: '/guide',
+    labelKey: 'guide',
+    icon: 'guide',
+    permissions: ['bank.read', 'questions.read'],
+  },
   /*
    * ┌─────────────────────────────────────────────────────────────────────────┐
    * │ THE CANDIDATE'S TWO ITEMS, AND WHY THEY WERE MISSING FOR SO LONG.       │
@@ -234,6 +247,26 @@ const NAV_ITEMS: NavItemConfig[] = [
    * │ analytics is a separate piece of work.                                  │
    * └─────────────────────────────────────────────────────────────────────────┘
    */
+  /*
+   * ┌─────────────────────────────────────────────────────────────────────────┐
+   * │ LIVE EXAMS SITS ABOVE EXAMS, AND THE ORDER IS THE POINT.                │
+   * │                                                                         │
+   * │ /exams is the full list — every exam ever, in any state, including the  │
+   * │ legacy rule-drawn ones. /exams/live is the handful running right now,   │
+   * │ which is the only one that is ever urgent.                              │
+   * │                                                                         │
+   * │ Upcoming and Closed are deliberately NOT nav items. They are two clicks │
+   * │ from here via the tab bar on the section itself, and three sibling      │
+   * │ entries for one concept would crowd out the things a chef opens daily.  │
+   * └─────────────────────────────────────────────────────────────────────────┘
+   */
+  {
+    href: '/exams/live',
+    labelKey: 'liveExams',
+    icon: 'liveExams',
+    permissions: ['exams.read'],
+    mobile: true,
+  },
   {
     href: '/exams',
     labelKey: 'exams',
@@ -309,8 +342,29 @@ export function visibleFootItems(claims: AppClaims): NavItem[] {
  * │ case looks like something is missing.                                     │
  * └───────────────────────────────────────────────────────────────────────────┘
  */
+/**
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ FIVE, ENFORCED — BECAUSE MARKING ITEMS `mobile` CANNOT BOUND THE TOTAL.   │
+ * │                                                                           │
+ * │ Every item here is gated on a permission, so the count depends on WHO is  │
+ * │ looking. A Super Admin holds all of them, so no amount of care choosing   │
+ * │ which items are `mobile` can keep their bar at five — it is six the       │
+ * │ moment a sixth mobile item exists anywhere in the list.                   │
+ * │                                                                           │
+ * │ MobileTabBar gives each tab flex-1, so an over-full bar does not break;   │
+ * │ it shrinks every label until they truncate, which is worse than an        │
+ * │ honest cap because nothing looks wrong.                                   │
+ * │                                                                           │
+ * │ DECLARATION ORDER IS THE PRIORITY, and the sidebar always carries the     │
+ * │ complete list — nothing is unreachable, it is one tap further away.       │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ */
+const MOBILE_TABS = 5
+
 export function mobileNavItems(claims: AppClaims): NavItem[] {
-  return NAV_ITEMS.filter((item) => item.mobile && isVisible(item, claims)).map(toClientItem)
+  return NAV_ITEMS.filter((item) => item.mobile && isVisible(item, claims))
+    .slice(0, MOBILE_TABS)
+    .map(toClientItem)
 }
 
 function isVisible(item: NavItemConfig, claims: AppClaims): boolean {

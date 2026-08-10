@@ -54,6 +54,21 @@ export interface EvaluationItem {
   auto_grade_status: string
   /** The rubric the author wrote. Manual formats only — see 0028. */
   guidance: { rubric?: Array<{ id: string; label: string; max: number }>; keywords?: string[] } | null
+  /**
+   * ┌───────────────────────────────────────────────────────────────────────────┐
+   * │ THE MODEL ANSWER — EVALUATOR ONLY, AND IT REACHES NO OTHER SURFACE.       │
+   * │                                                                           │
+   * │ Frozen onto attempt_questions.answer_key when the candidate started, so   │
+   * │ editing the bank afterwards cannot change what the marker is shown for a  │
+   * │ paper already sat. 0066 returns it here and NOWHERE else: attempt_paper() │
+   * │ and attempt_review() — the two candidate-facing readers — select the      │
+   * │ snapshot, which has never contained a key.                                │
+   * │                                                                           │
+   * │ Null for a legacy rule-drawn question, which has a rubric instead, and    │
+   * │ null for anything auto-graded.                                            │
+   * └───────────────────────────────────────────────────────────────────────────┘
+   */
+  model_answer: string | null
 }
 
 export interface VerificationRecord {

@@ -180,20 +180,23 @@ try {
    * │ A link a chef must not follow is equally wrong in a sidebar and in a    │
    * │ dashboard tile, so the assertion is on the rendered document.           │
    * │                                                                         │
-   * │ KNOWN FAILURES UNTIL THE DASHBOARD IS REBUILT: /dashboard is still the  │
-   * │ legacy page, which links to /evaluate, /verify, /reports and the old    │
-   * │ question bank from its own body. The navigation itself is clean — that  │
-   * │ is asserted directly in tests/unit/nav.test.ts. These four turn green   │
-   * │ when the new Dashboard replaces that page.                              │
+   * │ THREE ENTRIES WERE REMOVED FROM THIS LIST ON 10 AUG 2026, and the       │
+   * │ reason is a product change rather than a failing check being silenced:  │
+   * │ /exams, /evaluate and /results are now steps in a workflow the product  │
+   * │ supports. 0062 and 0063 made online delivery real, so a chef publishes  │
+   * │ a paper, candidates sit it, and the chef marks it. Every paper carries  │
+   * │ short answers by blueprint, so every submission waits at `evaluating`   │
+   * │ for a human — without /evaluate the results would never come out.       │
+   * │                                                                         │
+   * │ /verify and /reports STAY forbidden and are still asserted below.       │
+   * │ Paper-backed exams publish with verification_mode 'single', so nothing  │
+   * │ reaches the verify queue, and analytics is separate work.               │
    * └─────────────────────────────────────────────────────────────────────────┘
    */
   const forbidden = [
     ['/en/questions', 'the Question Bank'],
     ['/en/settings', 'Settings'],
-    ['/en/exams', 'the old exam builder'],
-    ['/en/evaluate', 'Evaluate'],
     ['/en/verify', 'Verify'],
-    ['/en/results', 'Results'],
     ['/en/reports', 'Analytics'],
   ]
 

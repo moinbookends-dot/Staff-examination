@@ -993,6 +993,7 @@ export type Database = {
           "created_at": string
           "updated_at": string
           "paper_id": string | null
+          "results_release": Database["public"]["Enums"]["results_release"]
         }
         Insert: {
           "id"?: string
@@ -1027,6 +1028,7 @@ export type Database = {
           "created_at"?: string
           "updated_at"?: string
           "paper_id"?: string | null
+          "results_release"?: Database["public"]["Enums"]["results_release"]
         }
         Update: {
           "id"?: string
@@ -1061,6 +1063,7 @@ export type Database = {
           "created_at"?: string
           "updated_at"?: string
           "paper_id"?: string | null
+          "results_release"?: Database["public"]["Enums"]["results_release"]
         }
         Relationships: []
       }
@@ -2087,7 +2090,19 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "exam_participants": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "exam_participation": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "exam_rule_counts": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "exam_state": {
         Args: Record<string, unknown>
         Returns: unknown
       }
@@ -2275,6 +2290,10 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "release_due_results": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "required_locales_for": {
         Args: Record<string, unknown>
         Returns: unknown
@@ -2357,6 +2376,7 @@ export type Database = {
       "question_status": "draft" | "review" | "active" | "approved" | "retired" | "archived" | "deprecated"
       "question_type": "mcq_single" | "mcq_multi" | "true_false" | "fill_blank" | "match" | "sequence" | "short_answer" | "essay" | "image" | "video" | "audio" | "document" | "practical" | "viva"
       "response_format": "choice_single" | "choice_multi" | "boolean" | "blanks" | "pairs" | "order" | "text_short" | "text_long" | "evaluator_only"
+      "results_release": "immediate" | "on_close"
       "submit_reason": "user" | "timer" | "tab_switch" | "sweeper" | "admin"
       "verification_mode": "auto" | "single" | "dual"
     }

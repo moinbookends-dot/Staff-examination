@@ -21,6 +21,8 @@ import { ExamSchedule } from '@/components/exams/exam-schedule'
 import { ExamAssignments, type AssignmentRow } from '@/components/exams/exam-assignments'
 import { CloneExamButton } from '@/components/exams/clone-exam-button'
 import { ExamPaperPreview } from '@/components/exams/exam-paper-preview'
+import { ExamMonitoring } from '@/components/exams/exam-monitoring'
+import { loadParticipation, loadParticipants } from '@/server/exams/live'
 import { Badge } from '@/components/ui/badge'
 import { Link } from '@/lib/i18n/navigation'
 import { LockIcon, FileTextIcon } from 'lucide-react'
@@ -47,14 +49,34 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
 
   const canAssign = can(claims, 'exams.assign')
 
+  /*
+   * ┌───────────────────────────────────────────────────────────────────────────┐
+   * │ THE LEGACY LOADERS ARE GATED ON WHETHER THEIR PANEL WILL RENDER, AND      │
+   * │ THIS FIXED A 500 FOR HR.                                                  │
+   * │                                                                           │
+   * │ listCategories() requires questions.read. HR holds exams.read and         │
+   * │ attempts.read_all but NOT questions.read, so this Promise.all threw for   │
+   * │ them on every exam — measured: /en/exams/<id> returned 500 for HR while   │
+   * │ /en/exams returned 200.                                                   │
+   * │                                                                           │
+   * │ The insult is that the result was discarded anyway: categories feed       │
+   * │ SectionBuilder, which a paper-backed exam does not render, and the health │
+   * │ report and paper preview are equally legacy-only. Fetching them for       │
+   * │ every reader of every exam bought nothing and locked a role out.          │
+   * └───────────────────────────────────────────────────────────────────────────┘
+   */
+  const paperBacked = exam.paper_id !== null && exam.paper_id !== undefined
+
   const [categories, ruleCounts, health, outlets, departments, brands, roles, people, paper] =
     await Promise.all([
-      listCategories(),
-      getRuleCounts(id),
+      // questions.read — needed only by the section builder, which a
+      // paper-backed exam replaces with a link to the paper.
+      !paperBacked && canEdit ? listCategories() : Promise.resolve([]),
+      !paperBacked ? getRuleCounts(id) : Promise.resolve([]),
       // Skipped entirely without the permission: the RPC would raise, and
       // swallowing that would hide a real authorisation failure behind an
       // empty report.
-      canEdit ? getExamHealth(id) : Promise.resolve([]),
+      canEdit && !paperBacked ? getExamHealth(id) : Promise.resolve([]),
       listOutlets(),
       listDepartments(),
       listBrands(),
@@ -62,8 +84,27 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
       // The individual picker reads profiles, which needs exams.assign. A
       // reader without it gets an empty list rather than a thrown guard.
       canAssign ? listTeamMembers() : Promise.resolve([]),
-      getExamPaper(id),
+      !paperBacked ? getExamPaper(id) : Promise.resolve([]),
     ])
+
+  /*
+   * ┌───────────────────────────────────────────────────────────────────────────┐
+   * │ MONITORING IS FETCHED ONLY FOR A PAPER-BACKED EXAM.                      │
+   * │                                                                           │
+   * │ exam_participation() and exam_participants() expand the audience through  │
+   * │ exam_assignments, which the legacy rule-drawn exams also use — so they    │
+   * │ would technically answer. But the legacy exams have their own reporting   │
+   * │ and none of the state vocabulary this panel is built around, and running  │
+   * │ two audience expansions on every render of an unrelated screen is a cost  │
+   * │ for a panel that would not be shown.                                      │
+   * └───────────────────────────────────────────────────────────────────────────┘
+   */
+  const canMonitor =
+    can(claims, 'attempts.read_all') || can(claims, 'attempts.read_team')
+
+  const [participation, participants] = paperBacked
+    ? await Promise.all([loadParticipation(id), loadParticipants(id)])
+    : [null, []]
 
   // The builder works in drafts keyed by a client-side handle rather than by
   // database id: a rule the chef has just added has no id yet, and React needs
@@ -89,24 +130,6 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
   // database will reject on save.
   const locked = exam.status !== 'draft'
 
-  /*
-   * ┌───────────────────────────────────────────────────────────────────────────┐
-   * │ A PAPER-BACKED EXAM HIDES THREE PANELS, BECAUSE ALL THREE READ THE        │
-   * │ LEGACY MODEL AND WOULD REPORT NOTHING TRUTHFULLY.                         │
-   * │                                                                           │
-   * │ SectionBuilder edits exam_sections and exam_rules; ExamPaperPreview reads │
-   * │ exam_questions; ExamHealthPanel runs exam_health(), which validates a     │
-   * │ RULE-DRAWN paper — pool depth, captured answer-key revisions, marks       │
-   * │ arithmetic. A paper-backed exam has none of those rows, so all three      │
-   * │ would render empty and the health panel would call an exam "unhealthy"    │
-   * │ for lacking rules it is not supposed to have.                             │
-   * │                                                                           │
-   * │ The questions came from the Question Bank and were fixed at generation.   │
-   * │ There is nothing on this screen to edit about them, and the paper's own   │
-   * │ page shows the composition — so this links there instead of restating it. │
-   * └───────────────────────────────────────────────────────────────────────────┘
-   */
-  const paperBacked = exam.paper_id !== null && exam.paper_id !== undefined
 
   return (
     <div className="space-y-6">
@@ -156,6 +179,16 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
       )}
 
       <ExamSettingsForm exam={exam as unknown as ExamSettings} readOnly={locked} />
+
+      {/* Participation first: on a live exam it is the reason somebody opened
+          this page, and the configuration below it is reference material. */}
+      {participation && (
+        <ExamMonitoring
+          participation={participation}
+          participants={participants}
+          canSeeTable={canMonitor}
+        />
+      )}
 
       {paperBacked ? (
         <section className="rounded-xl border bg-card p-5">

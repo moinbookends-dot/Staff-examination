@@ -149,6 +149,60 @@ describe('the approval gate still applies', () => {
  * ║ /verify and /reports stay out, and are still asserted absent below.       ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
+describe('the mobile tab bar stays within its design budget', () => {
+  /*
+   * ┌───────────────────────────────────────────────────────────────────────────┐
+   * │ FIVE IS A LAYOUT CONSTRAINT, NOT A PREFERENCE.                           │
+   * │                                                                           │
+   * │ MobileTabBar gives each item flex-1, so a sixth does not break the        │
+   * │ layout — it silently shrinks every label until they truncate. At 390px    │
+   * │ six items leave about 65px each, which is not enough for "Generate Exam". │
+   * │                                                                           │
+   * │ Adding Live exams DID push a Chef and an Editor to six, and nothing       │
+   * │ failed: the bar just got tighter. This test is what noticed, and Exam     │
+   * │ History gave up its slot as a result.                                     │
+   * └───────────────────────────────────────────────────────────────────────────┘
+   */
+  it('offers no role more than five tabs', () => {
+    for (const role of ['super_admin', 'editor', 'chef', 'hr', 'employee'] as const) {
+      const tabs = mobileNavItems(claimsFor(role))
+      expect(tabs.length, `${role} has ${tabs.length} tabs: ${hrefs(tabs).join(', ')}`)
+        .toBeLessThanOrEqual(5)
+    }
+  })
+
+  it('gives a candidate the two screens they actually use', () => {
+    const tabs = hrefs(mobileNavItems(claimsFor('employee')))
+    expect(tabs).toContain('/my-exams')
+    expect(tabs).toContain('/results')
+  })
+
+  it('puts Live exams in a Chef’s bar and Exam History outside it', () => {
+    const tabs = hrefs(mobileNavItems(CHEF))
+    expect(tabs).toContain('/exams/live')
+    // A desk task — reviewing and printing papers — so it lives in the sidebar.
+    expect(tabs).not.toContain('/history')
+    // …but it is still reachable.
+    expect(hrefs(visibleNavItems(CHEF))).toContain('/history')
+  })
+
+  it('never hides a capped tab from the sidebar as well', () => {
+    /*
+     * The cap TRUNCATES, so a Super Admin — who holds everything — loses a tab
+     * off the end of the bar. That is only acceptable because the sidebar is
+     * complete: an item dropped from the bar must still be reachable, or the
+     * cap would silently remove a screen from the product on small viewports.
+     */
+    for (const role of ['super_admin', 'editor', 'chef', 'hr', 'employee'] as const) {
+      const claims = claimsFor(role)
+      const sidebar = hrefs(visibleNavItems(claims))
+      for (const tab of hrefs(mobileNavItems(claims))) {
+        expect(sidebar, `${role}: ${tab} is in the bar but not the sidebar`).toContain(tab)
+      }
+    }
+  })
+})
+
 describe('navigation for the delivery workflow', () => {
   it('still offers no route to the parts that remain unbuilt', () => {
     const all = [

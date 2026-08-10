@@ -89,11 +89,13 @@ export default async function PaperDetailPage({
     ? async (input: {
         paperId: string
         title: string
+        instructions: string
         durationMinutes: number
         maxAttempts: number
         passMarkPercent: number
         opensAt: string | null
         closesAt: string | null
+        resultsRelease: 'immediate' | 'on_close'
       }) => {
         'use server'
         return publishPaperAsExam(input)

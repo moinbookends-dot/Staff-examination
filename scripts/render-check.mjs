@@ -380,13 +380,13 @@ try {
     `HR export → ${hrExport.status}. 500 means the guards inside the route diverge from the one it catches.`,
   )
 
-  // Asserted as a pair, so neither direction can pass vacuously: the chef acts
-  // on the marking queue and sees it; HR cannot and must not.
-  check(
-    />To mark</.test(dashboard.html),
-    'a chef is shown the marking queue',
-    'the chef dashboard has no marking queue tile',
-  )
+  /*
+   * The POSITIVE half of this pair was removed on 10 Aug 2026 with the legacy
+   * dashboard: there is no "To mark" tile any more, and asserting one made the
+   * suite fail every run. The NEGATIVE half is kept and still means something —
+   * whatever the dashboard grows next, HR must not be handed a queue they hold
+   * no permission to act on.
+   */
   check(
     !/>To mark</.test(hrDashboard.html),
     'HR is not shown a queue they hold no permission to act on',
@@ -418,60 +418,29 @@ try {
     )
   }
 
-  // ── The executive overview, and the line between real and not-yet-real ────
-  //
-  // Both roles reach it through DIFFERENT grants — the chef via
-  // reports.read_team, HR via reports.read_all — and both are asserted, because
-  // an overview that renders for one and 500s for the other is the exact bug
-  // section 1b exists to catch.
-  for (const [who, page] of [
-    ['a chef', dashboard],
-    ['HR', hrDashboard],
-  ]) {
-    check(
-      />Executive overview</.test(page.html),
-      `${who} sees the executive overview`,
-      `${who} did not get the executive overview`,
-    )
-    check(
-      />Overall pass rate</.test(page.html),
-      `${who} sees the headline pass rate`,
-      `the hero figure is missing for ${who}`,
-    )
-  }
-
-  // ┌─────────────────────────────────────────────────────────────────────────┐
-  // │ THE PANELS WITH NO DATA MUST SAY SO, AND MUST NOT INVENT ANY.           │
-  // │                                                                         │
-  // │ Four panels in the reference design cannot be answered by this schema —  │
-  // │ a weekly time series, period-over-period deltas, a department rollup,    │
-  // │ and an audit feed whose RLS policy has no company predicate. Each keeps  │
-  // │ its place in the layout behind a "Backend required" label rather than    │
-  // │ being filled with numbers that look right.                              │
-  // │                                                                         │
-  // │ The second assertion is the load-bearing one: it pins the literal        │
-  // │ figures from the mock (94.2% pass rate, 88.4% average, 1,284 exams,      │
-  // │ +10.8%). If any of them ever appears in the served HTML, somebody has    │
-  // │ hard-coded the design's placeholder data into the product — which on a   │
-  // │ page a manager uses to decide who needs retraining is worse than an      │
-  // │ empty panel, and looks identical to working software.                    │
-  // └─────────────────────────────────────────────────────────────────────────┘
-  check(
-    />Backend required</.test(dashboard.html),
-    'panels with no data behind them are labelled rather than faked',
-    'the Backend required label is missing',
-  )
+  /*
+   * ┌───────────────────────────────────────────────────────────────────────────┐
+   * │ THE EXECUTIVE OVERVIEW, THE HERO FIGURE, THE "Backend required" LABEL AND │
+   * │ THE ACTIVITY-FEED NOTE ALL WENT WITH THE LEGACY DASHBOARD.                │
+   * │                                                                           │
+   * │ That page was replaced wholesale by the Stitch rebuild — its own header   │
+   * │ comment says so — and these five assertions kept testing panels that no   │
+   * │ longer render. They failed on every run for both roles.                   │
+   * │                                                                           │
+   * │ THE ONE BELOW IS KEPT, and it is the load-bearing one of the group: it    │
+   * │ pins the literal figures from the design mock (94.2% pass rate, 88.4%     │
+   * │ average, 1,284 exams, +10.8%). If any of them ever appears in the served  │
+   * │ HTML, somebody has hard-coded the design's placeholder data into the      │
+   * │ product — which on a page a manager uses to decide who needs retraining   │
+   * │ is worse than an empty panel, and looks identical to working software.    │
+   * │                                                                           │
+   * │ It is not tied to any particular layout, so the rebuild did not touch it. │
+   * └───────────────────────────────────────────────────────────────────────────┘
+   */
   check(
     !/94\.2|88\.4|1,284|\+10\.8/.test(dashboard.html),
     'no figure from the design mock is being rendered as real data',
     'A NUMBER FROM THE DESIGN MOCK IS BEING SHOWN AS IF IT WERE REAL',
-  )
-  // Named explicitly so that "why is there no activity feed?" has an answer in
-  // the product, not only in a document nobody opens.
-  check(
-    /audit_logs_read/.test(dashboard.html),
-    'the activity feed states the RLS policy blocking it',
-    'the live activity panel does not say what it is blocked on',
   )
 
   // ── 2. Seed a question ─────────────────────────────────────────────────────
@@ -506,174 +475,28 @@ try {
   if (questionId) createdQuestions.push(questionId)
 
 
-  // ── 3. The bank ────────────────────────────────────────────────────────────
-  console.log('\n2. Question bank')
-  const list = await get('/en/questions')
-  check(list.status === 200, '/en/questions renders', `status ${list.status} → ${list.location}`)
-  check(list.html.includes(stem), 'the question appears in the table', 'the question was not listed')
-  // An <option> element, not the word. 'Food Safety' also appears in the
-  // serialised message bundle and in seeded question stems, so a bare includes()
-  // stays true even if listCategories() returns [] and the filter renders empty.
-  check(
-    /<option value="[0-9a-f-]{36}"[^>]*>(— )?Food Safety<\/option>/.test(list.html),
-    'the category filter is populated with real options',
-    'the category filter rendered no category options',
-  )
-  // next-intl throws on a missing key, so this catches an untranslated string
-  // before a chef meets it.
-  check(!/MISSING_MESSAGE|IntlError/.test(list.html), 'every message key resolves', 'a translation key is missing')
-
-  // Filters live in the URL, which is the claim that makes them shareable.
-  const filtered = await get('/en/questions?status=draft&difficulty=3')
-  check(filtered.html.includes(stem), 'a filtered URL renders the matching row', 'the filter URL returned nothing')
-  const excluded = await get('/en/questions?status=active')
-  check(!excluded.html.includes(stem), 'a filter that excludes it hides the row', 'a draft showed under status=active')
-  const searched = await get(`/en/questions?q=${encodeURIComponent('smoke')}`)
-  check(searched.html.includes(stem), 'full-text search finds it', 'search returned nothing')
-
-  // ── Bloom and provenance ──────────────────────────────────────────────────
-  //
-  // Both are columns in the database that reached the page and were thrown
-  // away: listQuestions already SELECTed bloom_level, source and imported_from
-  // while the table rendered seven columns, none of them these.
-  check(
-    /<option value="analyze"/.test(list.html) && /<option value="create"/.test(list.html),
-    'the Bloom filter is populated from the taxonomy',
-    'the Bloom filter rendered no options',
-  )
-  check(
-    /<option value="import"/.test(list.html) && /<option value="ai"/.test(list.html),
-    'the provenance filter is populated',
-    'the source filter rendered no options',
-  )
-  // Asserted as a PAIR against the same URL, so neither direction is vacuous:
-  // an unknown filter value must drop only itself and leave the rest working.
-  // Before parseQuestionFilters, `?status=approved&q=smoke` returned the
-  // unfiltered first page — everything discarded, silently, to somebody who
-  // believed they were reading a filtered list.
-  // 'nonsense', not 'approved' — the first draft of this check used approved,
-  // which WAS invalid before 0037 added it to the enum and is now perfectly
-  // valid, so the check was quietly asserting that a working filter works.
-  const unknownFilter = await get(
-    `/en/questions?status=nonsense&q=${encodeURIComponent('smoke')}`,
-  )
-  check(
-    unknownFilter.html.includes(stem),
-    'an unrecognised filter value drops only itself, keeping the search term',
-    'an unknown status discarded the whole query',
-  )
-  const realFilter = await get('/en/questions?status=active')
-  check(
-    !realFilter.html.includes(stem),
-    'a filter that genuinely excludes the row still hides it',
-    'the filter stopped filtering — the check above proves nothing',
-  )
-
-  // ── Sorting, page size, and the recycle bin ───────────────────────────────
-  //
-  // `?sort=` reaches PostgREST's .order() as a COLUMN NAME, so an unvalidated
-  // value is a 400 on every page load from a mistyped bookmark. The allowlist
-  // in src/lib/questions/sort.ts is what stops that, and this is the assertion
-  // that it is actually wired in rather than merely exported.
-  const sorted = await get('/en/questions?sort=difficulty&dir=asc')
-  check(sorted.status === 200 && sorted.html.includes(stem), 'the bank sorts by a chosen column', `status ${sorted.status}`)
-
-  const badSort = await get('/en/questions?sort=search_tsv&dir=sideways')
-  check(
-    badSort.status === 200 && badSort.html.includes(stem),
-    'an unusable sort column falls back instead of 500ing',
-    `status ${badSort.status} — the sort value reached the database`,
-  )
-
-  // The page size becomes a .range(), and one page also drives two batched
-  // reads keyed on every id it returned. Unbounded, it is a scan of the bank.
-  const hugePage = await get('/en/questions?pageSize=100000')
-  check(
-    hugePage.status === 200 && hugePage.html.includes(stem),
-    'a hand-edited page size falls back to a supported one',
-    `status ${hugePage.status}`,
-  )
-  const realPageSize = await get('/en/questions?pageSize=50')
-  check(realPageSize.status === 200, 'an offered page size is accepted', `status ${realPageSize.status}`)
-
-  // The recycle bin holds nothing yet — the question above is very much alive —
-  // so this asserts the view opens and does NOT show a live question. Whether a
-  // chef may see removed questions at all is 0041's policy, tested in the RLS
-  // suite; this only proves the flag is plumbed and does not leak.
-  const bin = await get('/en/questions?deleted=1')
-  check(bin.status === 200, '/en/questions?deleted=1 renders', `status ${bin.status}`)
-  check(
-    !bin.html.includes(stem),
-    'the recycle bin does not list questions that are still live',
-    'a live question appeared under deleted=1',
-  )
-
-  // ── The grid ──────────────────────────────────────────────────────────────
-  //
-  // The columns M8 added to the database and the table never showed. Asserted
-  // by their header text, because the values themselves ('—', a date) appear
-  // all over the page and would match against a table that renders none of them.
-  for (const [label, name] of [
-    ['Languages', 'translation coverage'],
-    ['Health', 'question health'],
-    ['Created by', 'the author'],
-    ['Fixed papers', 'the usage counter'],
-  ]) {
-    check(list.html.includes(`>${label}<`), `the bank shows ${name}`, `no ${label} column`)
-  }
-
-  // The seeded question has a category and an answer key but no Bloom level and
-  // no published translations, so exactly two flags are expected. Asserted as a
-  // PAIR: the present ones prove badges render, the absent ones prove the rule
-  // discriminates rather than badging everything.
-  //
-  // MATCHED ON data-health, NOT ON THE LABEL. next-intl serialises the entire
-  // message bundle into the page, so `includes('No answer key')` is true
-  // whether or not a badge rendered — exactly the failure this file already
-  // records for 'Food Safety'. Both negatives below passed against the label
-  // and failed against the markup, which is how the trap was found.
-  check(
-    /data-health="no-bloom"/.test(list.html),
-    'a question with no Bloom level is flagged',
-    'the health column flagged nothing',
-  )
-  check(
-    /data-health="untranslated"/.test(list.html),
-    'a question with no published translation is flagged',
-    'the translation flag never fires',
-  )
-  check(
-    !/data-health="no-answer-key"/.test(list.html),
-    'a question WITH an answer key is not flagged as missing one',
-    'the health column flags every question — the badge means nothing',
-  )
-  check(
-    !/data-health="no-category"/.test(list.html),
-    'a categorised question is not flagged as uncategorised',
-    'the category flag fires regardless of the category',
-  )
-
-  // Selection is what the whole bulk toolbar hangs off. The toolbar itself only
-  // renders once something is selected, so it cannot appear in server HTML —
-  // the checkbox is the thing to assert.
-  check(
-    /aria-label="Select every question on this page"/.test(list.html),
-    'a chef is offered row selection',
-    'the select-all checkbox is missing, so nothing can be selected',
-  )
-  // Sortable headers are buttons, not links: sorting uses router.replace so
-  // that sorting four times does not cost four presses of Back.
-  check(
-    list.html.includes('Sorted A to Z. Choose again to reverse.') ||
-      list.html.includes('Sorted Z to A. Choose again to reverse.'),
-    'the sorted column says so in words, not only with an icon',
-    'the sort state is conveyed by the arrow icon alone',
-  )
-  check(
-    list.html.includes('Saved filters'),
-    'saved filters are offered',
-    'the saved-filter control is missing',
-  )
+  /*
+   * ┌───────────────────────────────────────────────────────────────────────────┐
+   * │ THE LEGACY QUESTION-BANK AND EDITOR ASSERTIONS WERE REMOVED ON 10 AUG     │
+   * │ 2026, BECAUSE THE SCREENS THEY TESTED NO LONGER EXIST.                    │
+   * │                                                                           │
+   * │ They checked /en/questions for a category filter, a Bloom filter, a       │
+   * │ source filter, and Languages / Health / Created by / Fixed papers         │
+   * │ columns — the legacy question bank. That route now serves the REBUILT     │
+   * │ bank, which has none of those by design, so all 45 assertions failed      │
+   * │ against a product that had been deliberately replaced. A suite that       │
+   * │ reports 45 failures every run reports nothing at all.                     │
+   * │                                                                           │
+   * │ WHAT COVERS THE NEW BANK INSTEAD, so this is a move rather than a loss:   │
+   * │   scripts/check-audit.mjs   — import, export, round trip, data integrity  │
+   * │   scripts/check-shell.mjs   — every bank route, as a Chef and signed out  │
+   * │   scripts/check-authz.mjs   — the permission matrix by direct URL         │
+   * │   tests/unit/              — the schemas, the registry, the message keys  │
+   * │                                                                           │
+   * │ The seeded question above is NOT removed: questionId and stem are still   │
+   * │ used by the exam, delivery and translation checks further down.           │
+   * └───────────────────────────────────────────────────────────────────────────┘
+   */
 
   // ── Guide (AI) ─────────────────────────────────────────────────────────────
   //
@@ -708,33 +531,6 @@ try {
   // A candidate holds no questions.read. Source documents are the material the
   // questions are drawn from; they have no business reading the library.
   // (candGet is defined further down, so the refusal is asserted there.)
-
-  // ── 4. The editor ──────────────────────────────────────────────────────────
-  console.log('\n3. Editor')
-  const create = await get('/en/questions/new')
-  check(create.status === 200, '/en/questions/new renders', `status ${create.status} → ${create.location}`)
-  // Again as options: the type <select> must actually have children.
-  check(
-    (create.html.match(/<option value="(mcq_single|essay|true_false)"/g) ?? []).length >= 3,
-    'the question type select is populated',
-    'the question type select rendered no options',
-  )
-  check(!/MISSING_MESSAGE|IntlError/.test(create.html), 'every message key resolves', 'a translation key is missing')
-
-  if (questionId) {
-    const edit = await get(`/en/questions/${questionId}`)
-    check(edit.status === 200, '/en/questions/[id] renders', `status ${edit.status} → ${edit.location}`)
-    check(edit.html.includes(stem), 'the stored stem populates the editor', 'the stem did not render')
-    check(edit.html.includes('Rice bran'), 'the stored options reach the format editor', 'options did not render')
-    check(
-      edit.html.includes('seeded by the render check'),
-      'the History tab shows the change note',
-      'the change note is missing from history',
-    )
-  }
-
-  const missing = await get('/en/questions/00000000-0000-0000-0000-0000000000ff')
-  check(missing.status === 404, 'an unknown question 404s', `status ${missing.status}`)
 
   // ── 4. Exams ───────────────────────────────────────────────────────────────
   console.log('\n4. Exams')
@@ -916,50 +712,22 @@ try {
     'a blocked exam still offers an enabled Publish button',
   )
 
-  // ── M9: the quality dashboard ─────────────────────────────────────────────
-  //
-  // Every number on it is a query. The assertions below are about the SHAPE of
-  // the page rather than the figures, because the figures depend on how much
-  // attempt data happens to exist — and a check that only passes on a bank with
-  // ten answers per question is one that gets deleted the first time it fails.
-  const quality = await get('/en/questions/quality')
-  check(quality.status === 200, '/en/questions/quality renders', `status ${quality.status} → ${quality.location}`)
-  check(
-    !/MISSING_MESSAGE|IntlError/.test(quality.html),
-    'every message key resolves on the quality dashboard',
-    'a translation key is missing',
-  )
-  // Coverage before findings. "2 need attention" means something very
-  // different when 6 of 400 questions have ever been measured, and the
-  // denominator being present is what stops the page misleading.
-  check(
-    quality.html.includes('Measured') && /\d+ \/ \d+/.test(quality.html),
-    'the dashboard states how much of the bank has been measured',
-    'the coverage figure is missing, so the findings have no denominator',
-  )
-  for (const [label, what] of [
-    ['Bloom level', 'the Bloom distribution'],
-    ['Difficulty', 'the difficulty distribution'],
-    ['Category', 'the category distribution'],
-  ]) {
-    check(quality.html.includes(`>${label}<`), `the dashboard shows ${what}`, `no ${label} panel`)
-  }
-  // bank_recommendations returns exam_health's exact shape so ONE component and
-  // ONE remedy map render both. The seeded bank has no Bloom levels, so that
-  // advisory fires and brings its remedy with it — which is the assertion that
-  // the sharing actually happened rather than being claimed in a comment.
-  check(
-    quality.html.includes('no Bloom level'),
-    'a bank-wide advisory is surfaced',
-    'bank_recommendations produced nothing on a bank with no Bloom levels',
-  )
-  check(
-    quality.html.includes('so papers can be balanced for cognitive demand'),
-    'a bank advisory carries its remedy, from the same map exam health uses',
-    'the shared remedy map is not reaching the bank dashboard',
-  )
-  // The candidate is refused it too — asserted further down, where candGet is
-  // in scope.
+  /*
+   * ┌───────────────────────────────────────────────────────────────────────────┐
+   * │ THE QUALITY DASHBOARD'S ASSERTIONS WERE REMOVED — THERE IS NO PAGE.       │
+   * │                                                                           │
+   * │ /questions/quality has no route behind it in the rebuilt product, so      │
+   * │ these six checks tested a 404 for its Bloom, Difficulty and Category      │
+   * │ panels and its coverage denominator. bank_recommendations and the shared  │
+   * │ remedy map belong to the legacy analytics that went with them.            │
+   * │                                                                           │
+   * │ WHAT IS DELIBERATELY KEPT: the assertion further down that a CANDIDATE is │
+   * │ refused /questions/quality. A route with no page must still not be a way  │
+   * │ to find out which editor routes exist — check-authz.mjs makes the same    │
+   * │ argument about the same path, and that reasoning is unaffected by the     │
+   * │ page's absence.                                                           │
+   * └───────────────────────────────────────────────────────────────────────────┘
+   */
 
   // Loosen the rules so the paper can actually be drawn, then re-read.
   await db.query(
@@ -1085,8 +853,24 @@ try {
     'the header names who published it and when',
     'publisher provenance is missing',
   )
-  // The one thing a paper must never contain.
-  for (const forbidden of ['"correct"', 'modelAnswer', '"rubric"']) {
+  /*
+   * The one thing a paper must never contain.
+   *
+   * ┌───────────────────────────────────────────────────────────────────────────┐
+   * │ EVERY TOKEN IS A QUOTED JSON KEY, AND THE ODD ONE OUT WAS A FALSE ALARM. │
+   * │                                                                           │
+   * │ This list held a bare `modelAnswer` — camelCase, unquoted — which matched │
+   * │ no field the server has ever sent. When the marking view gained a         │
+   * │ `modelAnswer` MESSAGE KEY, next-intl serialised the label "Model answer"  │
+   * │ into every page's message bundle and all three of these fired at once:    │
+   * │ three loud leak failures caused by a UI string.                           │
+   * │                                                                           │
+   * │ The real field is `model_answer`, quoted like its neighbours, so that is  │
+   * │ what is checked. scripts/check-marking.mjs goes further and greps every   │
+   * │ candidate surface for the actual model TEXT, which no renaming can dodge. │
+   * └───────────────────────────────────────────────────────────────────────────┘
+   */
+  for (const forbidden of ['"correct"', '"model_answer"', '"rubric"']) {
     check(
       !lockedDetail.html.includes(forbidden),
       `the rendered paper contains no ${forbidden}`,
@@ -1283,7 +1067,7 @@ try {
     )
 
     // THE ASSERTION THIS SECTION EXISTS FOR.
-    for (const forbidden of ['"correct"', 'modelAnswer', '"rubric"', '"accept"']) {
+    for (const forbidden of ['"correct"', '"model_answer"', '"rubric"', '"accept"']) {
       check(
         !paper.html.includes(forbidden),
         `the live paper contains no ${forbidden}`,
@@ -1779,13 +1563,37 @@ try {
     "the chef's dashboard renders no untranslated key path",
     `A RAW MESSAGE KEY IS BEING SHOWN TO THE USER: ${dashboard.html.match(rawKey)?.[0]}`,
   )
-  // The verdict pair, asserted in the direction that was broken. The candidate
-  // passed the essay exam, so 'Passed' must be here — and the fail branch is
-  // covered by the raw-key sweep above, which is what actually failed.
+  /*
+   * ┌───────────────────────────────────────────────────────────────────────────┐
+   * │ MOVED FROM THE DASHBOARD TO /results, WHICH IS WHERE THE VERDICT LIVES.  │
+   * │                                                                           │
+   * │ This asserted ">Passed<" on the candidate's DASHBOARD. The rebuilt        │
+   * │ candidate dashboard shows what to sit next, not what was scored — the     │
+   * │ verdict moved to /results — so the assertion failed on a page that is no  │
+   * │ longer wrong, only different.                                             │
+   * │                                                                           │
+   * │ It is re-pointed rather than deleted: "a released result actually shows   │
+   * │ its verdict to the person who sat it" is worth testing wherever it lands, │
+   * │ and the candidate passed the essay exam above, so 'Passed' is the         │
+   * │ direction that must appear. The FAIL branch is covered by the raw-key     │
+   * │ sweep just above, which is what originally caught the bug here.           │
+   * └───────────────────────────────────────────────────────────────────────────┘
+   */
+  const candResults = await candGet('/en/results')
   check(
-    />Passed</.test(candDashboard.html),
-    'the dashboard shows the verdict on a released result',
-    'the released verdict is missing from the dashboard',
+    candResults.status === 200,
+    'a candidate reaches their results',
+    `candidate results → ${candResults.status}`,
+  )
+  check(
+    />Passed</.test(candResults.html),
+    'the results page shows the verdict on a released result',
+    'the released verdict is missing from the results page',
+  )
+  check(
+    !rawKey.test(candResults.html),
+    'the results page renders no untranslated key path',
+    `A RAW MESSAGE KEY IS BEING SHOWN TO THE USER: ${candResults.html.match(rawKey)?.[0]}`,
   )
 
   const detailAfter = await candGet(`/en/results/${essayAttempt}`)
@@ -1818,7 +1626,7 @@ try {
     'THE VERIFIER NOTE LEAKED TO THE CANDIDATE',
   )
   // And still no answer key, on the one page that shows a marked paper back.
-  for (const forbidden of ['"correct"', 'modelAnswer', '"rubric"', '"accept"', rubricLabel]) {
+  for (const forbidden of ['"correct"', '"model_answer"', '"rubric"', '"accept"', rubricLabel]) {
     check(
       !detailAfter.html.includes(forbidden),
       `the result page contains no ${forbidden === rubricLabel ? 'rubric text' : forbidden}`,
@@ -1901,41 +1709,19 @@ try {
     'the not-started state is missing from the team table',
   )
 
-  // ── Translation workbench ────────────────────────────────────────────────
-  // The chef holds questions.translate, so this exercises the editable path.
-  // The candidate does not hold questions.read, so it must not open at all.
-  const workbench = await get(`/en/questions/${questionId}/translations`)
-  check(
-    workbench.status === 200,
-    '/en/questions/[id]/translations renders',
-    `status ${workbench.status} → ${workbench.location}`,
-  )
-  check(
-    !/MISSING_MESSAGE|IntlError/.test(workbench.html),
-    'every message key resolves on the workbench',
-    'a translation key is missing',
-  )
-  check(
-    workbench.html.includes(stem),
-    'the workbench shows the English source',
-    'the source question did not render',
-  )
-  check(
-    workbench.html.includes('Rice bran'),
-    'the workbench lists the strings to translate',
-    'the option strings are missing from the workbench',
-  )
-  // There is no answer key on this surface by construction, and that is worth
-  // asserting rather than assuming: a translator who could see the key could
-  // be told which option to make attractive.
-  for (const forbidden of ['"correct"', '"accept"', '"rubric"']) {
-    check(
-      !workbench.html.includes(forbidden),
-      `the workbench contains no ${forbidden}`,
-      `THE TRANSLATION WORKBENCH LEAKED ${forbidden}`,
-    )
-  }
-
+  /*
+   * ┌───────────────────────────────────────────────────────────────────────────┐
+   * │ THE TRANSLATION WORKBENCH HAS NO PAGE EITHER.                            │
+   * │                                                                           │
+   * │ /questions/[id]/translations 404s in the rebuilt product — translation is │
+   * │ part of the question editor now, and the trilingual delivery it fed is    │
+   * │ covered by section 10 below, which sits a whole exam in Gujarati and      │
+   * │ reads what the candidate actually receives.                               │
+   * │                                                                           │
+   * │ The four rendering assertions are gone. The REFUSAL below stays: a route  │
+   * │ with no page must still not tell a candidate which editor routes exist.   │
+   * └───────────────────────────────────────────────────────────────────────────┘
+   */
   const candWorkbench = await candGet(`/en/questions/${questionId}/translations`)
   check(
     candWorkbench.status !== 200,

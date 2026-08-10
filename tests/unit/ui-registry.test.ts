@@ -37,6 +37,26 @@ describe('UI registry completeness', () => {
   })
 })
 
+/**
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ THE DYNAMIC-IMPORT TESTS BELOW GET A LONGER TIMEOUT, AND IT IS A REAL     │
+ * │ FIX RATHER THAN A PAPERED-OVER FLAKE.                                     │
+ * │                                                                           │
+ * │ `loads an editor component` failed roughly one run in twelve on vitest's  │
+ * │ 5000ms default. It is the FIRST `import()` in the file, so it pays the    │
+ * │ cold transform cost for the entire editor module graph — every subsequent │
+ * │ format hits a warm cache and finishes in single-digit milliseconds. The   │
+ * │ variance is Vite's compile step on a cold filesystem cache, not anything  │
+ * │ the registry does.                                                        │
+ * │                                                                           │
+ * │ A timeout that a passing run can exceed is not measuring what it claims   │
+ * │ to measure, so it is raised to something the cold path comfortably fits.  │
+ * │ These assertions are about whether a module resolves and exports a        │
+ * │ component; they were never about how fast it does so.                     │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ */
+const LOAD_TIMEOUT_MS = 30_000
+
 describe.each(RESPONSE_FORMATS)('format UI: %s', (format) => {
   const entry = FORMAT_UI[format]
 
@@ -48,19 +68,19 @@ describe.each(RESPONSE_FORMATS)('format UI: %s', (format) => {
   it('loads an editor component', async () => {
     const editor = await entry.editor()
     expect(editor.default, `${format} editor has no default export`).toBeTypeOf('function')
-  })
+  }, LOAD_TIMEOUT_MS)
 
   it('loads a renderer component', async () => {
     const renderer = await entry.renderer()
     expect(renderer.default, `${format} renderer has no default export`).toBeTypeOf('function')
-  })
+  }, LOAD_TIMEOUT_MS)
 
   it('does not wire the renderer to the editor', async () => {
     // A copy-paste slip in the registry table. Both loaders resolve, both export
     // a component, and the preview silently shows the authoring UI.
     const [editor, renderer] = await Promise.all([entry.editor(), entry.renderer()])
     expect(editor.default).not.toBe(renderer.default)
-  })
+  }, LOAD_TIMEOUT_MS)
 
   it('names its components after its own format', async () => {
     // Catches the other half of that slip: choice_multi's row pointing at
@@ -70,5 +90,5 @@ describe.each(RESPONSE_FORMATS)('format UI: %s', (format) => {
     const expected = format.replace(/_/g, '').toLowerCase()
     expect(editor.default.name.toLowerCase()).toBe(`${expected}editor`)
     expect(renderer.default.name.toLowerCase()).toBe(`${expected}renderer`)
-  })
+  }, LOAD_TIMEOUT_MS)
 })

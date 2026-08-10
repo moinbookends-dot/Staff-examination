@@ -1,6 +1,7 @@
 'use server'
 
-import { requirePermission } from '@/lib/auth/guards'
+import { requireAnyPermission } from '@/lib/auth/guards'
+import { GUIDE_READ_PERMISSIONS } from '@/lib/auth/guide-access'
 import { createClient } from '@/lib/supabase/server'
 import {
   GUIDE_PAGE_SIZE,
@@ -43,7 +44,7 @@ import {
 export async function listSourceDocuments(
   input: unknown,
 ): Promise<{ items: SourceDocumentRow[]; total: number; page: number; pageSize: number }> {
-  await requirePermission('questions.read')
+  await requireAnyPermission(GUIDE_READ_PERMISSIONS)
 
   // Re-parsed here rather than trusted. The page parses the same searchParams
   // with the same schema, but this is a server action and its argument is

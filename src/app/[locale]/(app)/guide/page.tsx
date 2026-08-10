@@ -1,6 +1,6 @@
 import { getTranslations, getFormatter } from 'next-intl/server'
-import { requirePermission } from '@/lib/auth/guards'
-import { can } from '@/lib/auth/claims'
+import { requireAnyPermission } from '@/lib/auth/guards'
+import { GUIDE_READ_PERMISSIONS, canManageGuideDocuments } from '@/lib/auth/guide-access'
 import { Link } from '@/lib/i18n/navigation'
 import { listSourceDocuments } from '@/server/actions/source-documents'
 import {
@@ -113,11 +113,12 @@ export default async function GuidePage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
-  const claims = await requirePermission('questions.read')
+  // Either vocabulary — see src/lib/auth/guide-access.ts and migration 0065.
+  const claims = await requireAnyPermission(GUIDE_READ_PERMISSIONS)
   const t = await getTranslations('guide')
   const format = await getFormatter()
 
-  const canImport = can(claims, 'questions.import')
+  const canImport = canManageGuideDocuments(claims)
 
   const raw = await searchParams
   // Unparseable parameters fall back to defaults rather than erroring: these

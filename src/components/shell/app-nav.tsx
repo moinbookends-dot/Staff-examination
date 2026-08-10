@@ -17,6 +17,7 @@ import {
   Award,
   NotebookPen,
   PenLine,
+  RadioIcon,
   type LucideIcon,
 } from 'lucide-react'
 import { Link, usePathname } from '@/lib/i18n/navigation'
@@ -64,6 +65,7 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   results: Award,
   exams: NotebookPen,
   evaluate: PenLine,
+  liveExams: RadioIcon,
 }
 
 /** Exact match for /dashboard, prefix elsewhere so /questions/123 stays lit. */

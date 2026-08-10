@@ -7,8 +7,10 @@ import { toast } from 'sonner'
 import { MonitorPlayIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { InlineError } from '@/components/ui/inline-error'
+import { cn } from '@/lib/utils'
 import type { PublishPaperResult } from '@/server/actions/papers'
 
 /**
@@ -47,12 +49,20 @@ export interface PublishPaperProps {
   onPublish?: (input: {
     paperId: string
     title: string
+    instructions: string
     durationMinutes: number
     maxAttempts: number
     passMarkPercent: number
     opensAt: string | null
     closesAt: string | null
+    resultsRelease: 'immediate' | 'on_close'
   }) => Promise<PublishPaperResult>
+}
+
+/** <input type="datetime-local"> from a Date, in the reader's own zone. */
+function toLocalInput(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 export function PublishPaper({ paperId, paperNo, marks, retired, onPublish }: PublishPaperProps) {
@@ -62,13 +72,23 @@ export function PublishPaper({ paperId, paperNo, marks, retired, onPublish }: Pu
   const [error, setError] = useState<string | null>(null)
 
   const [title, setTitle] = useState(t('publishDefaultTitle', { no: paperNo }))
+  const [instructions, setInstructions] = useState('')
   // Generous but not unbounded: a 20-mark paper in 30 minutes is the house
   // default, and 50 marks gets proportionally longer.
   const [duration, setDuration] = useState(marks >= 50 ? 60 : 30)
   const [attempts, setAttempts] = useState(1)
   const [passMark, setPassMark] = useState(60)
   const [opens, setOpens] = useState('')
-  const [closes, setCloses] = useState('')
+  /*
+   * A closing time is REQUIRED — 0064 refuses a paper-backed exam without one,
+   * because without it "closed" never arrives and an on_close release never
+   * fires. Prefilled a week out so the commonest case is one less thing to
+   * type, and so the field is never submitted empty by accident.
+   */
+  const [closes, setCloses] = useState(() =>
+    toLocalInput(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
+  )
+  const [release, setRelease] = useState<'immediate' | 'on_close'>('immediate')
 
   if (retired) {
     return <p className="text-body-sm text-muted-foreground">{t('publishRetired')}</p>
@@ -83,8 +103,36 @@ export function PublishPaper({ paperId, paperNo, marks, retired, onPublish }: Pu
   const submit = () => {
     setError(null)
 
+    /*
+     * ┌───────────────────────────────────────────────────────────────────────┐
+     * │ THESE MIRROR 0064'S CHECKS. THEY DO NOT REPLACE THEM.                 │
+     * │                                                                       │
+     * │ publish_paper_as_exam validates the whole configuration again and      │
+     * │ raises, because a Server Action is a public endpoint and this form is  │
+     * │ a courtesy to the person typing. What these buy is a message beside    │
+     * │ the field instead of a round trip.                                     │
+     * └───────────────────────────────────────────────────────────────────────┘
+     */
     if (!title.trim()) {
       setError(t('publishNeedsTitle'))
+      return
+    }
+    if (!closes) {
+      setError(t('publishNeedsDeadline'))
+      return
+    }
+    const closesIso = toIso(closes)
+    const opensIso = toIso(opens)
+    if (!closesIso) {
+      setError(t('publishNeedsDeadline'))
+      return
+    }
+    if (opensIso && closesIso <= opensIso) {
+      setError(t('publishDeadlineBeforeStart'))
+      return
+    }
+    if (new Date(closesIso).getTime() <= Date.now()) {
+      setError(t('publishDeadlinePast'))
       return
     }
 
@@ -92,11 +140,13 @@ export function PublishPaper({ paperId, paperNo, marks, retired, onPublish }: Pu
       const result = await onPublish({
         paperId,
         title: title.trim(),
+        instructions: instructions.trim(),
         durationMinutes: duration,
         maxAttempts: attempts,
         passMarkPercent: passMark,
-        opensAt: toIso(opens),
-        closesAt: toIso(closes),
+        opensAt: opensIso,
+        closesAt: closesIso,
+        resultsRelease: release,
       })
 
       if (!result.ok) {
@@ -177,17 +227,66 @@ export function PublishPaper({ paperId, paperNo, marks, retired, onPublish }: Pu
           />
         </div>
 
-        <div className="sm:col-span-2">
+        <div>
           <Label htmlFor="publish-closes">{t('publishCloses')}</Label>
           <Input
             id="publish-closes"
             type="datetime-local"
             value={closes}
+            required
             disabled={pending}
             onChange={(e) => setCloses(e.target.value)}
           />
         </div>
+
+        <div className="sm:col-span-2">
+          <Label htmlFor="publish-instructions">{t('publishInstructions')}</Label>
+          <Textarea
+            id="publish-instructions"
+            rows={3}
+            maxLength={2000}
+            value={instructions}
+            disabled={pending}
+            placeholder={t('publishInstructionsHint')}
+            onChange={(e) => setInstructions(e.target.value)}
+          />
+        </div>
       </div>
+
+      {/*
+        ┌───────────────────────────────────────────────────────────────────────┐
+        │ NEITHER OPTION CAN MEAN "AS SOON AS THEY PRESS SUBMIT".               │
+        │                                                                       │
+        │ Every paper is 80/20, so every paper has short answers and every      │
+        │ submission waits for a human to mark them. The wording says "once     │
+        │ marking is done" rather than "immediately" for that reason — the      │
+        │ honest promise, not the flattering one.                               │
+        └───────────────────────────────────────────────────────────────────────┘
+      */}
+      <fieldset className="rounded-lg border p-4">
+        <legend className="px-1 text-label-caps text-muted-foreground">
+          {t('publishResults')}
+        </legend>
+
+        <div className="space-y-2">
+          <ReleaseOption
+            id="release-immediate"
+            checked={release === 'immediate'}
+            disabled={pending}
+            onSelect={() => setRelease('immediate')}
+            label={t('publishResultsImmediate')}
+            hint={t('publishResultsImmediateHint')}
+          />
+          <ReleaseOption
+            id="release-on-close"
+            checked={release === 'on_close'}
+            disabled={pending}
+            onSelect={() => setRelease('on_close')}
+            label={t('publishResultsOnClose')}
+            hint={t('publishResultsOnCloseHint')}
+          />
+        </div>
+      </fieldset>
 
       <div className="flex flex-wrap items-center gap-3">
         <Button disabled={pending} onClick={submit}>
@@ -198,5 +297,53 @@ export function PublishPaper({ paperId, paperNo, marks, retired, onPublish }: Pu
 
       <p className="text-body-sm text-muted-foreground">{t('publishHint')}</p>
     </div>
+  )
+}
+
+/**
+ * A radio and its explanation, as one clickable row.
+ *
+ * A bare radio with the hint as sibling text leaves the hint outside the label,
+ * so a screen reader announces "Immediately" with no indication of what that
+ * means — and the hint is the entire difference between the two options.
+ */
+function ReleaseOption({
+  id,
+  checked,
+  disabled,
+  onSelect,
+  label,
+  hint,
+}: {
+  id: string
+  checked: boolean
+  disabled: boolean
+  onSelect: () => void
+  label: string
+  hint: string
+}) {
+  return (
+    <label
+      htmlFor={id}
+      className={cn(
+        'flex cursor-pointer items-start gap-3 rounded-md border p-3 transition-colors',
+        checked ? 'border-primary bg-primary/5' : 'hover:bg-accent/40',
+        disabled && 'cursor-not-allowed opacity-60',
+      )}
+    >
+      <input
+        id={id}
+        type="radio"
+        name="results-release"
+        className="mt-1 size-4 shrink-0 accent-primary"
+        checked={checked}
+        disabled={disabled}
+        onChange={onSelect}
+      />
+      <span className="min-w-0">
+        <span className="block text-body-md font-medium">{label}</span>
+        <span className="block text-body-sm text-muted-foreground">{hint}</span>
+      </span>
+    </label>
   )
 }

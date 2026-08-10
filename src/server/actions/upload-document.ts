@@ -3,7 +3,8 @@
 import { randomUUID } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
-import { requirePermission } from '@/lib/auth/guards'
+import { requireAnyPermission } from '@/lib/auth/guards'
+import { GUIDE_WRITE_PERMISSIONS } from '@/lib/auth/guide-access'
 import { createClient } from '@/lib/supabase/server'
 import { dbId } from '@/lib/db/id'
 import {
@@ -247,7 +248,7 @@ export async function createUploadTicket(
   // 1. Authorisation, first. The claims come back so the company and the
   //    uploader are known without a second round trip — and so they come from a
   //    verified token rather than from the input.
-  const claims = await requirePermission('questions.import')
+  const claims = await requireAnyPermission(GUIDE_WRITE_PERMISSIONS)
   const companyId = claims.company_id
   const userId = claims.userId
 
@@ -601,7 +602,7 @@ export async function createUploadTicket(
  * └───────────────────────────────────────────────────────────────────────────┘
  */
 export async function finaliseUpload(documentId: string): Promise<FinaliseUploadResult> {
-  await requirePermission('questions.import')
+  await requireAnyPermission(GUIDE_WRITE_PERMISSIONS)
 
   // dbId(), not z.uuid(): this id came out of a uuid column and went through a
   // browser. See src/lib/db/id.ts for what Zod 4's stricter .uuid() cost the

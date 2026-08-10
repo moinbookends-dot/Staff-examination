@@ -15,8 +15,32 @@ import type { Permission } from './permissions'
  * helper is "author forgot the `if`", and that failure is invisible in review.
  */
 
+/**
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ `digest` IS HOW THE ERROR BOUNDARY TELLS A REFUSAL FROM A CRASH, AND IT   │
+ * │ IS THE ONLY THING THAT SURVIVES THE TRIP.                                 │
+ * │                                                                           │
+ * │ In a production build Next replaces a server error's `message` and `name` │
+ * │ before it reaches the client — the boundary receives a bare Error whose    │
+ * │ message is "An error occurred in the Server Components render". Matching   │
+ * │ on `name` therefore worked in dev and silently failed in production,      │
+ * │ which is exactly how it was found: a denied page rendered "Something went │
+ * │ wrong at our end. Try again in a moment."                                 │
+ * │                                                                           │
+ * │ `digest` is passed through verbatim when it is already set, because Next  │
+ * │ only generates one for errors that lack it. So these three carry a stable │
+ * │ marker and src/app/[locale]/(app)/error.tsx reads it.                     │
+ * │                                                                           │
+ * │ It leaks nothing: "FORBIDDEN" is the fact the user is about to be told in │
+ * │ words. The permission KEY stays in `permission`, server-side, and is      │
+ * │ never serialised.                                                         │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ */
+export const REFUSAL_DIGEST = 'FORBIDDEN'
+
 export class AuthorizationError extends Error {
   readonly status = 403
+  readonly digest = REFUSAL_DIGEST
   constructor(
     message: string,
     readonly permission?: Permission,
@@ -28,6 +52,7 @@ export class AuthorizationError extends Error {
 
 export class AuthenticationError extends Error {
   readonly status = 401
+  readonly digest = REFUSAL_DIGEST
   constructor(message = 'Not signed in.') {
     super(message)
     this.name = 'AuthenticationError'
@@ -36,6 +61,7 @@ export class AuthenticationError extends Error {
 
 export class ApprovalPendingError extends Error {
   readonly status = 403
+  readonly digest = REFUSAL_DIGEST
   constructor(message = 'Your account is awaiting approval.') {
     super(message)
     this.name = 'ApprovalPendingError'

@@ -1,16 +1,22 @@
 import { getTranslations } from 'next-intl/server'
 import {
   ArchiveIcon,
+  AwardIcon,
   CheckCircle2Icon,
+  CalendarClockIcon,
+  ClipboardListIcon,
   FilePenLineIcon,
   FileTextIcon,
   LayersIcon,
+  RadioIcon,
   SparklesIcon,
   UsersIcon,
 } from 'lucide-react'
 import { requireApproved } from '@/lib/auth/guards'
-import { getAppClaims } from '@/lib/auth/claims'
+import { getAppClaims, can } from '@/lib/auth/claims'
 import { canGeneratePapers, canOpenQuestionBank, canReadPaperHistory } from '@/lib/auth/bank-access'
+import { listMyExams } from '@/server/actions/attempts'
+import { loadLiveSummary } from '@/server/exams/live'
 import { Link } from '@/lib/i18n/navigation'
 import { PageHeader } from '@/components/ui/page-header'
 import { buttonVariants } from '@/components/ui/button'
@@ -51,19 +57,46 @@ export default async function DashboardPage() {
 
   const claims = await getAppClaims()
   const t = await getTranslations('papers')
+  // The live-exam card speaks the exams vocabulary, not the papers one.
+  const te = await getTranslations('exams')
 
   const canBank = canOpenQuestionBank(claims)
   const canGenerate = canGeneratePapers(claims)
   const canHistory = canReadPaperHistory(claims)
 
   /*
-   * The bank statistics are only fetched for somebody who may see the bank.
-   * A chef's dashboard is about papers, and reading counts they have no screen
-   * for would be a query run to render nothing.
+   * ┌───────────────────────────────────────────────────────────────────────────┐
+   * │ A CANDIDATE IS NOT "EVERYONE ELSE", AND TREATING THEM AS SUCH PUT THE     │
+   * │ WRONG DASHBOARD IN FRONT OF THEM.                                         │
+   * │                                                                           │
+   * │ This page had two branches: the bank view, and a fallback commented "a    │
+   * │ chef sees papers only". An Employee holds neither bank.read nor           │
+   * │ papers.read_history, so they fell into the chef branch and were shown     │
+   * │ "Papers generated" and "Editors" — two counts about a subsystem they      │
+   * │ cannot open, both reading 0 because RLS correctly returns them nothing.   │
+   * │                                                                           │
+   * │ It is the first screen they ever see: the proxy sends them here after     │
+   * │ sign-in, / redirects here, and /pending forwards here on approval.        │
+   * └───────────────────────────────────────────────────────────────────────────┘
    */
-  const [stats, history] = await Promise.all([
-    loadBankStatistics(),
+  const isCandidate = !canBank && !canHistory && can(claims, 'attempts.take')
+
+  /*
+   * Each query is gated on the screen that will actually render it. The bank
+   * statistics used to be fetched for everybody, including candidates who have
+   * no tile to put them in — a query run to render nothing.
+   */
+  // exams.read gates the live summary: it counts attempts across the company,
+  // which is not a candidate's business and not an Editor's either.
+  const canSeeExams = can(claims, 'exams.read')
+
+  const [stats, history, myExams, live] = await Promise.all([
+    canBank || canHistory
+      ? loadBankStatistics()
+      : Promise.resolve(null),
     canHistory ? loadPaperHistory(1, 5) : Promise.resolve({ rows: [], total: 0, page: 1, pageSize: 5 }),
+    isCandidate ? listMyExams() : Promise.resolve([]),
+    canSeeExams ? loadLiveSummary() : Promise.resolve(null),
   ])
 
   const difficultyLabels = {
@@ -76,7 +109,9 @@ export default async function DashboardPage() {
     <div className="space-y-6">
       <PageHeader
         title={t('dashTitle')}
-        description={t('dashSubtitle')}
+        // "The question bank and recent activity" describes a screen a
+        // candidate cannot see. They get a line about their own work instead.
+        description={isCandidate ? t('dashCandidateSubtitle') : t('dashSubtitle')}
         actions={
           <div className="flex flex-wrap gap-2">
             {canGenerate && (
@@ -107,8 +142,91 @@ export default async function DashboardPage() {
         }
       />
 
+      {/* ── Live exams, for anyone who runs them ────────────────────────── */}
+      {/* Above the bank statistics deliberately: a running exam is time-bound
+          and everything below it is not. */}
+      {live && (live.live > 0 || live.upcoming > 0 || live.activeAttempts > 0) && (
+        <section className="rounded-xl border bg-card p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-title-md">{te('dashLiveTitle')}</h2>
+            <Link
+              href="/exams/live"
+              className="text-body-sm font-medium text-primary hover:underline"
+            >
+              {te('dashLiveAll')}
+            </Link>
+          </div>
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard
+              label={te('dashLiveExams')}
+              value={live.live.toLocaleString()}
+              icon={<RadioIcon className="size-5" />}
+              tone="primary"
+            />
+            <StatCard
+              label={te('dashActiveAttempts')}
+              value={live.activeAttempts.toLocaleString()}
+              hint={te('dashActiveAttemptsHint')}
+              icon={<ClipboardListIcon className="size-5" />}
+            />
+            <StatCard
+              label={te('dashSubmittedToday')}
+              value={live.submittedToday.toLocaleString()}
+              icon={<CheckCircle2Icon className="size-5" />}
+            />
+            <StatCard
+              label={te('dashUpcoming')}
+              value={live.upcoming.toLocaleString()}
+              icon={<CalendarClockIcon className="size-5" />}
+            />
+          </div>
+        </section>
+      )}
+
+      {/* ── A candidate: what they have to sit ──────────────────────────── */}
+      {isCandidate && (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <StatCard
+              label={t('statToSit')}
+              value={myExams.filter((e) => !e.open_attempt_id ? e.attempts_used < e.max_attempts : true).length.toLocaleString()}
+              hint={t('statToSitHint')}
+              icon={<ClipboardListIcon className="size-5" />}
+              tone="primary"
+            />
+            <StatCard
+              label={t('statInProgress')}
+              value={myExams.filter((e) => e.open_attempt_id).length.toLocaleString()}
+              hint={t('statInProgressHint')}
+              icon={<CheckCircle2Icon className="size-5" />}
+            />
+          </div>
+
+          <section className="rounded-xl border bg-card p-5">
+            <h2 className="text-title-md">{t('candidateNext')}</h2>
+            <p className="mt-1 text-body-sm text-muted-foreground">
+              {myExams.length === 0 ? t('candidateNothing') : t('candidateNextHint')}
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link href="/my-exams" className={cn(buttonVariants({ size: 'sm' }))}>
+                <ClipboardListIcon />
+                {t('candidateGoToExams')}
+              </Link>
+              <Link
+                href="/results"
+                className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+              >
+                <AwardIcon />
+                {t('candidateGoToResults')}
+              </Link>
+            </div>
+          </section>
+        </>
+      )}
+
       {/* ── Bank statistics — Editors only ──────────────────────────────── */}
-      {canBank && (
+      {canBank && stats && (
         <>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard
@@ -157,8 +275,11 @@ export default async function DashboardPage() {
         </>
       )}
 
-      {/* ── A chef sees papers only ─────────────────────────────────────── */}
-      {!canBank && (
+      {/* ── A chef (or HR) sees papers only ─────────────────────────────── */}
+      {/* Gated on canHistory, not on !canBank. The negation swept up every
+          role without a bank key — candidates included — and handed them a
+          papers dashboard they have no permission to act on. */}
+      {!canBank && canHistory && stats && (
         <>
           <div className="grid gap-4 sm:grid-cols-2">
             <StatCard

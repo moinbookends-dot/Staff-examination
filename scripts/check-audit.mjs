@@ -332,9 +332,16 @@ try {
     'CROSS-BRAND LEAK: brand B export contains brand A questions',
   )
 
+  /*
+   * The Super Admin left this list on 10 Aug 2026.
+   *
+   * They used to be denied the export by canOpenQuestionBank, which overrode
+   * has_perm() to keep platform administration separate from question
+   * authorship. The owner removed that lockout, so a 200 here is now the
+   * correct answer and is asserted positively below instead.
+   */
   const denials = [
     ['chef', chef.cookie, `?brand=${brands[0].id}`, 403],
-    ['super admin', superAdmin.cookie, `?brand=${brands[0].id}`, 403],
     ['signed out', null, `?brand=${brands[0].id}`, 403],
     ['nonexistent brand', editor.cookie, '?brand=00000000-0000-0000-0000-0000000000ff', 403],
     ['missing brand', editor.cookie, '', 400],
@@ -353,6 +360,22 @@ try {
     }
     check(!/"questions"\s*:/.test(body), `  ${label} response carries no question data`,
       `  ${label} RESPONSE LEAKED QUESTION DATA`)
+  }
+
+  /*
+   * The other half of removing the Super Admin from `denials`: assert the new
+   * rule positively, so "they can export" is something this script proves
+   * rather than something it merely stopped checking.
+   */
+  {
+    const res = await exportAs(superAdmin.cookie, `?brand=${brands[0].id}`)
+    const body = await res.text()
+    check(res.status === 200,
+      'export ALLOWED for a super admin (200) — the lockout was removed by decision',
+      `super admin export returned ${res.status}; the lockout may have been restored`)
+    check(/"questions"\s*:/.test(body),
+      '  and it actually carries the questions',
+      '  super admin got 200 but no question data')
   }
 
   // ═══ EXPORT → IMPORT → EXPORT ════════════════════════════════════════════

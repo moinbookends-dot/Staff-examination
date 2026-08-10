@@ -252,8 +252,14 @@ const publishInput = z.object({
   maxAttempts: z.coerce.number().int().min(1).max(10),
   passMarkPercent: z.coerce.number().int().min(1).max(100),
   opensAt: z.string().datetime({ offset: true }).nullable().optional(),
-  closesAt: z.string().datetime({ offset: true }).nullable().optional(),
+  /*
+   * REQUIRED, unlike the legacy exam model. 0064 refuses a paper-backed exam
+   * without a deadline: without one the exam never reaches `closed`, and an
+   * on_close release would never fire.
+   */
+  closesAt: z.string().datetime({ offset: true }),
   instructions: z.string().trim().max(2000).optional(),
+  resultsRelease: z.enum(['immediate', 'on_close']).default('immediate'),
 })
 
 export type PublishPaperResult =
@@ -283,10 +289,11 @@ export async function publishPaperAsExam(raw: unknown): Promise<PublishPaperResu
     p_title: input.title,
     p_duration_minutes: input.durationMinutes,
     p_opens_at: input.opensAt ?? null,
-    p_closes_at: input.closesAt ?? null,
+    p_closes_at: input.closesAt,
     p_max_attempts: input.maxAttempts,
     p_pass_mark_percent: input.passMarkPercent,
-    p_instructions: input.instructions ?? null,
+    p_instructions: input.instructions || null,
+    p_results_release: input.resultsRelease,
   })
 
   if (error) {

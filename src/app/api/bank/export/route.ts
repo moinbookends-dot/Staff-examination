@@ -65,7 +65,25 @@ export async function GET(request: Request) {
   // yours" are the same answer.
   if (!brand) return new Response('Not permitted.', { status: 403 })
 
-  const rows = await loadQuestionsForExport(brandId)
+  /*
+   * loadQuestionsForExport throws rather than returning a partial bank — see
+   * the box on it. Catching here turns that into a plain 5xx with a sentence,
+   * instead of an unhandled throw that Next renders as an empty 500 body.
+   *
+   * FAILING IS THE POINT. The alternative this replaced returned 200 with an
+   * envelope holding every question and none of their text, which re-imports
+   * as nothing.
+   */
+  let rows
+  try {
+    rows = await loadQuestionsForExport(brandId)
+  } catch (err) {
+    return new Response(
+      err instanceof Error ? err.message : 'The export could not be produced.',
+      { status: 503 },
+    )
+  }
+
   const exportedAt = new Date().toISOString()
 
   const envelope = toExportEnvelope(rows, { brand: brand.name, exportedAt })

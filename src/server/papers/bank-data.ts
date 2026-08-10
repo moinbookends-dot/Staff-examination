@@ -300,27 +300,115 @@ export async function loadQuestionPage(options: {
  * │ and a recycle bin is not part of the interchange format.                  │
  * └───────────────────────────────────────────────────────────────────────────┘
  */
+/**
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║ TWO SILENT TRUNCATIONS LIVED HERE, AND BOTH PRODUCED A FILE THAT LOOKED   ║
+ * ║ PERFECTLY VALID.                                                          ║
+ * ║                                                                           ║
+ * ║ 1. The questions query had no pagination. PostgREST caps a response at    ║
+ * ║    1,000 rows by default, so a 3,000-question bank exported its first     ║
+ * ║    third and said nothing.                                                ║
+ * ║                                                                           ║
+ * ║ 2. The texts query was one `.in('question_id', ids)` over EVERY id.       ║
+ * ║    PostgREST puts that in the query string, so 403 questions built a      ║
+ * ║    ~15KB URL, the request was refused, and `texts.data ?? []` turned the  ║
+ * ║    refusal into an empty list. Measured: an export of 403 questions       ║
+ * ║    returned 200, formatVersion 1, 403 question objects — and not one of   ║
+ * ║    them had `en`, `hi` or `gu`. Re-importing that file rejects every      ║
+ * ║    single row as missing-english.                                         ║
+ * ║                                                                           ║
+ * ║ Both are fixed by paging, and — the part that matters more — by REFUSING  ║
+ * ║ rather than returning a partial bank. An export that silently drops       ║
+ * ║ content is worse than one that fails, because it is the file somebody     ║
+ * ║ hand-corrects and re-imports believing it is the whole bank.              ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+
+/** PostgREST's default ceiling. Pages are requested at exactly this size. */
+const PAGE = 1000
+
+/**
+ * Ids per `.in()` request. 200 × 37 characters ≈ 7.4KB of query string, well
+ * inside every proxy's limit; the failure above began somewhere past 400.
+ */
+const ID_CHUNK = 200
+
 export async function loadQuestionsForExport(brandId: string): Promise<ExportRow[]> {
   const supabase = await createClient()
 
-  const { data: questions } = await supabase
-    .from('bank_questions')
-    .select('id, external_id, difficulty, qtype, status, topic_id, correct_option, reference_document_id, reference_page')
-    .eq('brand_id', brandId)
-    .is('deleted_at', null)
-    .order('difficulty')
+  type QuestionRow = {
+    id: string
+    external_id: string | null
+    difficulty: ExportRow['difficulty']
+    qtype: ExportRow['qtype']
+    status: ExportRow['status']
+    topic_id: string | null
+    correct_option: string | null
+    reference_document_id: string | null
+    reference_page: number | null
+  }
 
-  if (!questions || questions.length === 0) return []
+  const questions: QuestionRow[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from('bank_questions')
+      .select('id, external_id, difficulty, qtype, status, topic_id, correct_option, reference_document_id, reference_page')
+      .eq('brand_id', brandId)
+      .is('deleted_at', null)
+      // A STABLE tiebreak. Ordering by difficulty alone leaves rows within a
+      // level in no defined order, and paging an unordered set can repeat one
+      // row and skip another.
+      .order('difficulty')
+      .order('id')
+      .range(from, from + PAGE - 1)
+
+    if (error) throw new Error(`The question bank could not be read: ${error.message}`)
+    if (!data || data.length === 0) break
+
+    questions.push(...(data as QuestionRow[]))
+    if (data.length < PAGE) break
+  }
+
+  if (questions.length === 0) return []
 
   const ids = questions.map((q) => q.id)
 
+  type TextRow = {
+    question_id: string
+    locale: string
+    question: string
+    option_a: string | null
+    option_b: string | null
+    option_c: string | null
+    option_d: string | null
+    answer_text: string | null
+    explanation: string | null
+  }
+
+  // Chunked, and every failure is thrown rather than folded into an empty list.
+  const textRows: TextRow[] = []
+  for (let i = 0; i < ids.length; i += ID_CHUNK) {
+    const slice = ids.slice(i, i + ID_CHUNK)
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await supabase
+        .from('bank_question_texts')
+        .select('question_id, locale, question, option_a, option_b, option_c, option_d, answer_text, explanation')
+        .in('question_id', slice)
+        .order('question_id')
+        .order('locale')
+        .range(from, from + PAGE - 1)
+
+      if (error) throw new Error(`The question text could not be read: ${error.message}`)
+      if (!data || data.length === 0) break
+
+      textRows.push(...(data as TextRow[]))
+      if (data.length < PAGE) break
+    }
+  }
+
   // Separate queries rather than embeds — gen-types.mjs emits
   // `Relationships: []`, so an embedded select cannot be typed.
-  const [texts, topics, documents] = await Promise.all([
-    supabase
-      .from('bank_question_texts')
-      .select('question_id, locale, question, option_a, option_b, option_c, option_d, answer_text, explanation')
-      .in('question_id', ids),
+  const [topics, documents] = await Promise.all([
     supabase.from('question_topics').select('id, slug'),
     supabase.from('source_documents').select('id, title, original_filename'),
   ])
@@ -330,8 +418,22 @@ export async function loadQuestionsForExport(brandId: string): Promise<ExportRow
     (documents.data ?? []).map((d) => [d.id, d.title ?? d.original_filename]),
   )
 
+  /*
+   * The invariant the old code could not state: a question with no text is a
+   * question that will be rejected on re-import. If the texts came back empty
+   * for EVERY question, something upstream failed rather than the bank being
+   * genuinely textless — 0054's trigger will not let an active question exist
+   * without text.
+   */
+  if (textRows.length === 0) {
+    throw new Error(
+      `The question bank returned ${questions.length} questions and no text at all. ` +
+        'Refusing to write an export that would re-import as empty.',
+    )
+  }
+
   const byQuestion = new Map<string, ExportRow['texts']>()
-  for (const row of texts.data ?? []) {
+  for (const row of textRows) {
     const list = byQuestion.get(row.question_id) ?? []
     list.push({
       locale: row.locale,

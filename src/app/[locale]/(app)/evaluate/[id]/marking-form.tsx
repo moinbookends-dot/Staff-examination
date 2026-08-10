@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { CheckIcon, AlertTriangleIcon } from 'lucide-react'
+import { CheckIcon, AlertTriangleIcon, BookOpenCheckIcon } from 'lucide-react'
 
 /**
  * Marking one paper.
@@ -107,6 +107,33 @@ export function MarkingForm({
                   )}
                 </div>
               </div>
+
+              {/*
+                ┌───────────────────────────────────────────────────────────────┐
+                │ THE MODEL ANSWER SITS BELOW THE CANDIDATE'S, NOT ABOVE IT.    │
+                │                                                               │
+                │ Reading the model first anchors the marker to it, and every   │
+                │ answer afterwards is judged by how closely it matches the      │
+                │ wording rather than whether it is right. The candidate's       │
+                │ answer is what is being marked, so it comes first.            │
+                │                                                               │
+                │ Styled as a quiet reference — bordered, not filled — because  │
+                │ it is the one block on this card that is NOT a decision and   │
+                │ NOT something the candidate wrote.                            │
+                └───────────────────────────────────────────────────────────────┘
+              */}
+              {item.model_answer && (
+                <div>
+                  <p className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    <BookOpenCheckIcon aria-hidden className="size-3.5 shrink-0" />
+                    {t('modelAnswer')}
+                  </p>
+                  <div className="rounded-md border border-dashed border-primary/40 bg-primary/5 p-3 text-sm whitespace-pre-wrap">
+                    {item.model_answer}
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">{t('modelAnswerHint')}</p>
+                </div>
+              )}
 
               {guidance?.rubric && guidance.rubric.length > 0 && (
                 <div>
