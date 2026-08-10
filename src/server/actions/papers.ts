@@ -143,3 +143,69 @@ export async function generatePaper(raw: unknown): Promise<GenerateOutcome> {
       return { status: 'failed', message: result.message }
   }
 }
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * Move a printed paper between generated → live → retired.
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ THIS DOES NOT PUBLISH AN EXAM. IT LABELS A PIECE OF PAPER.                │
+ * │                                                                           │
+ * │ Nobody answers anything on a screen as a result of this. A Chef prints a  │
+ * │ paper, marks it live so the History screen shows which one is in use this │
+ * │ week, and retires it afterwards. The legacy online attempt stack is a     │
+ * │ separate system and is untouched.                                         │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ */
+const statusInput = z.object({
+  paperId: dbId(),
+  // 'generated' is deliberately absent: 0061 refuses a return to the state a
+  // paper is born in, and offering it here would be a button that always fails.
+  status: z.enum(['live', 'retired']),
+})
+
+export type PaperStatusResult =
+  | { ok: true; status: 'live' | 'retired'; paperNo: number }
+  | { ok: false; message: string }
+
+export async function setPaperStatus(raw: unknown): Promise<PaperStatusResult> {
+  const claims = await getAppClaims()
+
+  if (!canGeneratePapers(claims) || !claims.company_id) {
+    return { ok: false, message: 'You are not permitted to change a paper.' }
+  }
+
+  const parsed = statusInput.safeParse(raw)
+  if (!parsed.success) return { ok: false, message: 'That paper could not be found.' }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('set_paper_status', {
+    p_paper_id: parsed.data.paperId,
+    p_status: parsed.data.status,
+  })
+
+  if (error) {
+    // 0061 raises no_data_found for a paper the caller cannot see — the same
+    // answer as "does not exist", deliberately.
+    return {
+      ok: false,
+      message:
+        error.code === 'P0002'
+          ? 'That paper could not be found.'
+          : `The paper could not be updated. ${error.message}`,
+    }
+  }
+
+  const result = z
+    .object({ status: z.enum(['live', 'retired']), paperNo: z.number().int() })
+    .safeParse(data)
+
+  if (!result.success) {
+    return { ok: false, message: 'The paper was updated but its new state could not be read.' }
+  }
+
+  revalidatePath('/history')
+  revalidatePath(`/history/${parsed.data.paperId}`)
+
+  return { ok: true, status: result.data.status, paperNo: result.data.paperNo }
+}

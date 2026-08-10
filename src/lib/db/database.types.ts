@@ -742,6 +742,9 @@ export type Database = {
           "epoch": number
           "generated_by": string
           "generated_at": string
+          "status": Database["public"]["Enums"]["paper_status"]
+          "status_changed_at": string | null
+          "status_changed_by": string | null
         }
         Insert: {
           "id"?: string
@@ -756,6 +759,9 @@ export type Database = {
           "epoch": number
           "generated_by": string
           "generated_at"?: string
+          "status"?: Database["public"]["Enums"]["paper_status"]
+          "status_changed_at"?: string | null
+          "status_changed_by"?: string | null
         }
         Update: {
           "id"?: string
@@ -770,6 +776,9 @@ export type Database = {
           "epoch"?: number
           "generated_by"?: string
           "generated_at"?: string
+          "status"?: Database["public"]["Enums"]["paper_status"]
+          "status_changed_at"?: string | null
+          "status_changed_by"?: string | null
         }
         Relationships: []
       }
@@ -2269,6 +2278,10 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "set_paper_status": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "set_updated_at": {
         Args: Record<string, unknown>
         Returns: unknown
@@ -2314,6 +2327,7 @@ export type Database = {
       "exam_kind": "official" | "practice" | "quiz" | "monthly" | "annual" | "practical"
       "exam_status": "draft" | "scheduled" | "active" | "completed" | "archived" | "cancelled"
       "paper_mode": "fixed" | "per_attempt"
+      "paper_status": "generated" | "live" | "retired"
       "question_status": "draft" | "review" | "active" | "approved" | "retired" | "archived" | "deprecated"
       "question_type": "mcq_single" | "mcq_multi" | "true_false" | "fill_blank" | "match" | "sequence" | "short_answer" | "essay" | "image" | "video" | "audio" | "document" | "practical" | "viva"
       "response_format": "choice_single" | "choice_multi" | "boolean" | "blanks" | "pairs" | "order" | "text_short" | "text_long" | "evaluator_only"

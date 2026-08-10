@@ -277,7 +277,7 @@ export async function loadPaperHistory(page = 1, pageSize = 25): Promise<PaperHi
   const { data, count, error } = await supabase
     .from('exam_papers')
     .select(
-      'id, paper_no, brand_id, difficulty, marks, mcq_n, short_n, generated_at, generated_by',
+      'id, paper_no, brand_id, difficulty, marks, mcq_n, short_n, generated_at, generated_by, status, status_changed_at',
       { count: 'exact' },
     )
     .order('generated_at', { ascending: false })
@@ -318,6 +318,8 @@ export async function loadPaperHistory(page = 1, pageSize = 25): Promise<PaperHi
     questionCount: countByPaper.get(p.id) ?? 0,
     generatedByName: names.get(p.generated_by) ?? '—',
     generatedAt: p.generated_at,
+    status: p.status,
+    statusChangedAt: p.status_changed_at,
     availableFiles: toAvailableFiles(filesByPaper.get(p.id) ?? []),
   }))
 
@@ -357,7 +359,7 @@ export async function loadPaperDetail(paperId: string): Promise<PaperDetail | nu
 
   const { data, error } = await supabase
     .from('exam_papers')
-    .select('id, paper_no, brand_id, difficulty, marks, mcq_n, short_n, generated_at, generated_by')
+    .select('id, paper_no, brand_id, difficulty, marks, mcq_n, short_n, generated_at, generated_by, status, status_changed_at')
     .eq('id', paperId)
     .maybeSingle()
 
@@ -392,6 +394,8 @@ export async function loadPaperDetail(paperId: string): Promise<PaperDetail | nu
     questionCount: composition.length,
     generatedByName: names.get(data.generated_by) ?? '—',
     generatedAt: data.generated_at,
+    status: data.status,
+    statusChangedAt: data.status_changed_at,
     availableFiles: toAvailableFiles(files.data ?? []),
     // Recorded ON the paper, not re-derived: paper_settings is editable, and a
     // paper generated under 16+4 must still report 16+4 afterwards.

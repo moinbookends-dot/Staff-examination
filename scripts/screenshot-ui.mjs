@@ -123,7 +123,25 @@ async function makeUser(roleKey) {
   const id = (await res.json()).id
   made.push(id)
 
-  await db.query(`update public.profiles set approval_status='approved' where id=$1`, [id])
+  /*
+   * Pinned to an outlet, not merely approved.
+   *
+   * custom_access_token_hook derives brand_id from the outlet AT SIGN-IN, so an
+   * account without one has a null brand — and a brand-scoped read then matches
+   * nothing. A chef fixture without an outlet sees an empty question pool and a
+   * 404 on a paper that plainly exists, which looks like a product bug and is
+   * a fixture bug. It cost two debugging sessions before it went in here.
+   */
+  const outlet = (
+    await db.query(
+      `select id from public.outlets where deleted_at is null order by name limit 1`,
+    )
+  ).rows[0]
+
+  await db.query(
+    `update public.profiles set approval_status='approved', outlet_id = $2 where id = $1`,
+    [id, outlet?.id ?? null],
+  )
   await db.query(
     `insert into public.user_roles (user_id, role_id)
      select $1, id from public.roles where key=$2 and company_id is null on conflict do nothing`,

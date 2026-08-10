@@ -1173,7 +1173,24 @@
     "pdfWatermark": "Watermark",
     "pdfWatermarkHint": "Diagonal text behind the questions. Leave empty for none.",
     "save": "Save settings",
-    "saved": "Settings saved."
+    "saved": "Settings saved.",
+    "status": {
+      "generated": "Not in use",
+      "live": "In use",
+      "retired": "Retired"
+    },
+    "setLive": "Mark as in use",
+    "setRetired": "Retire",
+    "statusSet": {
+      "live": "Paper {no} is now the one in use.",
+      "retired": "Paper {no} retired."
+    },
+    "statusHint": {
+      "generated": "Generated and printable. Mark it as in use when this is the paper being sat.",
+      "live": "This is the paper currently being sat. Printed and handed out — nothing is answered on screen.",
+      "retired": "Finished with. Kept in history and still printable if needed."
+    },
+    "statusTitle": "Paper status"
   },
   "import": {
     "title": "Import questions",

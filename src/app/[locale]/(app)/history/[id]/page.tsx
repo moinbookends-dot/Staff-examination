@@ -1,3 +1,5 @@
+import { PaperStatusControl } from '@/components/papers/paper-status'
+import { setPaperStatus } from '@/server/actions/papers'
 import { notFound } from 'next/navigation'
 import { getTranslations, getFormatter } from 'next-intl/server'
 import { ArrowLeftIcon, FileTextIcon, KeyRoundIcon } from 'lucide-react'
@@ -59,6 +61,16 @@ export default async function PaperDetailPage({
 
   const t = await getTranslations('papers')
   const format = await getFormatter()
+
+  /*
+   * A Server Action, wrapped so the client component takes a plain callback.
+   * setPaperStatus re-checks the caller and the paper's visibility itself —
+   * this page having rendered is not authorisation for the write.
+   */
+  const onStatusChange = async (input: { paperId: string; status: 'live' | 'retired' }) => {
+    'use server'
+    return setPaperStatus(input)
+  }
 
   const difficultyLabels: Record<Difficulty, string> = {
     easy: t('difficulty.easy'),
@@ -160,6 +172,14 @@ export default async function PaperDetailPage({
             </ol>
           </>
         )}
+      </section>
+
+      {/* ── Status ───────────────────────────────────────────────────────── */}
+      <section className="rounded-xl border bg-card p-5">
+        <h2 className="text-title-md">{t('statusTitle')}</h2>
+        <div className="mt-3">
+          <PaperStatusControl paperId={paper.id} status={paper.status} onChange={onStatusChange} />
+        </div>
       </section>
 
       {/* ── Downloads ────────────────────────────────────────────────────── */}

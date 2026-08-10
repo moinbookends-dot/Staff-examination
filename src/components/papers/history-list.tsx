@@ -2,6 +2,7 @@ import { getTranslations, getFormatter } from 'next-intl/server'
 import { DownloadIcon, EyeIcon, FileTextIcon } from 'lucide-react'
 import { Link } from '@/lib/i18n/navigation'
 import { Badge } from '@/components/ui/badge'
+import { PaperStatusBadge } from '@/components/papers/paper-status'
 import { buttonVariants } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import type { Difficulty } from '@/lib/bank/vocabulary'
@@ -78,7 +79,14 @@ export async function HistoryList({ rows, difficultyLabels, narrowed }: HistoryL
           <tbody>
             {rows.map((row) => (
               <tr key={row.id} className="border-b last:border-0 hover:bg-accent/40">
-                <td className="px-4 py-3 font-medium">{t('paperNo', { paperNo: row.paperNo })}</td>
+                <td className="px-4 py-3 font-medium">
+                  <span className="flex flex-wrap items-center gap-2">
+                    {t('paperNo', { paperNo: row.paperNo })}
+                    {/* Which paper is actually in use, at a glance — otherwise
+                        every row in this list looks equally current. */}
+                    {row.status !== 'generated' && <PaperStatusBadge status={row.status} />}
+                  </span>
+                </td>
                 <td className="px-4 py-3">
                   <Badge variant="outline">{difficultyLabels[row.difficulty]}</Badge>
                 </td>
@@ -116,9 +124,10 @@ export async function HistoryList({ rows, difficultyLabels, narrowed }: HistoryL
                   {row.generatedByName} · {when(row.generatedAt)}
                 </span>
               </div>
-              <Badge variant="outline" className="shrink-0">
-                {difficultyLabels[row.difficulty]}
-              </Badge>
+              <span className="flex shrink-0 items-center gap-2">
+                {row.status !== 'generated' && <PaperStatusBadge status={row.status} />}
+                <Badge variant="outline">{difficultyLabels[row.difficulty]}</Badge>
+              </span>
             </div>
 
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-body-sm text-muted-foreground">

@@ -1,4 +1,7 @@
 import type { BankLocale, Difficulty, QuestionType } from '@/lib/bank/vocabulary'
+
+/** generated -> live -> retired. Nothing to do with online delivery. */
+export type PaperStatus = 'generated' | 'live' | 'retired'
 import type { PaperBlueprint } from './blueprint'
 import type { PoolCounts } from './combinations'
 
@@ -135,6 +138,9 @@ export interface PaperHistoryEntry {
   questionCount: number
   generatedByName: string
   generatedAt: string
+  /** Where the printed paper is in its working life. See migration 0061. */
+  status: PaperStatus
+  statusChangedAt: string | null
   /** Which of the six files exist. Absent ones are offered as "regenerate". */
   availableFiles: { locale: BankLocale; kind: 'paper' | 'key' }[]
 }
