@@ -13,6 +13,10 @@ import {
   Sparkles,
   UserRound,
   UserRoundCheck,
+  ClipboardList,
+  Award,
+  NotebookPen,
+  PenLine,
   type LucideIcon,
 } from 'lucide-react'
 import { Link, usePathname } from '@/lib/i18n/navigation'
@@ -56,6 +60,10 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   topics: TagsIcon,
   import: UploadIcon,
   profile: UserRound,
+  myExams: ClipboardList,
+  results: Award,
+  exams: NotebookPen,
+  evaluate: PenLine,
 }
 
 /** Exact match for /dashboard, prefix elsewhere so /questions/123 stays lit. */

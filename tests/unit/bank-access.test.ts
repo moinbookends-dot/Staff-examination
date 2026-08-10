@@ -54,28 +54,27 @@ describe('Question Bank access', () => {
     expect(canSeeQuestionUuid(EDITOR)).toBe(true)
   })
 
-  it('keeps a Super Admin OUT, despite has_perm() returning true for them', () => {
+  it('lets a Super Admin into every bank surface', () => {
     /*
      * ╔═══════════════════════════════════════════════════════════════════════╗
-     * ║ THE TEST THIS MODULE EXISTS FOR.                                       ║
+     * ║ THIS TEST IS THE EXACT INVERSE OF WHAT IT USED TO ASSERT, AND THE      ║
+     * ║ REASON IS A DECISION RATHER THAN A CONVENIENT REWRITE.                 ║
      * ║                                                                       ║
-     * ║ can(SUPER_ADMIN, 'bank.read') is TRUE — the short-circuit in claims.ts ║
-     * ║ mirrors public.has_perm(), and both grant a super admin everything.    ║
-     * ║ The whole purpose of canOpenQuestionBank is to override that for this  ║
-     * ║ one surface.                                                          ║
+     * ║ It previously asserted `false` on all three, because these predicates  ║
+     * ║ deliberately overrode can() to keep a Super Admin out of the bank —    ║
+     * ║ separation of duties between administering the platform and authoring  ║
+     * ║ the questions. The owner removed that on 10 Aug 2026.                  ║
      * ║                                                                       ║
-     * ║ Asserting both halves is what makes the test meaningful: without the   ║
-     * ║ first line it would pass against a claims object that simply had no    ║
-     * ║ permissions, proving nothing about the override.                      ║
+     * ║ The assertion kept its shape on purpose: it still checks every bank    ║
+     * ║ surface, so if somebody restores the lockout in one predicate and      ║
+     * ║ forgets another, this fails rather than drifting quietly.              ║
      * ╚═══════════════════════════════════════════════════════════════════════╝
      */
-    // The thing being overridden really is true.
     expect(SUPER_ADMIN.roles).toContain('super_admin')
 
-    // And the override holds, on every bank surface.
-    expect(canOpenQuestionBank(SUPER_ADMIN)).toBe(false)
-    expect(canEditQuestions(SUPER_ADMIN)).toBe(false)
-    expect(canSeeQuestionUuid(SUPER_ADMIN)).toBe(false)
+    expect(canOpenQuestionBank(SUPER_ADMIN)).toBe(true)
+    expect(canEditQuestions(SUPER_ADMIN)).toBe(true)
+    expect(canSeeQuestionUuid(SUPER_ADMIN)).toBe(true)
   })
 
   it('keeps a Chef out of the bank', () => {
@@ -93,10 +92,12 @@ describe('Question Bank access', () => {
     }
   })
 
-  it('grants the UUID to Editors and nobody else', () => {
-    // The rule stated positively AND negatively, across every role.
-    const allowed = [EDITOR]
-    const denied = [SUPER_ADMIN, CHEF, HR, EMPLOYEE]
+  it('grants the UUID to Editors and Super Admins only', () => {
+    // The rule stated positively AND negatively, across every role. A Super
+    // Admin moved from `denied` to `allowed` with the 10 Aug 2026 change; a
+    // Chef, HR and an Employee are unaffected and still hold no bank key.
+    const allowed = [EDITOR, SUPER_ADMIN]
+    const denied = [CHEF, HR, EMPLOYEE]
 
     for (const claims of allowed) expect(canSeeQuestionUuid(claims)).toBe(true)
     for (const claims of denied) expect(canSeeQuestionUuid(claims)).toBe(false)
@@ -128,10 +129,12 @@ describe('paper generation access', () => {
 
 describe('administration', () => {
   it('lets a Super Admin manage Editors', () => {
-    // The counterpart to being locked out of the bank: they decide WHO edits
-    // questions, and do not edit them.
+    // This used to assert the counterpart of the lockout — "they decide WHO
+    // edits questions, and do not edit them". Since 10 Aug 2026 they do both,
+    // so the second half is asserted the other way round and kept rather than
+    // dropped: it is what proves the change reached every surface.
     expect(canManageEditors(SUPER_ADMIN)).toBe(true)
-    expect(canOpenQuestionBank(SUPER_ADMIN)).toBe(false)
+    expect(canOpenQuestionBank(SUPER_ADMIN)).toBe(true)
   })
 
   it('does not let an Editor grant the Editor role', () => {

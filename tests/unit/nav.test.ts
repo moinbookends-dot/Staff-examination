@@ -85,14 +85,14 @@ describe('Question Bank visibility', () => {
     expect(hrefs(visibleNavItems(EDITOR))).toContain('/questions')
   })
 
-  it('is HIDDEN from a Super Admin, whose permission check passes', () => {
+  it('is shown to a Super Admin', () => {
     /*
-     * The governance boundary, asserted at the nav layer as well as at
-     * bank-access. can(SUPER_ADMIN, 'bank.read') is true — has_perm()
-     * short-circuits — so the permission list alone would show this item.
-     * canOpenQuestionBank is what removes it.
+     * This asserted `not.toContain` until 10 Aug 2026, mirroring the
+     * separation-of-duties lockout in bank-access.ts. The owner removed that
+     * lockout; the nav follows it rather than keeping its own copy of the
+     * rule, which is why only the expectation changed and nav.ts did not.
      */
-    expect(hrefs(visibleNavItems(SUPER_ADMIN))).not.toContain('/questions')
+    expect(hrefs(visibleNavItems(SUPER_ADMIN))).toContain('/questions')
   })
 
   it('is hidden from a Chef', () => {
@@ -129,15 +129,64 @@ describe('the approval gate still applies', () => {
   })
 })
 
-describe('removed legacy navigation stays removed', () => {
-  it('offers no route from the deleted delivery stack', () => {
+/**
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║ THIS BLOCK USED TO ASSERT THAT SIX DELIVERY ROUTES STAYED OUT OF THE NAV. ║
+ * ║ FOUR OF THEM CAME BACK, AND THE REASON IS A PRODUCT CHANGE, NOT A         ║
+ * ║ CONVENIENT REINTERPRETATION OF A FAILING TEST.                            ║
+ * ║                                                                           ║
+ * ║ When those links were removed there was no online delivery: papers were   ║
+ * ║ printed, and /my-exams, /results, /exams and /evaluate led to a stack     ║
+ * ║ nothing fed. 0062 and 0063 made delivery real — a generated paper can be  ║
+ * ║ published, assigned, sat on screen, and marked — so all four are now      ║
+ * ║ steps in a workflow the product actually supports.                        ║
+ * ║                                                                           ║
+ * ║ /evaluate in particular is not optional. The 80/20 blueprint guarantees   ║
+ * ║ short answers, so EVERY submitted attempt stops at `evaluating` and waits ║
+ * ║ for a person. Without that link, papers could be published and sat and    ║
+ * ║ the results would never come out.                                         ║
+ * ║                                                                           ║
+ * ║ /verify and /reports stay out, and are still asserted absent below.       ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+describe('navigation for the delivery workflow', () => {
+  it('still offers no route to the parts that remain unbuilt', () => {
     const all = [
       ...hrefs(visibleNavItems(SUPER_ADMIN)),
       ...hrefs(visibleNavItems(EDITOR)),
       ...hrefs(visibleNavItems(CHEF)),
     ]
-    for (const gone of ['/exams', '/evaluate', '/verify', '/results', '/reports', '/my-exams']) {
+    // Paper-backed exams publish with verification_mode 'single', so nothing
+    // ever reaches the verify queue; analytics is separate work.
+    for (const gone of ['/verify', '/reports']) {
       expect(all).not.toContain(gone)
+    }
+  })
+
+  it('gives a Chef the two screens that finish a sitting', () => {
+    const chef = hrefs(visibleNavItems(CHEF))
+    expect(chef).toContain('/exams')
+    expect(chef).toContain('/evaluate')
+  })
+
+  it('gives a Chef their own results but NOT the candidate list', () => {
+    const chef = hrefs(visibleNavItems(CHEF))
+    // attempts.read_own — a chef can see results they were given.
+    expect(chef).toContain('/results')
+    // attempts.take — a chef does not hold it, and a "My exams" link would
+    // lead to a list that is empty for them by construction.
+    expect(chef).not.toContain('/my-exams')
+  })
+
+  it('gives an Employee exactly the three screens they can use', () => {
+    const employee = claimsFor('employee')
+    expect(hrefs(visibleNavItems(employee))).toEqual(['/dashboard', '/my-exams', '/results'])
+  })
+
+  it('shows an Editor no delivery screens — they author, they do not run exams', () => {
+    const editor = hrefs(visibleNavItems(EDITOR))
+    for (const notTheirs of ['/exams', '/evaluate', '/my-exams']) {
+      expect(editor).not.toContain(notTheirs)
     }
   })
 })

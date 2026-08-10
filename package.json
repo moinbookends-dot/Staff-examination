@@ -23,7 +23,8 @@
     "db:demo": "node scripts/seed-demo.mjs",
     "db:sample": "node scripts/seed-sample-bank.mjs",
     "postinstall": "patch-package",
-    "gen:types": "node scripts/gen-types.mjs"
+    "gen:types": "node scripts/gen-types.mjs",
+    "check:delivery": "node scripts/check-delivery.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
-import { getAppClaims } from '@/lib/auth/claims'
+import { getAppClaims, can } from '@/lib/auth/claims'
 import { canGeneratePapers } from '@/lib/auth/bank-access'
 import { createClient } from '@/lib/supabase/server'
 import { dbId } from '@/lib/db/id'
@@ -146,15 +146,20 @@ export async function generatePaper(raw: unknown): Promise<GenerateOutcome> {
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * Move a printed paper between generated → live → retired.
+ * Move a paper between generated → live → retired.
  *
  * ┌───────────────────────────────────────────────────────────────────────────┐
- * │ THIS DOES NOT PUBLISH AN EXAM. IT LABELS A PIECE OF PAPER.                │
+ * │ THIS LABELS THE PAPER. IT DOES NOT OPEN AN EXAM.                          │
  * │                                                                           │
- * │ Nobody answers anything on a screen as a result of this. A Chef prints a  │
- * │ paper, marks it live so the History screen shows which one is in use this │
- * │ week, and retires it afterwards. The legacy online attempt stack is a     │
- * │ separate system and is untouched.                                         │
+ * │ This comment used to say the label had nothing to do with online          │
+ * │ delivery, because at the time there was none. 0062 changed that: `live`   │
+ * │ now means "in use" whether the paper is printed, sat on a screen, or       │
+ * │ both, and publishPaperAsExam() below sets it as a side effect.            │
+ * │                                                                           │
+ * │ What is still true is the direction: setting a paper live here does NOT   │
+ * │ create an exam, assign anybody, or let a single candidate answer          │
+ * │ anything. A Chef marking this week's printed paper is doing exactly what  │
+ * │ they always were.                                                         │
  * └───────────────────────────────────────────────────────────────────────────┘
  */
 const statusInput = z.object({
@@ -208,4 +213,111 @@ export async function setPaperStatus(raw: unknown): Promise<PaperStatusResult> {
   revalidatePath(`/history/${parsed.data.paperId}`)
 
   return { ok: true, status: result.data.status, paperNo: result.data.paperNo }
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * Publish a generated paper as an online exam.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║ THE PAPER IS NOT COPIED, MODIFIED, OR CONSUMED.                           ║
+ * ║                                                                           ║
+ * ║ 0063 writes one row — an `exams` row carrying paper_id. exam_papers and   ║
+ * ║ exam_paper_questions are never written by this path (except the paper's   ║
+ * ║ own generated → live label), so the printed PDF and the on-screen exam    ║
+ * ║ are guaranteed to be the same twenty questions in the same order: they    ║
+ * ║ are read from the same rows.                                              ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ NO AUDIENCE IS SET HERE, AND THAT IS THE SAFE DIRECTION TO FAIL.          │
+ * │                                                                           │
+ * │ Assignment is a separate, existing surface — ExamAssignments on           │
+ * │ /exams/[id], writing exam_assignments under its own RLS. Duplicating the  │
+ * │ picker into the publish form would put a second implementation of "who    │
+ * │ sits this" in the codebase.                                               │
+ * │                                                                           │
+ * │ Until somebody is assigned, is_exam_assigned_to_me() answers false for    │
+ * │ every candidate and start_attempt refuses. A half-finished publish is     │
+ * │ therefore an exam nobody can see, rather than an exam everybody can.      │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ */
+const publishInput = z.object({
+  paperId: dbId(),
+  title: z.string().trim().min(1).max(200),
+  // Bounded here as well as in the form. A Server Action is a public endpoint
+  // and the form's `min`/`max` attributes are a courtesy to the person typing,
+  // not a constraint on what arrives.
+  durationMinutes: z.coerce.number().int().min(5).max(480),
+  maxAttempts: z.coerce.number().int().min(1).max(10),
+  passMarkPercent: z.coerce.number().int().min(1).max(100),
+  opensAt: z.string().datetime({ offset: true }).nullable().optional(),
+  closesAt: z.string().datetime({ offset: true }).nullable().optional(),
+  instructions: z.string().trim().max(2000).optional(),
+})
+
+export type PublishPaperResult =
+  | { ok: true; examId: string; paperNo: number }
+  | { ok: false; message: string }
+
+export async function publishPaperAsExam(raw: unknown): Promise<PublishPaperResult> {
+  /*
+   * Both permissions, matching 0063 exactly. exams.create alone would let
+   * somebody who may draft an exam put one live without exams.publish, which is
+   * the separation publish_exam() has always enforced for the legacy path.
+   */
+  const claims = await getAppClaims()
+  if (!can(claims, 'exams.create') || !can(claims, 'exams.publish')) {
+    return { ok: false, message: 'You are not permitted to publish an exam.' }
+  }
+
+  const parsed = publishInput.safeParse(raw)
+  if (!parsed.success) {
+    return { ok: false, message: parsed.error.issues[0]?.message ?? 'Check the details and try again.' }
+  }
+  const input = parsed.data
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('publish_paper_as_exam', {
+    p_paper_id: input.paperId,
+    p_title: input.title,
+    p_duration_minutes: input.durationMinutes,
+    p_opens_at: input.opensAt ?? null,
+    p_closes_at: input.closesAt ?? null,
+    p_max_attempts: input.maxAttempts,
+    p_pass_mark_percent: input.passMarkPercent,
+    p_instructions: input.instructions ?? null,
+  })
+
+  if (error) {
+    /*
+     * 0063's errcodes, mapped to sentences. The unique_violation case is worth
+     * its own message because it is the one a Chef will actually hit — the
+     * paper is already open as an exam and they are looking at the wrong screen.
+     */
+    const message =
+      error.code === 'P0002'
+        ? 'That paper could not be found.'
+        : error.code === '23505'
+          ? 'That paper is already published as an open exam.'
+          : error.code === '23514'
+            ? error.message
+            : `The exam could not be published. ${error.message}`
+
+    return { ok: false, message }
+  }
+
+  const result = z
+    .object({ examId: dbId(), paperNo: z.number().int() })
+    .safeParse(data)
+
+  if (!result.success) {
+    return { ok: false, message: 'The exam was created but could not be read back.' }
+  }
+
+  revalidatePath('/history')
+  revalidatePath(`/history/${input.paperId}`)
+  revalidatePath('/exams')
+
+  return { ok: true, examId: result.data.examId, paperNo: result.data.paperNo }
 }

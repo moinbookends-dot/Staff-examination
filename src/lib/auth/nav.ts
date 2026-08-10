@@ -29,6 +29,10 @@ export type NavIcon =
   | 'topics'
   | 'import'
   | 'profile'
+  | 'myExams'
+  | 'results'
+  | 'exams'
+  | 'evaluate'
 
 /**
  * ╔═══════════════════════════════════════════════════════════════════════════╗
@@ -178,6 +182,70 @@ const NAV_ITEMS: NavItemConfig[] = [
    * │ two milestones as 404s because that rule was not followed.               │
    * └─────────────────────────────────────────────────────────────────────────┘
    */
+  /*
+   * ┌─────────────────────────────────────────────────────────────────────────┐
+   * │ THE CANDIDATE'S TWO ITEMS, AND WHY THEY WERE MISSING FOR SO LONG.       │
+   * │                                                                         │
+   * │ Every entry above is something a Chef or an Editor does. An Employee    │
+   * │ holds none of those permissions, so this list rendered exactly one item │
+   * │ for them — Dashboard — and /my-exams and /results were reachable only   │
+   * │ by typing the address. Both routes have existed and returned 200 the    │
+   * │ whole time; nothing linked to them.                                     │
+   * │                                                                         │
+   * │ That was survivable while papers were printed, because a candidate had  │
+   * │ nothing to do in the app. Publishing a paper as an online exam is what  │
+   * │ makes it a defect: the exam would go live, be assigned, and the person  │
+   * │ sitting it would open the app and see an empty dashboard.               │
+   * │                                                                         │
+   * │ attempts.take and attempts.read_own, not one permission for both: a     │
+   * │ Chef holds read_own (they can see their own results) but NOT take, and  │
+   * │ must not be offered a "My Exams" link to a list that is always empty.   │
+   * └─────────────────────────────────────────────────────────────────────────┘
+   */
+  {
+    href: '/my-exams',
+    labelKey: 'myExams',
+    icon: 'myExams',
+    permissions: ['attempts.take'],
+    mobile: true,
+  },
+  {
+    href: '/results',
+    labelKey: 'results',
+    icon: 'results',
+    permissions: ['attempts.read_own'],
+    mobile: true,
+  },
+  /*
+   * ┌─────────────────────────────────────────────────────────────────────────┐
+   * │ THE OTHER HALF OF THE LOOP — WITHOUT THESE THE FEATURE DEAD-ENDS.       │
+   * │                                                                         │
+   * │ A published paper always contains short answers (the 80/20 blueprint    │
+   * │ guarantees it), so every submitted attempt stops at `evaluating` and    │
+   * │ waits for a person. With no link to /evaluate, that person had no way   │
+   * │ to reach the queue: papers could be published and sat, and the results  │
+   * │ would simply never come out.                                            │
+   * │                                                                         │
+   * │ /exams for the same reason at the other end — published exams were      │
+   * │ reachable only by following the link on the paper that made them.       │
+   * │                                                                         │
+   * │ /verify and /reports stay out. Paper-backed exams publish with          │
+   * │ verification_mode 'single', so nothing lands in the verify queue, and   │
+   * │ analytics is a separate piece of work.                                  │
+   * └─────────────────────────────────────────────────────────────────────────┘
+   */
+  {
+    href: '/exams',
+    labelKey: 'exams',
+    icon: 'exams',
+    permissions: ['exams.read'],
+  },
+  {
+    href: '/evaluate',
+    labelKey: 'evaluate',
+    icon: 'evaluate',
+    permissions: ['evaluation.evaluate'],
+  },
   {
     href: '/approvals',
     labelKey: 'approvals',

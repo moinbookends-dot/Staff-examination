@@ -22,7 +22,8 @@ import { ExamAssignments, type AssignmentRow } from '@/components/exams/exam-ass
 import { CloneExamButton } from '@/components/exams/clone-exam-button'
 import { ExamPaperPreview } from '@/components/exams/exam-paper-preview'
 import { Badge } from '@/components/ui/badge'
-import { LockIcon } from 'lucide-react'
+import { Link } from '@/lib/i18n/navigation'
+import { LockIcon, FileTextIcon } from 'lucide-react'
 
 /**
  * One exam.
@@ -88,6 +89,25 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
   // database will reject on save.
   const locked = exam.status !== 'draft'
 
+  /*
+   * ┌───────────────────────────────────────────────────────────────────────────┐
+   * │ A PAPER-BACKED EXAM HIDES THREE PANELS, BECAUSE ALL THREE READ THE        │
+   * │ LEGACY MODEL AND WOULD REPORT NOTHING TRUTHFULLY.                         │
+   * │                                                                           │
+   * │ SectionBuilder edits exam_sections and exam_rules; ExamPaperPreview reads │
+   * │ exam_questions; ExamHealthPanel runs exam_health(), which validates a     │
+   * │ RULE-DRAWN paper — pool depth, captured answer-key revisions, marks       │
+   * │ arithmetic. A paper-backed exam has none of those rows, so all three      │
+   * │ would render empty and the health panel would call an exam "unhealthy"    │
+   * │ for lacking rules it is not supposed to have.                             │
+   * │                                                                           │
+   * │ The questions came from the Question Bank and were fixed at generation.   │
+   * │ There is nothing on this screen to edit about them, and the paper's own   │
+   * │ page shows the composition — so this links there instead of restating it. │
+   * └───────────────────────────────────────────────────────────────────────────┘
+   */
+  const paperBacked = exam.paper_id !== null && exam.paper_id !== undefined
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -137,13 +157,27 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
 
       <ExamSettingsForm exam={exam as unknown as ExamSettings} readOnly={locked} />
 
-      <SectionBuilder
-        examId={exam.id}
-        initialSections={initialSections}
-        categories={categories}
-        ruleCounts={ruleCounts}
-        readOnly={locked}
-      />
+      {paperBacked ? (
+        <section className="rounded-xl border bg-card p-5">
+          <h2 className="text-lg font-semibold">{t('fromPaperTitle')}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t('fromPaperBody')}</p>
+          <Link
+            href={`/history/${exam.paper_id}`}
+            className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+          >
+            <FileTextIcon className="size-4" />
+            {t('fromPaperLink')}
+          </Link>
+        </section>
+      ) : (
+        <SectionBuilder
+          examId={exam.id}
+          initialSections={initialSections}
+          categories={categories}
+          ruleCounts={ruleCounts}
+          readOnly={locked}
+        />
+      )}
 
       <ExamSchedule
         examId={exam.id}
@@ -170,7 +204,7 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
       {/* The health report needs exams.update — it returns question ids and
           stems in its detail payload, so it is as sensitive as the paper. A
           reader without that permission simply does not see the panel. */}
-      {canEdit && (
+      {canEdit && !paperBacked && (
         <ExamHealthPanel
           examId={exam.id}
           status={exam.status}
@@ -179,7 +213,7 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
         />
       )}
 
-      <ExamPaperPreview paper={paper} />
+      {!paperBacked && <ExamPaperPreview paper={paper} />}
     </div>
   )
 }

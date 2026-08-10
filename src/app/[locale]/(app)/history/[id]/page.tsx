@@ -1,8 +1,10 @@
 import { PaperStatusControl } from '@/components/papers/paper-status'
-import { setPaperStatus } from '@/server/actions/papers'
+import { PublishPaper } from '@/components/papers/publish-paper'
+import { setPaperStatus, publishPaperAsExam } from '@/server/actions/papers'
+import { can } from '@/lib/auth/claims'
 import { notFound } from 'next/navigation'
 import { getTranslations, getFormatter } from 'next-intl/server'
-import { ArrowLeftIcon, FileTextIcon, KeyRoundIcon } from 'lucide-react'
+import { ArrowLeftIcon, FileTextIcon, KeyRoundIcon, UsersIcon } from 'lucide-react'
 import { requirePermission } from '@/lib/auth/guards'
 import { Link } from '@/lib/i18n/navigation'
 import { PageHeader } from '@/components/ui/page-header'
@@ -43,7 +45,7 @@ export default async function PaperDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  await requirePermission('papers.read_history')
+  const claims = await requirePermission('papers.read_history')
 
   const { id } = await params
 
@@ -71,6 +73,32 @@ export default async function PaperDetailPage({
     'use server'
     return setPaperStatus(input)
   }
+
+  /*
+   * Editors generate papers; Chefs run them. An Editor reaching this page holds
+   * papers.read_history and sees everything else, but gets no publish form —
+   * and passing `undefined` rather than rendering a disabled control is what
+   * makes that a fact about their permissions instead of a UI state.
+   *
+   * publishPaperAsExam re-checks both permissions itself. This decides what to
+   * draw, never what is allowed.
+   */
+  const mayPublish = can(claims, 'exams.create') && can(claims, 'exams.publish')
+
+  const onPublish = mayPublish
+    ? async (input: {
+        paperId: string
+        title: string
+        durationMinutes: number
+        maxAttempts: number
+        passMarkPercent: number
+        opensAt: string | null
+        closesAt: string | null
+      }) => {
+        'use server'
+        return publishPaperAsExam(input)
+      }
+    : undefined
 
   const difficultyLabels: Record<Difficulty, string> = {
     easy: t('difficulty.easy'),
@@ -179,6 +207,73 @@ export default async function PaperDetailPage({
         <h2 className="text-title-md">{t('statusTitle')}</h2>
         <div className="mt-3">
           <PaperStatusControl paperId={paper.id} status={paper.status} onChange={onStatusChange} />
+        </div>
+      </section>
+
+      {/* ── Publish online ───────────────────────────────────────────────── */}
+      <section className="rounded-xl border bg-card p-5">
+        <h2 className="text-title-md">{t('publishTitle')}</h2>
+        <p className="mt-1 text-body-sm text-muted-foreground">{t('publishSubtitle')}</p>
+
+        <div className="mt-4">
+          {paper.liveExam ? (
+            /*
+             * ┌───────────────────────────────────────────────────────────────┐
+             * │ "PUBLISHED" AND "ANYBODY CAN SEE IT" ARE DIFFERENT FACTS, AND │
+             * │ THIS IS WHERE THAT STOPPED BEING INVISIBLE.                   │
+             * │                                                               │
+             * │ Publishing deliberately assigns nobody — an exam with no      │
+             * │ audience is invisible rather than open to everyone, which is  │
+             * │ the safe way round. But the only thing that ever said so was  │
+             * │ a toast, and a toast is gone by the time anyone wonders why   │
+             * │ the exam has not appeared for their staff.                    │
+             * │                                                               │
+             * │ So the unassigned case is stated here, permanently, as the    │
+             * │ unfinished step it is — not as an error, because nothing has  │
+             * │ gone wrong; the work is simply half done.                     │
+             * └───────────────────────────────────────────────────────────────┘
+             */
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline">{t('publishedAs')}</Badge>
+                <span className="text-body-md">{paper.liveExam.title}</span>
+              </div>
+
+              {paper.liveExam.assignmentCount === 0 ? (
+                <div className="flex items-start gap-3 rounded-lg border border-dashed border-warning/50 bg-warning/5 p-3">
+                  <UsersIcon className="mt-0.5 size-4 shrink-0 text-warning" />
+                  <div className="min-w-0">
+                    <p className="text-body-sm font-medium">{t('publishedNobodyTitle')}</p>
+                    <p className="mt-0.5 text-body-sm text-muted-foreground">
+                      {t('publishedNobodyBody')}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-body-sm text-muted-foreground">
+                  {t('publishedAssigned', { count: paper.liveExam.assignmentCount })}
+                </p>
+              )}
+
+              <Link
+                href={`/exams/${paper.liveExam.id}`}
+                className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+              >
+                <UsersIcon />
+                {paper.liveExam.assignmentCount === 0
+                  ? t('publishedChooseWho')
+                  : t('publishedOpenExam')}
+              </Link>
+            </div>
+          ) : (
+            <PublishPaper
+              paperId={paper.id}
+              paperNo={paper.paperNo}
+              marks={paper.marks}
+              retired={paper.status === 'retired'}
+              onPublish={onPublish}
+            />
+          )}
         </div>
       </section>
 

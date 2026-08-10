@@ -352,6 +352,15 @@ export interface PaperDetail extends PaperHistoryEntry {
   composition: { questionNo: number; section: 'mcq' | 'short_answer' }[]
   mcqCount: number
   shortAnswerCount: number
+  /**
+   * The open exam delivering this paper online, if there is one.
+   *
+   * `assignmentCount` is here for one reason: an exam with no audience is
+   * invisible to every candidate, and publishing does not set one. Without
+   * this the screen cannot tell "published and running" from "published and
+   * nobody can see it", and those look identical to whoever pressed the button.
+   */
+  liveExam: { id: string; title: string; status: string; assignmentCount: number } | null
 }
 
 export async function loadPaperDetail(paperId: string): Promise<PaperDetail | null> {
@@ -368,7 +377,7 @@ export async function loadPaperDetail(paperId: string): Promise<PaperDetail | nu
   if (error || !data) return null
 
   // Separate queries rather than embeds. See the box on loadPaperHistory.
-  const [questions, files, names, brands] = await Promise.all([
+  const [questions, files, names, brands, exams] = await Promise.all([
     supabase
       .from('exam_paper_questions')
       .select('question_no, section')
@@ -377,7 +386,38 @@ export async function loadPaperDetail(paperId: string): Promise<PaperDetail | nu
     supabase.from('exam_paper_files').select('locale, kind').eq('paper_id', paperId),
     resolveNames(supabase, [data.generated_by]),
     resolveBrands(supabase, [data.brand_id]),
+    /*
+     * The open exam, if any. 0062's partial unique index allows at most one, so
+     * maybeSingle is safe rather than optimistic.
+     *
+     * A reader without exams.read gets nothing back from RLS and simply sees no
+     * publishing state — which is correct: they are not the person who acts on
+     * it. The count is fetched separately for the same reason the rest of this
+     * function avoids embeds.
+     */
+    supabase
+      .from('exams')
+      .select('id, title, status')
+      .eq('paper_id', paperId)
+      .is('deleted_at', null)
+      .in('status', ['draft', 'scheduled', 'active'])
+      .maybeSingle(),
   ])
+
+  let liveExam: PaperDetail['liveExam'] = null
+  if (exams.data) {
+    const { count } = await supabase
+      .from('exam_assignments')
+      .select('exam_id', { count: 'exact', head: true })
+      .eq('exam_id', exams.data.id)
+
+    liveExam = {
+      id: exams.data.id,
+      title: exams.data.title,
+      status: exams.data.status,
+      assignmentCount: count ?? 0,
+    }
+  }
 
   const composition = (questions.data ?? []).map((q) => ({
     questionNo: q.question_no,
@@ -403,5 +443,6 @@ export async function loadPaperDetail(paperId: string): Promise<PaperDetail | nu
     composition,
     mcqCount: composition.filter((q) => q.section === 'mcq').length,
     shortAnswerCount: composition.filter((q) => q.section === 'short_answer').length,
+    liveExam,
   }
 }

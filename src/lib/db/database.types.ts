@@ -80,6 +80,8 @@ export type Database = {
           "negative_marks": number
           "fallback_reason": string | null
           "created_at": string
+          "source": Database["public"]["Enums"]["question_source"]
+          "answer_key": Json | null
         }
         Insert: {
           "attempt_id": string
@@ -93,6 +95,8 @@ export type Database = {
           "negative_marks"?: number
           "fallback_reason"?: string | null
           "created_at"?: string
+          "source"?: Database["public"]["Enums"]["question_source"]
+          "answer_key"?: Json | null
         }
         Update: {
           "attempt_id"?: string
@@ -106,6 +110,8 @@ export type Database = {
           "negative_marks"?: number
           "fallback_reason"?: string | null
           "created_at"?: string
+          "source"?: Database["public"]["Enums"]["question_source"]
+          "answer_key"?: Json | null
         }
         Relationships: []
       }
@@ -986,6 +992,7 @@ export type Database = {
           "deleted_at": string | null
           "created_at": string
           "updated_at": string
+          "paper_id": string | null
         }
         Insert: {
           "id"?: string
@@ -1019,6 +1026,7 @@ export type Database = {
           "deleted_at"?: string | null
           "created_at"?: string
           "updated_at"?: string
+          "paper_id"?: string | null
         }
         Update: {
           "id"?: string
@@ -1052,6 +1060,7 @@ export type Database = {
           "deleted_at"?: string | null
           "created_at"?: string
           "updated_at"?: string
+          "paper_id"?: string | null
         }
         Relationships: []
       }
@@ -1918,6 +1927,10 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "assert_question_source": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "assignment_matches": {
         Args: Record<string, unknown>
         Returns: unknown
@@ -1935,6 +1948,10 @@ export type Database = {
         Returns: unknown
       }
       "audit_row": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "bank_answer_key": {
         Args: Record<string, unknown>
         Returns: unknown
       }
@@ -1959,6 +1976,10 @@ export type Database = {
         Returns: unknown
       }
       "bank_question_missing_locales": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "bank_question_snapshot": {
         Args: Record<string, unknown>
         Returns: unknown
       }
@@ -2210,6 +2231,10 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "publish_paper_as_exam": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "quality_min_sample": {
         Args: Record<string, unknown>
         Returns: unknown
@@ -2328,6 +2353,7 @@ export type Database = {
       "exam_status": "draft" | "scheduled" | "active" | "completed" | "archived" | "cancelled"
       "paper_mode": "fixed" | "per_attempt"
       "paper_status": "generated" | "live" | "retired"
+      "question_source": "legacy" | "bank"
       "question_status": "draft" | "review" | "active" | "approved" | "retired" | "archived" | "deprecated"
       "question_type": "mcq_single" | "mcq_multi" | "true_false" | "fill_blank" | "match" | "sequence" | "short_answer" | "essay" | "image" | "video" | "audio" | "document" | "practical" | "viva"
       "response_format": "choice_single" | "choice_multi" | "boolean" | "blanks" | "pairs" | "order" | "text_short" | "text_long" | "evaluator_only"

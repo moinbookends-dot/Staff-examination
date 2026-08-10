@@ -12,32 +12,32 @@ import { can, isSuperAdmin } from './can'
  * Who may open the Question Bank, and who may see a question's UUID.
  *
  * ╔═══════════════════════════════════════════════════════════════════════════╗
- * ║ "SUPER ADMIN CANNOT OPEN THE QUESTION EDITOR" IS NOT EXPRESSIBLE IN THIS  ║
- * ║ RBAC, AND THIS MODULE IS THE HONEST WORKAROUND.                           ║
+ * ║ THE SUPER ADMIN LOCKOUT WAS REMOVED ON 10 AUG 2026, BY THE OWNER'S        ║
+ * ║ EXPLICIT INSTRUCTION: "give all the access to super admin everything".    ║
  * ║                                                                           ║
- * ║ public.has_perm() short-circuits TRUE for super_admin (migration 0004),   ║
- * ║ and forty migrations of RLS policies are built on that. There is no deny  ║
- * ║ concept anywhere in the model: a permission is something you have or do   ║
- * ║ not, and a super admin has everything by construction. Adding a denial to ║
- * ║ has_perm() would change the meaning of every policy in the schema at      ║
- * ║ once, to serve one screen.                                                ║
+ * ║ WHAT USED TO BE HERE, so nobody re-derives it from scratch: these three   ║
+ * ║ predicates each began `if (isSuperAdmin(claims)) return false`, which     ║
+ * ║ kept a Super Admin out of the bank screens even though has_perm() grants  ║
+ * ║ them everything. It was a SEPARATION OF DUTIES rule — the person who      ║
+ * ║ administers the platform does not also author the questions or read the   ║
+ * ║ answer keys — and it lived here because the RBAC has no concept of a      ║
+ * ║ denial to express it with.                                                ║
  * ║                                                                           ║
- * ║ So the rule is enforced HERE, at the application boundary, by the three   ║
- * ║ predicates below — and every route guard and server action in the bank    ║
- * ║ calls them instead of can() directly.                                     ║
+ * ║ WHAT REMOVING IT MEANS, stated plainly rather than buried: a Super Admin  ║
+ * ║ can now read every question, every answer key and every translation, and  ║
+ * ║ can create and edit questions. Question authorship is no longer separable ║
+ * ║ from platform administration anywhere in the product.                     ║
  * ║                                                                           ║
- * ║ WHAT THIS IS, STATED PLAINLY: a GOVERNANCE boundary, not a security one.  ║
+ * ║ NO MIGRATION WAS NEEDED, and that is the tell that this was only ever an  ║
+ * ║ application boundary. has_perm() has always short-circuited TRUE for      ║
+ * ║ super_admin (0004), so every bank RLS policy already admitted them —      ║
+ * ║ measured during the stabilization audit with a real Super Admin JWT:      ║
+ * ║ SELECT bank_questions 200, INSERT 201, SELECT question_topics 200. The    ║
+ * ║ screens were the only thing refusing.                                     ║
  * ║                                                                           ║
- * ║ A super admin holds the platform. They can reach the same rows through    ║
- * ║ psql, through the service-role key, or by granting themselves the editor  ║
- * ║ role for ten seconds. Nothing here stops that and nothing could. What it  ║
- * ║ does is make the separation REAL IN THE PRODUCT: the screens are not      ║
- * ║ offered, the actions refuse, and any route around it is deliberate and    ║
- * ║ visible in the audit log rather than accidental.                          ║
- * ║                                                                           ║
- * ║ Do not describe it in the UI as though it were a security control, and    ║
- * ║ do not "fix" it by deleting these checks because has_perm() already       ║
- * ║ returns true. That return value IS the thing being overridden.            ║
+ * ║ To restore the separation, put the three guards back — nothing else       ║
+ * ║ changed, and public.is_super_admin() still exists for the SQL half if a   ║
+ * ║ real containment boundary is ever wanted instead.                         ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  * ═══════════════════════════════════════════════════════════════════════════
  */
@@ -45,49 +45,17 @@ import { can, isSuperAdmin } from './can'
 /**
  * May this caller open the Question Bank at all?
  *
- * Editors: yes. Super admins: no, by the rule above. Chefs: no, and that one
- * is structural rather than a policy decision — a chef holds no bank.* key and
- * no RLS policy on bank_questions admits them, so the screen would be empty
- * even if it were offered.
- */
-/**
- * ╔═══════════════════════════════════════════════════════════════════════════╗
- * ║ THE SUPER ADMIN LOCKOUT IS AN APPLICATION BOUNDARY. THE DATABASE DOES NOT ║
- * ║ ENFORCE IT, AND THAT IS A DECISION RATHER THAN AN OVERSIGHT.              ║
- * ║                                                                           ║
- * ║ has_perm() short-circuits on is_super_admin(), so every bank RLS policy   ║
- * ║ admits a Super Admin. Measured directly against the live database during  ║
- * ║ the stabilization audit, with a real Super Admin JWT:                     ║
- * ║                                                                           ║
- * ║     SELECT bank_questions  → 200                                          ║
- * ║     INSERT bank_questions  → 201                                          ║
- * ║     SELECT question_topics → 200                                          ║
- * ║                                                                           ║
- * ║ Every ROUTE refuses them — /questions/* via the subtree layout,           ║
- * ║ /api/bank/export via its own check, and bank_import_commit through this   ║
- * ║ predicate's callers. A Super Admin with a raw token and PostgREST does    ║
- * ║ not go through any of them.                                              ║
- * ║                                                                           ║
- * ║ WHY IT IS LEFT THIS WAY: a Super Admin holds user and role administration,║
- * ║ so they can grant themselves `editor` and import entirely legitimately.   ║
- * ║ The lockout separates DUTIES and makes the crossing conspicuous in the    ║
- * ║ audit log; it is not a containment boundary and must not be described as  ║
- * ║ one. Enforcing it in SQL (`and not public.is_super_admin()` across the    ║
- * ║ eight bank policies) would harden a door whose wall is already open, at   ║
- * ║ the cost of touching every Editor read and write path.                    ║
- * ║                                                                           ║
- * ║ If that trade is ever revisited, public.is_super_admin() already exists   ║
- * ║ and the change is mechanical.                                            ║
- * ╚═══════════════════════════════════════════════════════════════════════════╝
+ * Editors and Super Admins: yes. Chefs: no, and that one is structural rather
+ * than a policy decision — a chef holds no bank.* key and no RLS policy on
+ * bank_questions admits them, so the screen would be empty even if it were
+ * offered.
  */
 export function canOpenQuestionBank(claims: AppClaims): boolean {
-  if (isSuperAdmin(claims)) return false
   return can(claims, 'bank.read')
 }
 
 /** May this caller create or edit questions? */
 export function canEditQuestions(claims: AppClaims): boolean {
-  if (isSuperAdmin(claims)) return false
   return can(claims, 'bank.write')
 }
 
@@ -105,7 +73,6 @@ export function canEditQuestions(claims: AppClaims): boolean {
  * running in a browser.
  */
 export function canSeeQuestionUuid(claims: AppClaims): boolean {
-  if (isSuperAdmin(claims)) return false
   return can(claims, 'bank.read_uuid')
 }
 

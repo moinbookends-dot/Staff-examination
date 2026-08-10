@@ -607,7 +607,10 @@
         "difficulty_widened": "No question matched the requested difficulty exactly, so a nearby one was used.",
         "short": "The rule could not be filled completely."
       }
-    }
+    },
+    "fromPaperTitle": "Questions come from a generated paper",
+    "fromPaperBody": "This exam delivers a paper drawn from the Question Bank. Its questions and their order were fixed when the paper was generated and cannot be changed here.",
+    "fromPaperLink": "View the paper"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -1190,7 +1193,29 @@
       "live": "This is the paper currently being sat. Printed and handed out — nothing is answered on screen.",
       "retired": "Finished with. Kept in history and still printable if needed."
     },
-    "statusTitle": "Paper status"
+    "statusTitle": "Paper status",
+    "publishTitle": "Sit this paper online",
+    "publishSubtitle": "Publish this paper as an online exam. The questions and their order stay exactly as printed.",
+    "publishDefaultTitle": "Paper {no}",
+    "publishTitleLabel": "Exam name",
+    "publishDuration": "Time allowed (minutes)",
+    "publishPassMark": "Pass mark (%)",
+    "publishAttempts": "Attempts allowed",
+    "publishOpens": "Opens (optional)",
+    "publishCloses": "Closes (optional)",
+    "publish": "Publish online",
+    "publishing": "Publishing…",
+    "publishHint": "Nobody can see this exam until you choose who sits it. You'll do that on the next screen.",
+    "publishDone": "Paper {no} is published. Now choose who sits it.",
+    "publishRetired": "This paper has been retired and cannot be published.",
+    "publishNotPermitted": "Publishing an exam is done by a chef.",
+    "publishNeedsTitle": "Give the exam a name.",
+    "publishedAs": "Published",
+    "publishedNobodyTitle": "Nobody has been chosen to sit this yet",
+    "publishedNobodyBody": "The exam is published but no staff are assigned to it, so it does not appear for anyone. Choose who sits it to finish.",
+    "publishedAssigned": "Assigned to {count, plural, one {# group} other {# groups}} of staff.",
+    "publishedChooseWho": "Choose who sits it",
+    "publishedOpenExam": "Open the exam"
   },
   "import": {
     "title": "Import questions",
