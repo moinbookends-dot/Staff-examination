@@ -1,0 +1,28 @@
+diff --git a/node_modules/fontkit/dist/main.cjs b/node_modules/fontkit/dist/main.cjs
+index 851b2d2..9bf8910 100644
+--- a/node_modules/fontkit/dist/main.cjs
++++ b/node_modules/fontkit/dist/main.cjs
+@@ -9976,6 +9976,9 @@ class $79ea6270f0a90256$export$2e2bcd8739ae039 extends (0, $7b226e6bbeadedeb$exp
+         }
+     }
+     applyAnchor(markRecord, baseAnchor, baseGlyphIndex) {
++        // A NULL anchor offset is legal in OpenType: it means this mark class has
++        // no attachment point on this base, so the mark is simply not attached.
++        if (!baseAnchor || !markRecord.markAnchor) return;
+         let baseCoords = this.getAnchor(baseAnchor);
+         let markCoords = this.getAnchor(markRecord.markAnchor);
+         let basePos = this.positions[baseGlyphIndex];
+diff --git a/node_modules/fontkit/dist/module.mjs b/node_modules/fontkit/dist/module.mjs
+index fde88fc..1b88f9e 100644
+--- a/node_modules/fontkit/dist/module.mjs
++++ b/node_modules/fontkit/dist/module.mjs
+@@ -9959,6 +9959,9 @@ class $c96c93587d49c14d$export$2e2bcd8739ae039 extends (0, $a83b9c36aaa94fd3$exp
+         }
+     }
+     applyAnchor(markRecord, baseAnchor, baseGlyphIndex) {
++        // A NULL anchor offset is legal in OpenType: it means this mark class has
++        // no attachment point on this base, so the mark is simply not attached.
++        if (!baseAnchor || !markRecord.markAnchor) return;
+         let baseCoords = this.getAnchor(baseAnchor);
+         let markCoords = this.getAnchor(markRecord.markAnchor);
+         let basePos = this.positions[baseGlyphIndex];

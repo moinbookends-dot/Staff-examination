@@ -1,0 +1,11 @@
+{
+  "note": "DEVELOPMENT SAMPLE ACCOUNTS. Created by npm run db:sample, removed by --clean. The login page renders these ONLY when NODE_ENV is not production. Never add a real account here.",
+  "password": "Sample-2026!",
+  "accounts": [
+    { "role": "super_admin", "email": "sample-superadmin@example.com", "label": "Super Admin", "can": "Everything except the Question Bank — locked out by design" },
+    { "role": "editor", "email": "editor@example.com", "label": "Editor", "can": "Question Bank, Topics, Import/Export, Generate" },
+    { "role": "chef", "email": "sample-chef@example.com", "label": "Chef", "can": "Generate papers and read history. No Question Bank" },
+    { "role": "hr", "email": "sample-hr@example.com", "label": "HR", "can": "Reports and directory, read-only" },
+    { "role": "employee", "email": "sample-employee@example.com", "label": "Employee", "can": "Own results only" }
+  ]
+}
