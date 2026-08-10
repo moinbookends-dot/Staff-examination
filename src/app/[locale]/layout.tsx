@@ -1,9 +1,10 @@
+import Script from 'next/script'
+import { THEME_SCRIPT } from '@/lib/theme'
 import type { Metadata } from 'next'
 import { Hanken_Grotesk, JetBrains_Mono, Noto_Sans_Devanagari, Noto_Sans_Gujarati } from 'next/font/google'
 import { NextIntlClientProvider, hasLocale } from 'next-intl'
 import { notFound } from 'next/navigation'
 import { routing } from '@/lib/i18n/routing'
-import { ThemeProvider } from '@/components/shell/theme-provider'
 import { Toaster } from '@/components/ui/sonner'
 import '../globals.css'
 
@@ -88,23 +89,41 @@ export default async function LocaleLayout({
   }
 
   return (
-    // suppressHydrationWarning: next-themes writes the theme class onto this
-    // element from an inline script before React hydrates, so the server markup
-    // and the live DOM legitimately differ by one class name.
+    // suppressHydrationWarning: THEME_SCRIPT writes the theme class onto this
+    // element before React hydrates, so the server markup and the live DOM
+    // legitimately differ by one class name.
     <html
       lang={locale}
       suppressHydrationWarning
       className={`${sans.variable} ${mono.variable} ${devanagari.variable} ${gujarati.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <ThemeProvider>
-          <NextIntlClientProvider>
-            {children}
-            {/* Seven files called toast.success() into a void: sonner needs a
-                mounted <Toaster /> and there was never one. */}
-            <Toaster position="top-right" richColors closeButton />
-          </NextIntlClientProvider>
-        </ThemeProvider>
+        {/*
+          The pre-paint theme script — server-injected, never rendered by React.
+
+          `beforeInteractive` is documented as "injected into the initial HTML
+          from the server, downloaded before any Next.js module", which is what
+          a no-flash theme needs: the class must be on <html> before the first
+          paint, not after hydration.
+
+          It lives HERE, in a Server Component, rather than inside a client
+          provider, because a <script> rendered by a Client Component is never
+          executed by React 19 and warns on every client navigation. That is
+          the bug this replaced — see src/lib/theme.ts.
+
+          There is no ThemeProvider: the theme has no React state to provide.
+          useTheme() reads the class off <html> via useSyncExternalStore.
+        */}
+        <Script id="theme" strategy="beforeInteractive">
+          {THEME_SCRIPT}
+        </Script>
+
+        <NextIntlClientProvider>
+          {children}
+          {/* Seven files called toast.success() into a void: sonner needs a
+              mounted <Toaster /> and there was never one. */}
+          <Toaster position="top-right" richColors closeButton />
+        </NextIntlClientProvider>
       </body>
     </html>
   )

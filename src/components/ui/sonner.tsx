@@ -1,15 +1,17 @@
 "use client"
 
-import { useTheme } from "next-themes"
+import { useTheme } from "@/components/shell/use-theme"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon } from "lucide-react"
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
+  // No `= "system"` default any more: the provider always resolves to 'dark' or
+  // 'light', and there is no system option to fall back to.
+  const { theme } = useTheme()
 
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
+      theme={theme}
       className="toaster group"
       icons={{
         success: (
