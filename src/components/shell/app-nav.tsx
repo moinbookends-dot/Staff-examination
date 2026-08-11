@@ -2,22 +2,15 @@
 
 import { useTranslations } from 'next-intl'
 import {
+  Award,
+  ClipboardList,
   Database,
   FilePlus2,
-  History,
   LayoutDashboard,
-  Settings,
-  ShieldCheck,
-  TagsIcon,
-  UploadIcon,
-  Sparkles,
-  UserRound,
-  UserRoundCheck,
-  ClipboardList,
-  Award,
-  NotebookPen,
   PenLine,
   RadioIcon,
+  Settings,
+  UserRoundCheck,
   type LucideIcon,
 } from 'lucide-react'
 import { Link, usePathname } from '@/lib/i18n/navigation'
@@ -53,28 +46,32 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   dashboard: LayoutDashboard,
   bank: Database,
   generate: FilePlus2,
-  history: History,
-  editors: ShieldCheck,
-  settings: Settings,
-  guide: Sparkles,
-  approvals: UserRoundCheck,
-  topics: TagsIcon,
-  import: UploadIcon,
-  profile: UserRound,
+  liveExams: RadioIcon,
+  evaluate: PenLine,
   myExams: ClipboardList,
   results: Award,
-  exams: NotebookPen,
-  evaluate: PenLine,
-  liveExams: RadioIcon,
+  approvals: UserRoundCheck,
+  settings: Settings,
 }
 
-/** Exact match for /dashboard, prefix elsewhere so /questions/123 stays lit. */
+/**
+ * Exact match for /dashboard, prefix elsewhere so /questions/123 stays lit.
+ *
+ * `activeFor` adds prefixes a section owns but does not share a path with —
+ * Papers is one item covering /papers/generate and /history, and without it the
+ * sidebar would go dark on the paper page.
+ */
 function useIsActive() {
   const pathname = usePathname()
-  return (href: string) =>
-    href === '/dashboard'
-      ? pathname === href
-      : pathname === href || pathname.startsWith(`${href}/`)
+
+  return (item: NavItem) => {
+    if (item.href === '/dashboard') return pathname === item.href
+
+    const matches = (prefix: string) =>
+      pathname === prefix || pathname.startsWith(`${prefix}/`)
+
+    return matches(item.href) || (item.activeFor?.some(matches) ?? false)
+  }
 }
 
 export function SidebarNav({ items }: { items: NavItem[] }) {
@@ -84,7 +81,7 @@ export function SidebarNav({ items }: { items: NavItem[] }) {
   return (
     <nav className="flex flex-col gap-1" aria-label="Main">
       {items.map((item) => {
-        const active = isActive(item.href)
+        const active = isActive(item)
         const Icon = ICONS[item.icon]
 
         return (
@@ -145,7 +142,7 @@ export function MobileTabBar({ items }: { items: NavItem[] }) {
   return (
     <nav className="flex items-stretch" aria-label="Main">
       {items.map((item) => {
-        const active = isActive(item.href)
+        const active = isActive(item)
         const Icon = ICONS[item.icon]
 
         return (

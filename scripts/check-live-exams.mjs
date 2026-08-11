@@ -409,8 +409,26 @@ try {
       '/en/exams/live':     { chef: 'ALLOW', editor: 'DENY', hr: 'ALLOW', employee: 'DENY' },
       '/en/exams/upcoming': { chef: 'ALLOW', editor: 'DENY', hr: 'ALLOW', employee: 'DENY' },
       '/en/exams/closed':   { chef: 'ALLOW', editor: 'DENY', hr: 'ALLOW', employee: 'DENY' },
-      [`/en/exams/${monId}`]: { chef: 'ALLOW', editor: 'DENY', hr: 'ALLOW', employee: 'DENY' },
     }
+
+    /*
+     * `/en/exams/${monId}` used to be in that matrix and is not any more.
+     *
+     * There has never been a per-exam page under this tree — monitoring is a
+     * row on the three section pages, expanded from exam_participation() — and
+     * the consolidation removed /exams/[id] along with the rest of the
+     * authoring area. The chef row expected ALLOW and would now fail on a 404,
+     * which reads as a permission bug rather than a deleted route.
+     *
+     * Asserted the other way instead, because a DENY expectation is satisfied
+     * by a 404 and would have gone on "passing" against a page that no longer
+     * exists — for everyone, including the chef.
+     */
+    const gone = await fetch(`${APP}/en/exams/${monId}`, {
+      headers: { cookie: chef.cookie },
+      redirect: 'manual',
+    })
+    check('there is no per-exam admin page left behind', gone.status === 404, `got ${gone.status}`)
 
     for (const [path, wanted] of Object.entries(expect)) {
       for (const [who, user] of Object.entries(people)) {

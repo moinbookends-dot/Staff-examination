@@ -42,10 +42,22 @@ const registerSchema = z.object({
     // toward Password1! and are worse than a longer passphrase. NIST dropped
     // them years ago; so do we.
     .max(128, 'Password is too long.'),
+  confirm: z.string(),
   fullName: z.string().trim().min(2, 'Enter your full name.').max(120),
   phone: z.string().trim().max(20).optional().or(z.literal('')),
+  /** The URL's locale. Decides where the redirect below lands, and nothing else. */
   locale: localeSchema.default('en'),
+  /**
+   * What the person actually picked, and what their profile is created with.
+   * The form has always rendered this select and the action has always ignored
+   * it — see the box in register-form.tsx. Falls back to the URL's locale when
+   * absent, which is what the old behaviour was for everybody.
+   */
+  preferredLocale: localeSchema.optional(),
 })
+  .refine((v) => v.password === v.confirm, {
+    message: 'Those passwords do not match.',
+  })
 
 /**
  * SECURITY: the schema above has no role, no outlet, no approval_status, and
@@ -64,38 +76,262 @@ export async function registerAction(
   const parsed = registerSchema.safeParse({
     email: formData.get('email'),
     password: formData.get('password'),
+    confirm: formData.get('confirm'),
     fullName: formData.get('fullName'),
     phone: formData.get('phone') ?? '',
     locale: formData.get('locale') ?? 'en',
+    preferredLocale: formData.get('preferredLocale') ?? undefined,
   })
 
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? 'Check the form and try again.' }
   }
 
-  const { email, password, fullName, phone, locale } = parsed.data
+  const { email, password, fullName, phone, locale, preferredLocale } = parsed.data
   const supabase = await createClient()
 
   const { error } = await supabase.auth.signUp({
     email,
     password,
     options: {
+      /*
+       * ┌───────────────────────────────────────────────────────────────────────┐
+       * │ THIS POINTED AT /{locale}/auth/confirm, WHICH DID NOT EXIST.          │
+       * │                                                                       │
+       * │ mailer_autoconfirm is false on this project — verified against        │
+       * │ /auth/v1/settings, not assumed — so signUp sends a confirmation mail  │
+       * │ and establishes no session. Every one of those mails carried a link   │
+       * │ to a 404, so a registrant could never confirm and could never sign    │
+       * │ in. Signup was a dead end for the whole life of the product.          │
+       * │                                                                       │
+       * │ The route now exists, AND the primary flow is a 6-digit code typed    │
+       * │ on /verify-email. Both are supported deliberately: which one the      │
+       * │ email carries is decided by a template in the Supabase dashboard,     │
+       * │ not by this file, and supporting only one fails silently and in       │
+       * │ production the day somebody edits the other.                          │
+       * └───────────────────────────────────────────────────────────────────────┘
+       */
       emailRedirectTo: `${await origin()}/${locale}/auth/confirm`,
-      data: { full_name: fullName, phone: phone || null, locale },
+      // `locale` here is what handle_new_user (0003) writes to
+      // profiles.preferred_locale — it validates the value against the three
+      // supported codes and falls back to 'en', so nothing client-supplied
+      // reaches the column unchecked.
+      data: { full_name: fullName, phone: phone || null, locale: preferredLocale ?? locale },
     },
   })
 
   if (error) {
-    // Deliberately vague on "user already registered". Distinguishing it turns
-    // the signup form into an account-enumeration oracle — anyone could test
-    // whether a given colleague has an account.
+    /*
+     * ╔═══════════════════════════════════════════════════════════════════════════╗
+     * ║ THE RATE LIMIT IS NAMED, AND EVERYTHING ELSE IS NOT.                      ║
+     * ║                                                                           ║
+     * ║ "user already registered" stays deliberately vague: distinguishing it     ║
+     * ║ turns this form into an account-enumeration oracle — anyone could test    ║
+     * ║ whether a colleague has an account.                                       ║
+     * ║                                                                           ║
+     * ║ over_email_send_rate_limit is different in kind, and it is REAL on this   ║
+     * ║ project. The built-in SMTP allows a couple of messages an hour, and       ║
+     * ║ registering three people in one sitting produced:                         ║
+     * ║                                                                           ║
+     * ║   429 {"error_code":"over_email_send_rate_limit",                         ║
+     * ║        "msg":"email rate limit exceeded"}                                 ║
+     * ║                                                                           ║
+     * ║ Under the generic message that reads as "check your details", so the      ║
+     * ║ person retypes a correct form until they give up — and the manager        ║
+     * ║ onboarding a shift of new staff concludes signup is broken. It reveals    ║
+     * ║ nothing about any account: it is a property of the project, and it is     ║
+     * ║ already visible to anyone who registers twice.                            ║
+     * ║                                                                           ║
+     * ║ The real fix is custom SMTP on the project. This makes the wait legible   ║
+     * ║ until then.                                                               ║
+     * ╚═══════════════════════════════════════════════════════════════════════════╝
+     */
+    if (/rate limit/i.test(error.message) || error.status === 429) {
+      return {
+        ok: false,
+        error: 'Too many accounts have been created just now. Wait a few minutes and try again.',
+      }
+    }
+
     return { ok: false, error: 'Could not complete registration. Check your details and try again.' }
   }
 
-  return {
-    ok: true,
-    message: 'Check your email for a verification link. A manager will approve your account shortly after.',
+  /*
+   * Straight to the code screen, carrying the address.
+   *
+   * Not a success panel with "check your email": there is nowhere to type the
+   * code from there, and the address has to reach /verify-email somehow. There
+   * is no session yet — mailer_autoconfirm is false — so a cookie is not
+   * available and the query string is the only channel.
+   *
+   * Putting an email address in a URL is a real cost (browser history, server
+   * logs, a shared screen) and it is accepted here because the alternative is
+   * asking somebody who has just typed their address to type it again. It is
+   * not a credential: possession of the address grants nothing without the
+   * code, which is emailed to that address.
+   */
+  redirect(`/${locale}/verify-email?email=${encodeURIComponent(email)}`)
+}
+
+// ── Email verification ───────────────────────────────────────────────────────
+
+const verifySchema = z.object({
+  email: z.string().trim().toLowerCase().email('Enter a valid email address.'),
+  /*
+   * ╔═══════════════════════════════════════════════════════════════════════════╗
+   * ║ THE CODE IS NOT SIX DIGITS ON THIS PROJECT. IT IS EIGHT.                  ║
+   * ║                                                                           ║
+   * ║ This was written as /^\d{6}$/ because six is what every article about     ║
+   * ║ email OTP says. Asking the live auth server produced 67660187, 98219925   ║
+   * ║ and 89068002 — all eight. A six-digit rule would have rejected every      ║
+   * ║ real code before it ever reached Supabase, and the screen would have      ║
+   * ║ said "enter the 6-digit code" to somebody holding eight.                  ║
+   * ║                                                                           ║
+   * ║ The length is a dashboard setting (Email OTP Length) that this app has    ║
+   * ║ no way to read at runtime — it is not in /auth/v1/settings. So the rule   ║
+   * ║ is deliberately loose: digits, of a plausible length. GoTrue is the       ║
+   * ║ authority on whether the code is right; this only stops an obviously      ║
+   * ║ empty or pasted-wrong field from becoming a round trip.                   ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   */
+  token: z
+    .string()
+    .trim()
+    .regex(/^\d{4,12}$/, 'Enter the code from your email.'),
+  locale: localeSchema.default('en'),
+})
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * Confirming the address with the emailed code.
+ *
+ * ON SUCCESS THIS ESTABLISHES A SESSION, which is why it is an action and not
+ * done during render: a Server Component cannot set cookies (server.ts
+ * swallows exactly that failure in its setAll), so the same call in a page
+ * would appear to work and leave the user with no session at all.
+ *
+ * The freshly minted token already carries email_verified=true from the 0070
+ * hook, so the proxy lets them through on the very next request. No refresh
+ * handshake is needed here — unlike approval, which is granted by somebody
+ * else, long after the token was minted.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export async function verifyEmailAction(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const parsed = verifySchema.safeParse({
+    email: formData.get('email'),
+    token: formData.get('token'),
+    locale: formData.get('locale') ?? 'en',
+  })
+
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Enter the 6-digit code from your email.' }
   }
+
+  const { email, token, locale } = parsed.data
+  const supabase = await createClient()
+
+  // type 'email', which GoTrue accepts for a signup confirmation code — checked
+  // against the live server rather than read off the type union, because
+  // EmailOtpType offers both 'signup' and 'email' and only one of them being
+  // right would be a production-only failure.
+  const { error } = await supabase.auth.verifyOtp({ email, token, type: 'email' })
+
+  if (error) {
+    /*
+     * ┌───────────────────────────────────────────────────────────────────────┐
+     * │ ONE MESSAGE, BECAUSE THE SERVER GIVES ONE ANSWER.                     │
+     * │                                                                       │
+     * │ This branched on /expired/ to say either "that code has expired" or   │
+     * │ "that code is not right". GoTrue answers a WRONG code with exactly    │
+     * │ the same thing it answers an expired one:                             │
+     * │                                                                       │
+     * │   403 {"error_code":"otp_expired",                                    │
+     * │        "msg":"Token has expired or is invalid"}                       │
+     * │                                                                       │
+     * │ So the branch would have told everybody who mistyped a digit that     │
+     * │ their code had expired, sending them to request a new one they did    │
+     * │ not need — and the message would have been confidently wrong, which   │
+     * │ is worse than vague.                                                  │
+     * │                                                                       │
+     * │ The screen carries a "send a new code" button next to this, so the    │
+     * │ remedy for both cases is one tap away without having to name which    │
+     * │ case it is.                                                           │
+     * └───────────────────────────────────────────────────────────────────────┘
+     */
+    return {
+      ok: false,
+      error: 'That code did not work. It may have expired — check the email, or ask for a new code.',
+    }
+  }
+
+  // Verified, but not yet approved by a manager — /pending is the next stop,
+  // and it redirects onward by itself the moment approval lands.
+  redirect(`/${locale}/pending`)
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * The verification counterpart of checkApprovalStatus().
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║ WITHOUT THIS, MIGRATION 0070 STRANDS ANYBODY HOLDING AN OLDER TOKEN.      ║
+ * ║                                                                           ║
+ * ║ A token minted before 0070 carries no email_verified, and can.ts defaults ║
+ * ║ the missing field to false — correctly, because failing closed is the     ║
+ * ║ only safe reading of an absent claim. The (app) layout therefore sends    ║
+ * ║ its holder to /verify-email.                                             ║
+ * ║                                                                           ║
+ * ║ Their address is ALREADY confirmed, so there is no code coming and        ║
+ * ║ verifyOtp() would refuse one. Without this action they would sit on a     ║
+ * ║ screen whose only exit is to work out for themselves that signing out     ║
+ * ║ and back in fixes it.                                                     ║
+ * ║                                                                           ║
+ * ║ Same shape as the approval handshake in /pending, for the same reason:    ║
+ * ║ read the AUTHORITY (auth.users, via getUser) rather than the stale claim, ║
+ * ║ then let the client call refreshSession() to mint a token that agrees.    ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * getUser() and not getSession(): getSession trusts the cookie without checking
+ * it against the auth server, and this decides whether somebody walks past a
+ * gate.
+ */
+export async function checkEmailVerified(): Promise<{ signedIn: boolean; verified: boolean }> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.auth.getUser()
+
+  if (error || !data.user) return { signedIn: false, verified: false }
+  return { signedIn: true, verified: Boolean(data.user.email_confirmed_at) }
+}
+
+const resendSchema = z.object({
+  email: z.string().trim().toLowerCase().email('Enter a valid email address.'),
+})
+
+/**
+ * Sends another code.
+ *
+ * The response is the same whether or not the address is registered, and
+ * whether or not GoTrue rate-limited the request. This endpoint is reachable
+ * without a session, so a distinguishable answer would make it an
+ * account-enumeration oracle — the same reasoning as forgotPasswordAction.
+ */
+export async function resendOtpAction(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const parsed = resendSchema.safeParse({ email: formData.get('email') })
+
+  if (!parsed.success) {
+    return { ok: false, error: 'Enter a valid email address.' }
+  }
+
+  const supabase = await createClient()
+  await supabase.auth.resend({ type: 'signup', email: parsed.data.email })
+
+  return { ok: true, message: 'A new code is on its way.' }
 }
 
 // ── Sign in ──────────────────────────────────────────────────────────────────
@@ -280,6 +516,25 @@ export async function resetPasswordAction(
   if (error) {
     return { ok: false, error: 'That password could not be saved. Try a different one.' }
   }
+
+  /*
+   * ┌───────────────────────────────────────────────────────────────────────────┐
+   * │ END THE RECOVERY SESSION. IT IS NOT A LOGIN.                              │
+   * │                                                                           │
+   * │ exchangeRecoveryLink() establishes a real session so updateUser() has      │
+   * │ somebody to act on, and this action used to leave it standing. The result: │
+   * │ whoever opened that emailed link stayed signed in on that device           │
+   * │ indefinitely — on the one flow whose whole premise is that the account     │
+   * │ may have been compromised.                                                 │
+   * │                                                                           │
+   * │ It also silently undoes the change on every OTHER device, which is the     │
+   * │ behaviour people expect from "I changed my password" and did not get.      │
+   * │                                                                           │
+   * │ scope 'global', not the default 'local': the point is the sessions this    │
+   * │ browser cannot see.                                                        │
+   * └───────────────────────────────────────────────────────────────────────────┘
+   */
+  await supabase.auth.signOut({ scope: 'global' })
 
   return { ok: true }
 }

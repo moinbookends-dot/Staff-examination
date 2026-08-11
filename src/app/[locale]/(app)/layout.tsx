@@ -8,6 +8,7 @@ import { MobileTabBar, SidebarNav } from '@/components/shell/app-nav'
 import { LocaleSwitcher } from '@/components/shell/locale-switcher'
 import { ThemeToggle } from '@/components/shell/theme-toggle'
 import { Button } from '@/components/ui/button'
+import { SignOutButton } from '@/components/auth/sign-out-button'
 import { Link } from '@/lib/i18n/navigation'
 
 /**
@@ -33,6 +34,25 @@ export default async function AppLayout({
 }) {
   const { locale } = await params
   const claims = await getAppClaims()
+
+  /*
+   * Verification first, approval second — the order of the flow, and the same
+   * order proxy.ts uses. An unverified account sent to /pending would be told
+   * to wait for a manager while the thing actually blocking it is an unopened
+   * email.
+   *
+   * Both are re-checked HERE and not merely in the proxy. The proxy is a
+   * routing convenience that can be bypassed by hitting a route directly; this
+   * runs server-side on every render. RLS backs both at the database.
+   *
+   * Unlike the proxy, this reads getAppClaims() — a JWKS-VERIFIED claim, and
+   * one whose Zod schema defaults email_verified to false. So a pre-0070 token
+   * that the proxy waves through on the absent-field rule is stopped here, one
+   * layer in, and sent somewhere it can fix itself.
+   */
+  if (!claims.email_verified) {
+    redirect(`/${locale}/verify-email`)
+  }
 
   if (!claims.approved) {
     redirect(`/${locale}/pending`)
@@ -134,9 +154,7 @@ export default async function AppLayout({
             <ThemeToggle />
             <LocaleSwitcher />
             <form action={signOut}>
-              <Button type="submit" variant="ghost" size="sm">
-                {tc('signOut')}
-              </Button>
+              <SignOutButton label={tc('signOut')} pendingLabel={tc('loading')} />
             </form>
           </div>
         </header>

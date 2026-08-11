@@ -1,5 +1,6 @@
 'use client'
 
+import { Link } from '@/lib/i18n/navigation'
 import { useMemo, useState, useTransition } from 'react'
 import { useTranslations } from 'next-intl'
 import {
@@ -7,7 +8,7 @@ import {
   CheckCircle2Icon,
   DownloadIcon,
   FileTextIcon,
-  KeyRoundIcon,
+  KeyRoundIcon, MonitorPlayIcon,
   Loader2Icon,
   SparklesIcon,
 } from 'lucide-react'
@@ -379,6 +380,36 @@ function Outcome({ outcome }: { outcome: GenerateOutcome }) {
               </div>
             </div>
           ))}
+        </div>
+
+        {/*
+          ┌───────────────────────────────────────────────────────────────────┐
+          │ THE WAY FORWARD, WHICH THIS PANEL DID NOT HAVE.                   │
+          │                                                                   │
+          │ It offered six downloads and stopped. To publish the paper it had │
+          │ just made, somebody had to leave the page, open Exam History,     │
+          │ find the paper by number, and scroll past three sections — for a  │
+          │ paper whose id was already in hand right here.                    │
+          │                                                                   │
+          │ Publishing itself is NOT duplicated: this links to the paper,     │
+          │ where PublishPaper lives. A second publish form would be a second │
+          │ set of validation rules to keep in step with 0064.                │
+          └───────────────────────────────────────────────────────────────────┘
+        */}
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Link
+            href={`/history/${outcome.paperId}`}
+            className={cn(buttonVariants({ size: 'sm' }))}
+          >
+            <MonitorPlayIcon />
+            {t('generatePublishNow')}
+          </Link>
+          <Link
+            href="/history"
+            className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}
+          >
+            {t('viewInHistory')}
+          </Link>
         </div>
       </Panel>
     )

@@ -7,7 +7,7 @@ import { exchangeRecoveryLink, resetPasswordAction, type ActionResult } from '@/
 import { Link } from '@/lib/i18n/navigation'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
-import { PasswordField } from '@/components/auth/password-field'
+import { PasswordPair } from '@/components/auth/password-pair'
 
 type LinkState = 'checking' | 'valid' | 'invalid'
 
@@ -100,26 +100,13 @@ export function ResetPasswordForm({
     <form action={formAction} className="space-y-4">
       {state?.error && <InlineError>{state.error}</InlineError>}
 
-      <PasswordField
-        id="password"
-        name="password"
-        label={t('password')}
+      <PasswordPair
+        passwordLabel={t('password')}
+        confirmLabel={t('confirm')}
+        mismatchLabel={t('mismatch')}
         hint={t('hint')}
-        autoComplete="new-password"
-        minLength={8}
-        required
+        disabled={pending}
         autoFocus
-        disabled={pending}
-      />
-
-      <PasswordField
-        id="confirm"
-        name="confirm"
-        label={t('confirm')}
-        autoComplete="new-password"
-        minLength={8}
-        required
-        disabled={pending}
       />
 
       <Button type="submit" size="lg" className="w-full" disabled={pending}>

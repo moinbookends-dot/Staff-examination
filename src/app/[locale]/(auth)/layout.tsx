@@ -83,7 +83,14 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
           <LocaleSwitcher />
         </header>
 
-        <main className="flex flex-1 items-center justify-center px-6 pt-2 pb-14">
+        {/* data-auth-surface raises every control inside to a 44px touch
+            target — see the box in globals.css. It is on <main> rather than on
+            the page wrapper so it also covers anything a future auth screen
+            renders outside the card. */}
+        <main
+          data-auth-surface
+          className="flex flex-1 items-center justify-center px-6 pt-2 pb-14"
+        >
           <div className="w-full max-w-sm space-y-6">
             {/* The wordmark the brand panel carries above lg. */}
             <div className="flex items-center justify-center gap-2.5 lg:hidden">

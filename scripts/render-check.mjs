@@ -68,28 +68,20 @@ const check = (c, good, notGood) => { if (c) ok(good); else bad(notGood) }
 
 const adminHeaders = { apikey: SECRET, Authorization: `Bearer ${SECRET}`, 'Content-Type': 'application/json' }
 
-/**
- * Is the button whose label is `label` rendered, and is it disabled?
+/*
+ * buttonIsDisabled() was removed with the exam authoring screens on 11 Aug
+ * 2026 — every one of its callers asserted on the Publish / Duplicate / Save
+ * buttons of /exams/[id], which no longer exists.
  *
- * Returns true / false / null-if-absent. Written as a lookback from the text
- * node rather than one regex over the whole tag because attribute order is not
- * ours to predict, and because a bare `html.includes('Publish')` matches the
- * next-intl message bundle that every page serialises for the client provider —
- * which is exactly how two earlier assertions in this file passed vacuously.
+ * ITS LESSON IS WORTH MORE THAN THE FUNCTION AND IS RECORDED HERE: it read the
+ * `disabled` ATTRIBUTE by looking back from the text node, because every button
+ * in this app carries Tailwind variant classes containing the word
+ * (`disabled:pointer-events-none disabled:opacity-50`), so `.includes(
+ * 'disabled')` reports every button as disabled and any assertion built on it
+ * passes vacuously. The same trap applies to `.includes('Publish')`, which
+ * matches the next-intl message bundle every page serialises for the client
+ * provider — which is why the checks below match `>text<` rather than text.
  */
-function buttonIsDisabled(html, label) {
-  const textAt = html.indexOf(`>${label}<`)
-  if (textAt === -1) return null
-  const openAt = html.lastIndexOf('<button', textAt)
-  if (openAt === -1) return null
-
-  // The ATTRIBUTE, not the substring. Every button in this app carries Tailwind
-  // variant classes containing the word — `disabled:pointer-events-none
-  // disabled:opacity-50` — so `.includes('disabled')` reports every button as
-  // disabled and any assertion built on it passes vacuously. The `\s` guard
-  // also keeps `aria-disabled` from matching.
-  return /\sdisabled(=""|\s|>)/.test(html.slice(openAt, textAt))
-}
 
 // Fail fast with a useful message rather than twenty confusing assertion errors.
 try {
@@ -498,42 +490,46 @@ try {
    * └───────────────────────────────────────────────────────────────────────────┘
    */
 
-  // ── Guide (AI) ─────────────────────────────────────────────────────────────
-  //
-  // The document library (0048, kinds widened by 0050). Asserted BEFORE the nav
-  // entry exists, and that ordering is the point: /learning and /admin sat in
-  // the sidebar since M2 with no page behind them, and the fix for that landed
-  // in the same session as this page. A route earns its nav item by rendering.
-  const guide = await get('/en/guide')
-  check(guide.status === 200, '/en/guide renders', `status ${guide.status} → ${guide.location}`)
-  check(
-    !/MISSING_MESSAGE|IntlError/.test(guide.html),
-    'every message key resolves on Guide (AI)',
-    'a translation key is missing',
-  )
-  // The tabs are anchors, not client state, so a filtered shelf is shareable and
-  // needs no JavaScript. Asserted as hrefs rather than by label text, because
-  // next-intl serialises the whole message bundle into the page — the trap this
-  // file already records for 'Food Safety' and again for the health badges.
-  check(
-    /href="[^"]*\/guide\?[^"]*kind=cookbooks/.test(guide.html),
-    'the document-type tabs are real links',
-    'the tab strip is not navigable without JavaScript',
-  )
-  // An unknown tab must fall back rather than 500, exactly as an unknown
-  // question filter does. These arrive from URLs people edit and share.
-  const badTab = await get('/en/guide?kind=nonsense')
-  check(
-    badTab.status === 200,
-    'an unrecognised document tab falls back instead of erroring',
-    `status ${badTab.status}`,
-  )
-  // A candidate holds no questions.read. Source documents are the material the
-  // questions are drawn from; they have no business reading the library.
-  // (candGet is defined further down, so the refusal is asserted there.)
+  /*
+   * ┌───────────────────────────────────────────────────────────────────────────┐
+   * │ THE GUIDE (AI) ASSERTIONS WERE REMOVED ON 11 AUG 2026 — THE FEATURE IS    │
+   * │ GONE, NOT MERELY MOVED.                                                   │
+   * │                                                                           │
+   * │ /guide, its upload dialog and its four tables (0048/0050) were deleted in │
+   * │ the consolidation, and migration 0068 dropped source_documents,           │
+   * │ document_chunks, generation_jobs and generation_candidates. Questions now  │
+   * │ come from the bank and nowhere else, which is a frozen product decision.   │
+   * │                                                                           │
+   * │ Its four checks — the page rendering, the message sweep, the tab hrefs,   │
+   * │ the unknown-tab fallback — plus the candidate refusal further down were    │
+   * │ all testing a 404. Nothing replaces them because nothing replaces the      │
+   * │ feature.                                                                  │
+   * └───────────────────────────────────────────────────────────────────────────┘
+   */
 
-  // ── 4. Exams ───────────────────────────────────────────────────────────────
-  console.log('\n4. Exams')
+  // ── 4. An exam to deliver ──────────────────────────────────────────────────
+  //
+  // ┌─────────────────────────────────────────────────────────────────────────┐
+  // │ THE AUTHORING SCREENS WERE REMOVED ON 10 AUG 2026. THE EXAM WAS NOT.    │
+  // │                                                                         │
+  // │ /exams, /exams/new and /exams/[id] are gone: a paper is now generated on │
+  // │ /papers/generate and published straight from the success screen, so      │
+  // │ there is no section builder, no health panel and no per-exam settings    │
+  // │ page left to render. Sections 4–7 used to assert on exactly those, and   │
+  // │ every one of those assertions was testing a 404.                        │
+  // │                                                                         │
+  // │ WHAT IS KEPT, AND WHY IT IS NOT A DELETION: the exam this block builds   │
+  // │ is the fixture the whole candidate half of this file runs on — section 8 │
+  // │ sits it, section 9 marks it. It is now built through the database and    │
+  // │ published through the real publish_exam RPC, which is the same contract  │
+  // │ the deleted page invoked. The publish semantics (status moves to         │
+  // │ scheduled, the paper is frozen and counted) are still asserted below.    │
+  // │                                                                         │
+  // │ The leak checks that used to run against the authoring paper preview are │
+  // │ NOT lost either: section 8 runs the identical sweep against the live     │
+  // │ paper, which is the surface where a leaked key actually costs an exam.   │
+  // └─────────────────────────────────────────────────────────────────────────┘
+  console.log('\n4. An exam to deliver')
 
   // ACTIVATED HERE, not at seed time. save_question() creates drafts and
   // draw_paper() only ever selects status='active' — a draft is not eligible
@@ -544,33 +540,14 @@ try {
     await db.query(`update public.questions set status='active' where id=$1`, [questionId])
   }
 
-  const examList = await get('/en/exams')
-  check(examList.status === 200, '/en/exams renders', `status ${examList.status} → ${examList.location}`)
-  check(
-    !/MISSING_MESSAGE|IntlError/.test(examList.html),
-    'every message key resolves on the exam list',
-    'a translation key is missing',
-  )
+  // The deleted routes must actually be gone, not merely unlinked. A page left
+  // behind after its nav entry is removed is still reachable by anyone who
+  // guesses the URL, and this is the cheapest possible proof that it is not.
+  for (const dead of ['/en/exams', '/en/exams/new']) {
+    const res = await get(dead)
+    check(res.status === 404, `${dead} is gone`, `${dead} still answers ${res.status}`)
+  }
 
-  const newExam = await get('/en/exams/new')
-  check(newExam.status === 200, '/en/exams/new renders', `status ${newExam.status} → ${newExam.location}`)
-  // The old check looked for 'Food Safety' — which this page never renders.
-  // It only ever matched the message bundle, so it would have passed against a
-  // blank page. Assert the form's actual inputs instead.
-  check(
-    newExam.html.includes('id="exam-title"') &&
-      newExam.html.includes('id="exam-kind"') &&
-      newExam.html.includes('id="exam-duration"'),
-    'the settings form renders its inputs',
-    'the settings form inputs are missing',
-  )
-  check(
-    !/MISSING_MESSAGE|IntlError/.test(newExam.html),
-    'every message key resolves in the exam form',
-    'a translation key is missing',
-  )
-
-  // Create one through the real action path, then read it back on the list.
   const examTitle = `Render check exam ${stamp}`
   const { rows: examRows } = await db.query(
     `insert into public.exams (company_id, title, created_by, kind, duration_minutes)
@@ -584,21 +561,10 @@ try {
   const examId = examRows[0].id
   createdExams.push(examId)
 
-  const listWithExam = await get('/en/exams')
-  check(listWithExam.html.includes(examTitle), 'a draft exam appears in the list', 'the exam was not listed')
-
-  // Empty state FIRST, before any section exists — and matched as a text node.
-  // `includes('No sections yet')` would pass either way, because next-intl
-  // serialises the whole message bundle into the page for the client provider.
-  const emptyDetail = await get(`/en/exams/${examId}`)
-  check(
-    />No sections yet/.test(emptyDetail.html),
-    'a sectionless exam shows the empty state',
-    'the empty section state is missing',
-  )
-
-  // A section with two rules over the SAME category, so the second is starved
-  // by the first — the case the two-number display exists for.
+  // One section, one rule, one question — the smallest exam that can be drawn.
+  // The old two-rule form existed to starve the second rule and prove the
+  // health panel reported the shortfall; there is no health panel to report it
+  // to any more, and publish_exam's own refusal is covered by the RLS suite.
   const { rows: sectionRows } = await db.query(
     `insert into public.exam_sections (exam_id, title, sort_order)
      values ($1,'Render check section',0) returning id`,
@@ -606,157 +572,13 @@ try {
   )
   await db.query(
     `insert into public.exam_rules (section_id, category_id, question_count, difficulty_min, difficulty_max, sort_order)
-     values ($1,$2,3,1,5,0), ($1,$2,3,1,5,1)`,
+     values ($1,$2,1,1,5,0)`,
     [sectionRows[0].id, RENDER_CAT],
   )
-
-  const withSections = await get(`/en/exams/${examId}`)
-  check(
-    withSections.html.includes('Render check section'),
-    'the section builder renders a saved section',
-    'the section did not render',
-  )
-  check(
-    withSections.html.includes('1 match this rule'),
-    'each rule shows a real match count',
-    'the live rule count is missing or zero',
-  )
-
-  const examDetail = await get(`/en/exams/${examId}`)
-  check(examDetail.status === 200, '/en/exams/[id] renders', `status ${examDetail.status}`)
-  check(examDetail.html.includes(examTitle), 'the exam detail shows its title', 'title missing')
-  check(
-    !/>No sections yet/.test(examDetail.html),
-    'the empty state disappears once a section exists',
-    'the empty state is still shown for an exam that has sections',
-  )
-
-  // NOTE THE `>text<` FORM. next-intl serialises the whole message bundle into
-  // the page for the client provider, so a bare `includes('Save settings')`
-  // matches the JSON blob and is true whether or not the button rendered.
-  // Matching the text node asserts on what was actually drawn.
-  const savedButton = />Save settings</
-  check(
-    savedButton.test(examDetail.html),
-    'a draft exam offers its save button',
-    'the save button is missing from a draft',
-  )
-
-  // ── Schedule, assignments and clone ───────────────────────────────────────
-  console.log('\n5. Schedule and assignments')
-
-  check(
-    withSections.html.includes('id="exam-opens"') && withSections.html.includes('id="exam-closes"'),
-    'a draft offers both ends of the window',
-    'the schedule inputs are missing from a draft',
-  )
-  check(
-    withSections.html.includes('id="exam-timezone"'),
-    'a draft offers the timezone',
-    'the timezone control is missing',
-  )
-  check(
-    />Nobody is assigned yet/.test(withSections.html),
-    'an unassigned exam says so',
-    'the empty assignment state is missing',
-  )
-  check(
-    buttonIsDisabled(withSections.html, 'Duplicate') === false,
-    'the duplicate button is offered',
-    'the duplicate button is missing or disabled',
-  )
-
-  // Assign it, and confirm the badge names the outlet rather than a raw uuid.
   await db.query(
     `insert into public.exam_assignments (exam_id, target_kind, target_id)
      values ($1,'outlet','00000000-0000-0000-0000-00000000a001')`,
     [examId],
-  )
-  const assigned = await get(`/en/exams/${examId}`)
-  check(
-    assigned.html.includes('Aiko — Outlet 1'),
-    'an assignment renders with its outlet name',
-    'the assignment badge is missing or shows a raw id',
-  )
-  check(
-    !/>Nobody is assigned yet/.test(assigned.html),
-    'the empty assignment state disappears once assigned',
-    'the empty state is still shown for an assigned exam',
-  )
-
-  // ── Exam Health ────────────────────────────────────────────────────────────
-  // The two rules above each want 3 questions from Food Safety, and the bank
-  // holds exactly the one this script seeded. So the paper is short and the
-  // panel must say so rather than letting publish fail later.
-  console.log('\n6. Exam Health')
-
-  check(/>Exam health</.test(withSections.html), 'the health panel renders', 'the health panel is missing')
-  check(
-    withSections.html.includes('the bank could supply'),
-    'a rule that cannot be satisfied is reported',
-    'rule.short was not surfaced',
-  )
-  check(
-    withSections.html.includes('Widen the rule'),
-    'a blocking issue carries its remedy',
-    'the remedy text is missing',
-  )
-  check(
-    />Some things must be fixed/.test(withSections.html),
-    'the panel says the exam is not ready',
-    'the not-ready description is missing',
-  )
-  check(
-    buttonIsDisabled(withSections.html, 'Publish') === true,
-    'the publish button is disabled while blocked',
-    'a blocked exam still offers an enabled Publish button',
-  )
-
-  /*
-   * ┌───────────────────────────────────────────────────────────────────────────┐
-   * │ THE QUALITY DASHBOARD'S ASSERTIONS WERE REMOVED — THERE IS NO PAGE.       │
-   * │                                                                           │
-   * │ /questions/quality has no route behind it in the rebuilt product, so      │
-   * │ these six checks tested a 404 for its Bloom, Difficulty and Category      │
-   * │ panels and its coverage denominator. bank_recommendations and the shared  │
-   * │ remedy map belong to the legacy analytics that went with them.            │
-   * │                                                                           │
-   * │ WHAT IS DELIBERATELY KEPT: the assertion further down that a CANDIDATE is │
-   * │ refused /questions/quality. A route with no page must still not be a way  │
-   * │ to find out which editor routes exist — check-authz.mjs makes the same    │
-   * │ argument about the same path, and that reasoning is unaffected by the     │
-   * │ page's absence.                                                           │
-   * └───────────────────────────────────────────────────────────────────────────┘
-   */
-
-  // Loosen the rules so the paper can actually be drawn, then re-read.
-  await db.query(
-    `update public.exam_rules set question_count = 1
-      where section_id = $1`,
-    [sectionRows[0].id],
-  )
-  await db.query(`delete from public.exam_rules where section_id = $1 and sort_order = 1`, [
-    sectionRows[0].id,
-  ])
-
-  const healthy = await get(`/en/exams/${examId}`)
-  check(
-    />This exam is ready to publish/.test(healthy.html),
-    'a satisfiable exam reports ready',
-    'the ready state was not reported',
-  )
-  // The other half of the disabled assertion above. Asserting only that a
-  // blocked exam disables Publish would pass even if the button were ALWAYS
-  // disabled — which is exactly what the old substring-based helper did.
-  check(
-    buttonIsDisabled(healthy.html, 'Publish') === false,
-    'the publish button is enabled once the exam is ready',
-    'Publish is still disabled for a healthy exam',
-  )
-  check(
-    !healthy.html.includes('the bank could supply'),
-    'the shortfall disappears once the rule fits',
-    'rule.short is still reported for a satisfiable rule',
   )
 
   // ── Publish, through the real RPC ──────────────────────────────────────────
@@ -787,99 +609,61 @@ try {
   )
   check(afterPublish[0]?.question_count === 1, 'the frozen paper is counted', 'question_count is wrong')
 
-  const lockedDetail = await get(`/en/exams/${examId}`)
+  // Immutability, asserted where it is actually enforced. The old checks read
+  // it off the settings form — no opens_at input, no timezone control, Save
+  // gone — which tested a page's honesty about a rule rather than the rule.
+  // 0016's trigger is the rule, and it answers over the wire.
+  const tamper = await fetch(`${URL_}/rest/v1/exams?id=eq.${examId}`, {
+    method: 'PATCH',
+    headers: {
+      apikey: PUB,
+      Authorization: `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation',
+    },
+    body: JSON.stringify({ duration_minutes: 999 }),
+  })
   check(
-    // The notice is rendered inside a <p>; the same sentence is in the message
-    // bundle, so match the element rather than the string.
-    />This exam is published/.test(lockedDetail.html),
-    'a published exam shows the immutability notice',
-    'the locked notice is missing from a published exam',
-  )
-  check(
-    !savedButton.test(lockedDetail.html),
-    'a published exam hides its save button',
-    'a published exam still offers Save, which the database would refuse',
-  )
-
-  // The schedule asymmetry, on the page. 0016 permits closes_at to move after
-  // publish and nothing else, so the opening time must stop being an input —
-  // not merely be disabled, which still reads as "temporarily unavailable".
-  check(
-    !lockedDetail.html.includes('id="exam-opens"'),
-    'a published exam stops offering the opening time',
-    'a published exam still renders an opens_at input the database would refuse',
-  )
-  check(
-    lockedDetail.html.includes('id="exam-closes"'),
-    'a published exam still offers the closing time',
-    'the closing time is not editable on a published exam',
-  )
-  check(
-    !lockedDetail.html.includes('id="exam-timezone"'),
-    'a published exam stops offering the timezone',
-    'a published exam still renders a timezone control',
-  )
-  // Assignments outlive the lock — the paper is fixed, the audience is not.
-  check(
-    buttonIsDisabled(lockedDetail.html, 'Save assignments') === false,
-    'a published exam can still be reassigned',
-    'assignments were locked along with the paper',
+    tamper.status !== 200,
+    'a published exam refuses a change to its frozen settings',
+    `PATCHing a published exam returned ${tamper.status} — the paper is not immutable`,
   )
 
-  // ── 7. Paper preview and provenance ───────────────────────────────────────
-  console.log('\n7. Paper and provenance')
+  // ── 7. The frozen paper ────────────────────────────────────────────────────
+  //
+  // The authoring-side preview is gone with /exams/[id], so provenance and the
+  // per-question revision are asserted against the stored paper rather than a
+  // rendered one. The LEAK sweep is not asserted here at all — it moved to
+  // section 8, against the live paper served to the candidate, which is the
+  // surface where a leak actually costs an exam.
+  console.log('\n7. The frozen paper')
 
-  check(
-    lockedDetail.html.includes(stem),
-    'the frozen paper renders the question a candidate will see',
-    'the paper preview did not render the question',
+  const { rows: frozenPaper } = await db.query(
+    `select eq.question_revision, q.stem
+       from public.exam_questions eq
+       join public.questions q on q.id = eq.question_id
+      where eq.exam_id = $1`,
+    [examId],
   )
+  check(frozenPaper.length === 1, 'exactly one question was frozen', `${frozenPaper.length} questions frozen`)
+  check(frozenPaper[0]?.stem === stem, 'the frozen question is the one that was seeded', 'the wrong question was drawn')
   check(
-    lockedDetail.html.includes('Rice bran'),
-    'the candidate-facing renderer is mounted, options and all',
-    'the question options did not render in the paper',
+    frozenPaper[0]?.question_revision === 1,
+    'the frozen question carries its revision',
+    `revision ${frozenPaper[0]?.question_revision}`,
   )
-  check(
-    /rev <!-- -->1|>rev 1</.test(lockedDetail.html),
-    'each question carries the revision that was frozen',
-    'the per-question revision is missing',
-  )
-  check(
-    // 'Published' alone is always true — four message keys contain it. The
-    // publisher's NAME is the part only a real render can produce.
-    /Published [^<]*by <!-- -->Render Chef|>Published [^<]*by Render Chef/.test(lockedDetail.html) ||
-      (lockedDetail.html.includes('Render Chef') &&
-        />Published/.test(lockedDetail.html)),
-    'the header names who published it and when',
-    'publisher provenance is missing',
-  )
-  /*
-   * The one thing a paper must never contain.
-   *
-   * ┌───────────────────────────────────────────────────────────────────────────┐
-   * │ EVERY TOKEN IS A QUOTED JSON KEY, AND THE ODD ONE OUT WAS A FALSE ALARM. │
-   * │                                                                           │
-   * │ This list held a bare `modelAnswer` — camelCase, unquoted — which matched │
-   * │ no field the server has ever sent. When the marking view gained a         │
-   * │ `modelAnswer` MESSAGE KEY, next-intl serialised the label "Model answer"  │
-   * │ into every page's message bundle and all three of these fired at once:    │
-   * │ three loud leak failures caused by a UI string.                           │
-   * │                                                                           │
-   * │ The real field is `model_answer`, quoted like its neighbours, so that is  │
-   * │ what is checked. scripts/check-marking.mjs goes further and greps every   │
-   * │ candidate surface for the actual model TEXT, which no renaming can dodge. │
-   * └───────────────────────────────────────────────────────────────────────────┘
-   */
-  for (const forbidden of ['"correct"', '"model_answer"', '"rubric"']) {
-    check(
-      !lockedDetail.html.includes(forbidden),
-      `the rendered paper contains no ${forbidden}`,
-      `THE PAPER LEAKED ${forbidden} TO THE BROWSER`,
-    )
-  }
 
-  const missingExam = await get('/en/exams/00000000-0000-0000-0000-0000000000ff')
-  check(missingExam.status === 404, 'an unknown exam 404s', `status ${missingExam.status}`)
+  const { rows: provenance } = await db.query(
+    `select p.full_name, e.published_at
+       from public.exams e join public.profiles p on p.id = e.published_by
+      where e.id = $1`,
+    [examId],
+  )
+  check(
+    provenance[0]?.full_name === 'Render Chef' && provenance[0]?.published_at !== null,
+    'the exam records who published it and when',
+    `publisher provenance is ${JSON.stringify(provenance[0])}`,
+  )
 
   // ── 8. Sitting the exam, as a candidate ────────────────────────────────────
   // ┌─────────────────────────────────────────────────────────────────────────┐
@@ -949,13 +733,14 @@ try {
     `a candidate got ${candQuality.status} from /questions/quality`,
   )
 
-  // Guide (AI) holds the cookbooks every question is drawn from. A candidate
-  // holds no questions.read and must be turned away by the page guard.
-  const candGuide = await candGet('/en/guide')
+  // The bank is where every question comes from now. A candidate holds no
+  // questions.read and must be turned away by the page guard — this is the
+  // refusal that used to be asserted against /guide.
+  const candBank = await candGet('/en/questions')
   check(
-    candGuide.status !== 200,
-    'a candidate cannot open the Guide (AI) library',
-    `a candidate got ${candGuide.status} from /guide`,
+    candBank.status !== 200,
+    'a candidate cannot open the question bank',
+    `a candidate got ${candBank.status} from /questions`,
   )
 
   const myExams = await candGet('/en/my-exams')
@@ -1113,14 +898,14 @@ try {
     )
   }
 
-  // The authoring list must stay closed to them, or the separation of the two
-  // sides is cosmetic.
-  const candExams = await candGet('/en/exams')
-  check(
-    candExams.status !== 200,
-    'a candidate cannot open the authoring exam list',
-    `a candidate got ${candExams.status} on /en/exams`,
-  )
+  // The authoring side must stay closed to them, or the separation of the two
+  // halves of the product is cosmetic. /exams/live replaced /exams as the
+  // supervisor's view of who is sitting what, and /papers/generate replaced
+  // /exams/new as the place a paper is made.
+  for (const closed of ['/en/exams/live', '/en/exams/upcoming', '/en/exams/closed', '/en/papers/generate']) {
+    const res = await candGet(closed)
+    check(res.status !== 200, `a candidate cannot open ${closed}`, `a candidate got ${res.status} on ${closed}`)
+  }
 
   // ── 9. The whole loop ─────────────────────────────────────────────────────
   // ┌─────────────────────────────────────────────────────────────────────────┐

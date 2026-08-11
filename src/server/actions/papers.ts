@@ -10,6 +10,10 @@ import { DIFFICULTIES } from '@/lib/bank/vocabulary'
 import { PAPER_SIZES } from '@/lib/papers/blueprint'
 import { generatePaper as runGenerator } from '@/lib/papers/generate'
 import { createPaperRepository } from '@/server/papers/repository'
+// The audience is chosen while publishing now; reuse the exam layer's own
+// schema and writer rather than restating the target-shape CHECK here.
+import { setAssignments } from '@/server/actions/exams'
+import { assignmentSchema } from '@/lib/exams/rules'
 import type { GenerateOutcome } from '@/components/papers/generate-panel'
 
 /**
@@ -260,10 +264,35 @@ const publishInput = z.object({
   closesAt: z.string().datetime({ offset: true }),
   instructions: z.string().trim().max(2000).optional(),
   resultsRelease: z.enum(['immediate', 'on_close']).default('immediate'),
+  /*
+   * ┌───────────────────────────────────────────────────────────────────────────┐
+   * │ THE AUDIENCE IS PART OF PUBLISHING NOW.                                  │
+   * │                                                                           │
+   * │ It used to be a separate visit to /exams/[id], and the gap between the    │
+   * │ two steps was a real failure mode: publishing succeeded, nobody was       │
+   * │ assigned, and the exam reached nobody. The paper page still carries the   │
+   * │ "nobody has been chosen yet" warning for anyone who skips this.           │
+   * │                                                                           │
+   * │ Reuses exams.ts's assignmentSchema rather than restating the target       │
+   * │ shape — the four target columns have a CHECK constraint behind them and   │
+   * │ a second copy of that rule would drift.                                   │
+   * └───────────────────────────────────────────────────────────────────────────┘
+   */
+  assignments: z.array(assignmentSchema).max(100).default([]),
 })
 
 export type PublishPaperResult =
-  | { ok: true; examId: string; paperNo: number }
+  | {
+      ok: true
+      examId: string
+      paperNo: number
+      /**
+       * Set when the exam published but its audience did not save. The publish
+       * itself succeeded, so this is a warning to carry to the reader rather
+       * than a failure — see the box in publishPaperAsExam.
+       */
+      assignmentError?: string
+    }
   | { ok: false; message: string }
 
 export async function publishPaperAsExam(raw: unknown): Promise<PublishPaperResult> {
@@ -322,9 +351,40 @@ export async function publishPaperAsExam(raw: unknown): Promise<PublishPaperResu
     return { ok: false, message: 'The exam was created but could not be read back.' }
   }
 
+  /*
+   * ┌───────────────────────────────────────────────────────────────────────────┐
+   * │ THE AUDIENCE IS SET SECOND, AND A FAILURE HERE IS NOT FATAL.              │
+   * │                                                                           │
+   * │ The exam already exists by this point, so throwing away a successful      │
+   * │ publish because the assignment write failed would be the worse outcome —  │
+   * │ the paper would be marked live with an exam the caller never learns the   │
+   * │ id of, and 0062's index would then refuse a second attempt.               │
+   * │                                                                           │
+   * │ An exam with no audience is invisible rather than open to everyone, and   │
+   * │ the paper page states that plainly, so the safe failure is to report the  │
+   * │ exam as published and let the reader fix the audience there.              │
+   * │                                                                           │
+   * │ setAssignments carries its own exams.assign guard — this does not widen   │
+   * │ who may choose an audience, it only moves when they do it.                │
+   * └───────────────────────────────────────────────────────────────────────────┘
+   */
+  let assignmentError: string | undefined
+  if (input.assignments.length > 0) {
+    const assigned = await setAssignments({
+      examId: result.data.examId,
+      assignments: input.assignments,
+    })
+    if (!assigned.ok) assignmentError = assigned.error
+  }
+
   revalidatePath('/history')
   revalidatePath(`/history/${input.paperId}`)
-  revalidatePath('/exams')
+  revalidatePath('/exams/live')
 
-  return { ok: true, examId: result.data.examId, paperNo: result.data.paperNo }
+  return {
+    ok: true,
+    examId: result.data.examId,
+    paperNo: result.data.paperNo,
+    assignmentError,
+  }
 }

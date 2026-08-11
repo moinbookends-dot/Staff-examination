@@ -1,6 +1,8 @@
 import 'server-only'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
+import { examState, type ExamState, type StoredExamStatus } from '@/lib/exams/state'
+import type { AssignmentTarget } from '@/lib/exams/rules'
 import type { BankLocale, Difficulty } from '@/lib/bank/vocabulary'
 import { DIFFICULTIES } from '@/lib/bank/vocabulary'
 import { blueprintFor, PAPER_SIZES, type PaperBlueprint } from '@/lib/papers/blueprint'
@@ -360,7 +362,33 @@ export interface PaperDetail extends PaperHistoryEntry {
    * this the screen cannot tell "published and running" from "published and
    * nobody can see it", and those look identical to whoever pressed the button.
    */
-  liveExam: { id: string; title: string; status: string; assignmentCount: number } | null
+  liveExam: {
+    id: string
+    title: string
+    status: StoredExamStatus
+    /** Derived from the window — draft / scheduled / live / closed / cancelled. */
+    state: ExamState
+    opensAt: string | null
+    closesAt: string | null
+    durationMinutes: number
+    passMarkPercent: number
+    resultsRelease: 'immediate' | 'on_close'
+    assignmentCount: number
+    /** The rows themselves, so the paper page can edit the audience in place. */
+    assignments: {
+      id: string
+      target_kind: AssignmentTarget
+      target_id: string | null
+      target_role: string | null
+      target_user_id: string | null
+    }[]
+    /**
+     * True while 0062's partial index would refuse a second exam for this
+     * paper. A closed or cancelled exam leaves the paper publishable again,
+     * and the page needs to tell those apart to decide which control to show.
+     */
+    blocksRepublish: boolean
+  } | null
 }
 
 export async function loadPaperDetail(paperId: string): Promise<PaperDetail | null> {
@@ -397,25 +425,61 @@ export async function loadPaperDetail(paperId: string): Promise<PaperDetail | nu
      */
     supabase
       .from('exams')
-      .select('id, title, status')
+      .select('id, title, status, opens_at, closes_at, duration_minutes, pass_mark_percent, results_release')
       .eq('paper_id', paperId)
       .is('deleted_at', null)
-      .in('status', ['draft', 'scheduled', 'active'])
+      /*
+       * ANY status, newest first — not just the open ones.
+       *
+       * This was scoped to draft/scheduled/active because its only job was
+       * gating the publish form. Now the paper page also shows who sat the
+       * exam, and a CLOSED exam is exactly when that record matters most.
+       * `blocksRepublish` carries the old meaning so the publish gate is
+       * unchanged.
+       */
+      .order('published_at', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle(),
   ])
 
   let liveExam: PaperDetail['liveExam'] = null
   if (exams.data) {
-    const { count } = await supabase
+    /*
+     * The assignment ROWS, not just a count.
+     *
+     * The count alone was enough while the audience was edited on a different
+     * page. Now that the paper page owns it, the picker needs the actual
+     * targets — and fetching them here keeps the page a single round of
+     * server work rather than a client fetch after paint.
+     */
+    const { data: rows } = await supabase
       .from('exam_assignments')
-      .select('exam_id', { count: 'exact', head: true })
+      .select('id, target_kind, target_id, target_role, target_user_id')
       .eq('exam_id', exams.data.id)
+
+    const assignments = (rows ?? []) as PaperDetail['liveExam'] extends null
+      ? never
+      : NonNullable<PaperDetail['liveExam']>['assignments']
 
     liveExam = {
       id: exams.data.id,
       title: exams.data.title,
       status: exams.data.status,
-      assignmentCount: count ?? 0,
+      state: examState({
+        status: exams.data.status,
+        opensAt: exams.data.opens_at,
+        closesAt: exams.data.closes_at,
+      }),
+      opensAt: exams.data.opens_at,
+      closesAt: exams.data.closes_at,
+      durationMinutes: exams.data.duration_minutes,
+      passMarkPercent: exams.data.pass_mark_percent,
+      resultsRelease: exams.data.results_release,
+      assignmentCount: assignments.length,
+      assignments,
+      // Mirrors 0062's partial index exactly.
+      blocksRepublish: ['draft', 'scheduled', 'active'].includes(exams.data.status),
     }
   }
 

@@ -31,6 +31,16 @@ import type { Permission, RoleKey } from './permissions'
 // that mismatch is what made every signed-in user look unapproved.
 export const appClaimsSchema = z.object({
   approved: z.boolean().default(false),
+  /*
+   * Added by migration 0070, and DEFAULTED FALSE ON PURPOSE.
+   *
+   * Tokens minted before 0070 carry no `email_verified`, and they stay valid
+   * for the rest of their hour. Defaulting true would let those tokens walk
+   * past the gate; defaulting false costs their holders one trip through
+   * /verify-email, where a verified address is recognised immediately and the
+   * session is refreshed. Fail closed, and let the cheap path correct it.
+   */
+  email_verified: z.boolean().default(false),
   company_id: dbId().nullable().default(null),
   brand_id: dbId().nullable().default(null),
   outlet_id: dbId().nullable().default(null),
@@ -51,6 +61,7 @@ export type AppClaims = z.infer<typeof appClaimsSchema> & { userId: string | nul
 export const DENY_ALL: AppClaims = {
   userId: null,
   approved: false,
+  email_verified: false,
   company_id: null,
   brand_id: null,
   outlet_id: null,

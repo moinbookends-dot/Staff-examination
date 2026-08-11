@@ -99,8 +99,12 @@ for (const table of [
   'questions',
   'exams',
   'attempts',
-  'source_documents',
   'audit_logs',
+  // source_documents was dropped by 0068 along with the rest of the Guide.
+  // The catch below records an absent table as -1, so leaving it in this list
+  // would have written a "count shrank" signal into every snapshot from now on.
+  'bank_questions',
+  'exam_papers',
 ]) {
   try {
     const { rows } = await db.query(`select count(*)::int as n from public.${table}`)

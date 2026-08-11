@@ -17,23 +17,28 @@ import { canManageExamSettings, canOpenQuestionBank } from './bank-access'
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
+/**
+ * Exactly the icons NAV_ITEMS uses, and no more.
+ *
+ * This union held seven names nothing referenced — `guide` and `exams` for
+ * sections that were deleted, plus `history`, `editors`, `topics`, `import`
+ * and `profile` for items that were folded into others. ICONS in app-nav.tsx
+ * is a `Record<NavIcon, LucideIcon>`, so every dead name obliged that file to
+ * keep importing a lucide component for a link that could never render, and
+ * the union was the only thing making those imports look necessary.
+ *
+ * Keeping it minimal means tsc reports the mismatch the moment the two drift.
+ */
 export type NavIcon =
   | 'dashboard'
   | 'bank'
   | 'generate'
-  | 'history'
-  | 'editors'
-  | 'settings'
-  | 'guide'
-  | 'approvals'
-  | 'topics'
-  | 'import'
-  | 'profile'
+  | 'liveExams'
+  | 'evaluate'
   | 'myExams'
   | 'results'
-  | 'exams'
-  | 'evaluate'
-  | 'liveExams'
+  | 'approvals'
+  | 'settings'
 
 /**
  * ╔═══════════════════════════════════════════════════════════════════════════╗
@@ -71,6 +76,22 @@ export interface NavItem {
   /** Key under the `nav` namespace in messages/*.json. */
   labelKey: string
   icon: NavIcon
+  /**
+   * Extra path prefixes that should keep this item lit.
+   *
+   * ┌───────────────────────────────────────────────────────────────────────┐
+   * │ NEEDED BECAUSE A SECTION'S TABS DO NOT ALWAYS SHARE ITS PREFIX.       │
+   * │                                                                       │
+   * │ useIsActive() matches on prefix, which is enough for Question Bank —  │
+   * │ /questions/topics and /questions/import both start with /questions.   │
+   * │ Papers does not have that luxury: its tabs are /papers/generate and   │
+   * │ /history, and without this the sidebar would go dark the moment       │
+   * │ somebody opened a paper, telling them they were nowhere.              │
+   * │                                                                       │
+   * │ Strings only — this crosses to a Client Component.                    │
+   * └───────────────────────────────────────────────────────────────────────┘
+   */
+  activeFor?: string[]
 }
 
 /** The server-side configuration. Holds predicates and never leaves the server. */
@@ -111,6 +132,24 @@ interface NavItemConfig extends NavItem {
  * │ Settings pinned to the foot — SIDEBAR_FOOT below.                         │
  * └───────────────────────────────────────────────────────────────────────────┘
  */
+/**
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ EIGHT ITEMS, DOWN FROM THIRTEEN — AND THE MISSING FIVE ARE NOT GONE.      │
+ * │                                                                           │
+ * │ Topics and Import moved inside Question Bank; Exam History moved inside    │
+ * │ Papers. Both are TABS on the section they belong to, using the pattern     │
+ * │ this codebase already prefers — real links with aria-current, not client   │
+ * │ state — so every screen keeps its own URL and stays bookmarkable.          │
+ * │                                                                           │
+ * │ /exams and /guide are genuinely gone: the first was a second, older exam   │
+ * │ product built on the legacy questions table, and the second a document     │
+ * │ library nothing referenced.                                               │
+ * │                                                                           │
+ * │ A NAV ITEM IS STILL A PROMISE ABOUT A ROUTE. /learning and /admin sat here │
+ * │ for two milestones with no page behind either; nothing goes in this list   │
+ * │ until its route returns 200.                                              │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ */
 const NAV_ITEMS: NavItemConfig[] = [
   {
     href: '/dashboard',
@@ -124,97 +163,45 @@ const NAV_ITEMS: NavItemConfig[] = [
     labelKey: 'bank',
     icon: 'bank',
     permissions: ['bank.read'],
-    // The Super Admin lockout. See the box on `guard`.
+    // The Super Admin lockout was removed on 10 Aug 2026; the guard stays
+    // because it is still the one place that rule would live if restored.
     guard: canOpenQuestionBank,
     mobile: true,
-  },
-  {
-    href: '/questions/topics',
-    labelKey: 'topics',
-    icon: 'topics',
-    permissions: ['bank.write'],
-    // Inside the Question Bank subtree, so the layout gates it too. The guard
-    // is repeated here because the NAV decides visibility and the LAYOUT
-    // decides access, and a super admin must fail both.
-    guard: canOpenQuestionBank,
-  },
-  {
-    href: '/questions/import',
-    labelKey: 'import',
-    icon: 'import',
-    // bank.import, not bank.write: importing 3,000 questions at once is a
-    // different act from editing one, and 0053 keys them separately.
-    permissions: ['bank.import', 'bank.write'],
-    guard: canOpenQuestionBank,
+    /*
+     * Topics and Import are tabs inside this section now. They already matched
+     * by prefix — useIsActive() lights /questions while on either child — so
+     * they need no entry of their own here, only in the tab bar rendered by
+     * src/app/[locale]/(app)/questions/layout.tsx.
+     */
   },
   {
     href: '/papers/generate',
-    labelKey: 'generate',
+    labelKey: 'papers',
     icon: 'generate',
-    permissions: ['papers.generate'],
+    permissions: ['papers.generate', 'papers.read_history'],
     mobile: true,
-  },
-  {
-    href: '/history',
-    labelKey: 'history',
-    icon: 'history',
-    permissions: ['papers.read_history'],
     /*
-     * NOT in the mobile bar, since Live exams took the fifth slot.
-     *
-     * The bar holds five and adding Live exams made six for a Chef and an
-     * Editor. Exam History is the one that gives way: it is where papers are
-     * reviewed, downloaded and printed — a desk task, at a desk, next to a
-     * printer. Live exams is the opposite: the thing somebody checks on a
-     * phone, mid-service, to see whether their staff have sat the paper.
-     *
-     * tests/unit/nav.test.ts asserts the cap so this cannot creep back.
+     * /history does NOT share a prefix with /papers/generate, so without this
+     * the Papers item would go dark the moment somebody opened a paper — the
+     * sidebar would say they were nowhere.
      */
+    activeFor: ['/papers', '/history'],
   },
-  /*
-   * ┌─────────────────────────────────────────────────────────────────────────┐
-   * │ /guide IS HERE NOW, AND THE NOTE THAT USED TO SIT IN ITS PLACE SAID     │
-   * │ EXACTLY WHY IT COULD NOT BE.                                            │
-   * │                                                                         │
-   * │ The cookbook library is the EDITOR's reference material while writing    │
-   * │ questions, so it belongs under bank.read beside the Question Bank. It    │
-   * │ could not go there while the route and all eight of 0048's row and       │
-   * │ storage policies were keyed on questions.read / questions.import — keys  │
-   * │ a Chef holds and an Editor does not. A nav entry would have handed an    │
-   * │ Editor a link that 500s, and relaxing only the route check would have    │
-   * │ shown them an empty library with no error at all.                        │
-   * │                                                                         │
-   * │ 0065 re-keyed all eight policies to accept EITHER vocabulary and         │
-   * │ src/lib/auth/guide-access.ts does the same at the application boundary,  │
-   * │ so the promise this list makes is now one the route keeps for both.      │
-   * └─────────────────────────────────────────────────────────────────────────┘
-   */
   {
-    href: '/guide',
-    labelKey: 'guide',
-    icon: 'guide',
-    permissions: ['bank.read', 'questions.read'],
+    href: '/exams/live',
+    labelKey: 'liveExams',
+    icon: 'liveExams',
+    permissions: ['exams.read'],
+    mobile: true,
+    // Upcoming and Closed are tabs on the section itself (ExamSection).
+    activeFor: ['/exams'],
   },
-  /*
-   * ┌─────────────────────────────────────────────────────────────────────────┐
-   * │ THE CANDIDATE'S TWO ITEMS, AND WHY THEY WERE MISSING FOR SO LONG.       │
-   * │                                                                         │
-   * │ Every entry above is something a Chef or an Editor does. An Employee    │
-   * │ holds none of those permissions, so this list rendered exactly one item │
-   * │ for them — Dashboard — and /my-exams and /results were reachable only   │
-   * │ by typing the address. Both routes have existed and returned 200 the    │
-   * │ whole time; nothing linked to them.                                     │
-   * │                                                                         │
-   * │ That was survivable while papers were printed, because a candidate had  │
-   * │ nothing to do in the app. Publishing a paper as an online exam is what  │
-   * │ makes it a defect: the exam would go live, be assigned, and the person  │
-   * │ sitting it would open the app and see an empty dashboard.               │
-   * │                                                                         │
-   * │ attempts.take and attempts.read_own, not one permission for both: a     │
-   * │ Chef holds read_own (they can see their own results) but NOT take, and  │
-   * │ must not be offered a "My Exams" link to a list that is always empty.   │
-   * └─────────────────────────────────────────────────────────────────────────┘
-   */
+  {
+    href: '/evaluate',
+    labelKey: 'evaluate',
+    icon: 'evaluate',
+    permissions: ['evaluation.evaluate'],
+  },
   {
     href: '/my-exams',
     labelKey: 'myExams',
@@ -228,56 +215,6 @@ const NAV_ITEMS: NavItemConfig[] = [
     icon: 'results',
     permissions: ['attempts.read_own'],
     mobile: true,
-  },
-  /*
-   * ┌─────────────────────────────────────────────────────────────────────────┐
-   * │ THE OTHER HALF OF THE LOOP — WITHOUT THESE THE FEATURE DEAD-ENDS.       │
-   * │                                                                         │
-   * │ A published paper always contains short answers (the 80/20 blueprint    │
-   * │ guarantees it), so every submitted attempt stops at `evaluating` and    │
-   * │ waits for a person. With no link to /evaluate, that person had no way   │
-   * │ to reach the queue: papers could be published and sat, and the results  │
-   * │ would simply never come out.                                            │
-   * │                                                                         │
-   * │ /exams for the same reason at the other end — published exams were      │
-   * │ reachable only by following the link on the paper that made them.       │
-   * │                                                                         │
-   * │ /verify and /reports stay out. Paper-backed exams publish with          │
-   * │ verification_mode 'single', so nothing lands in the verify queue, and   │
-   * │ analytics is a separate piece of work.                                  │
-   * └─────────────────────────────────────────────────────────────────────────┘
-   */
-  /*
-   * ┌─────────────────────────────────────────────────────────────────────────┐
-   * │ LIVE EXAMS SITS ABOVE EXAMS, AND THE ORDER IS THE POINT.                │
-   * │                                                                         │
-   * │ /exams is the full list — every exam ever, in any state, including the  │
-   * │ legacy rule-drawn ones. /exams/live is the handful running right now,   │
-   * │ which is the only one that is ever urgent.                              │
-   * │                                                                         │
-   * │ Upcoming and Closed are deliberately NOT nav items. They are two clicks │
-   * │ from here via the tab bar on the section itself, and three sibling      │
-   * │ entries for one concept would crowd out the things a chef opens daily.  │
-   * └─────────────────────────────────────────────────────────────────────────┘
-   */
-  {
-    href: '/exams/live',
-    labelKey: 'liveExams',
-    icon: 'liveExams',
-    permissions: ['exams.read'],
-    mobile: true,
-  },
-  {
-    href: '/exams',
-    labelKey: 'exams',
-    icon: 'exams',
-    permissions: ['exams.read'],
-  },
-  {
-    href: '/evaluate',
-    labelKey: 'evaluate',
-    icon: 'evaluate',
-    permissions: ['evaluation.evaluate'],
   },
   {
     href: '/approvals',
@@ -317,7 +254,15 @@ const SIDEBAR_FOOT: NavItemConfig[] = [
  * did, and typecheck and build would both pass again.
  */
 function toClientItem(item: NavItemConfig): NavItem {
-  return { href: item.href, labelKey: item.labelKey, icon: item.icon }
+  // Field by field, still — see the box above. `activeFor` is a string array
+  // and therefore safe to forward; `permissions`, `guard` and `mobile` are not
+  // forwarded and must never be.
+  return {
+    href: item.href,
+    labelKey: item.labelKey,
+    icon: item.icon,
+    ...(item.activeFor ? { activeFor: item.activeFor } : {}),
+  }
 }
 
 /** Everything the sidebar and the mobile bar filter against. */

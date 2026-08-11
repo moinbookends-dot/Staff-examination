@@ -46,6 +46,10 @@ const PUBLIC_PATHS = [
   '/register',
   '/forgot-password',
   '/reset-password',
+  // No session exists at this point: mailer_autoconfirm is false, so signUp()
+  // sends a mail and returns nothing to sign in with. The screen has to be
+  // reachable by somebody holding an account and no token.
+  '/verify-email',
   '/auth/callback',
   '/auth/confirm',
 ]
@@ -105,7 +109,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // 5 — The approval gate.
+  // 5 — The verification and approval gates, in that order.
   //
   // Read from the ACCESS TOKEN CLAIM, not by querying profiles: a database read
   // in middleware runs on every single request, and the claim is already
@@ -117,8 +121,34 @@ export async function proxy(request: NextRequest) {
   // directly, then calling refreshSession() to mint a token with the new claim.
   // See migration 0004 and plan §5.5.
   if (user && !isPublic && !isPendingAllowed) {
-    const approved = isApprovedFromToken(request)
-    if (!approved) {
+    const claim = appClaimFromToken(request)
+
+    /*
+     * ┌───────────────────────────────────────────────────────────────────────┐
+     * │ VERIFICATION IS CHECKED BEFORE APPROVAL, AND THE ORDER IS THE FLOW.   │
+     * │                                                                       │
+     * │ signup → confirm the address → wait for a manager → the app. Sending  │
+     * │ an unverified user to /pending would tell them to wait for an         │
+     * │ approval that nobody is going to grant, with no hint that the thing   │
+     * │ actually blocking them is an email they have not opened.              │
+     * │                                                                       │
+     * │ email_verified arrived in migration 0070, so a token minted before it │
+     * │ has no such key. appClaimFromToken returns undefined for that, and    │
+     * │ the check below treats only an explicit `false` as unverified: an     │
+     * │ hour-old token from before the migration keeps working until it       │
+     * │ refreshes, instead of bouncing every signed-in user to a screen they  │
+     * │ do not need. The database is unaffected either way — this is a        │
+     * │ routing hint, and RLS is the authority.                               │
+     * └───────────────────────────────────────────────────────────────────────┘
+     */
+    if (claim?.email_verified === false) {
+      const url = request.nextUrl.clone()
+      url.pathname = `/${locale}/verify-email`
+      url.search = ''
+      return NextResponse.redirect(url)
+    }
+
+    if (claim?.approved !== true) {
       const url = request.nextUrl.clone()
       url.pathname = `/${locale}/pending`
       url.search = ''
@@ -130,7 +160,7 @@ export async function proxy(request: NextRequest) {
 }
 
 /**
- * Reads `app.approved` from the access token cookie.
+ * Reads the whole `app` claim off the access token cookie.
  *
  * Decoded WITHOUT signature verification — deliberately. This is a routing
  * hint only: the worst case is showing someone a page whose data RLS then
@@ -139,8 +169,15 @@ export async function proxy(request: NextRequest) {
  * every action and has_perm() in every policy.
  *
  * Never make an authorisation decision from this value anywhere else.
+ *
+ * Returns undefined — not a defaulted object — when there is no readable
+ * claim, so the caller can tell "the token says false" apart from "the token
+ * predates this field". Those want opposite handling, and collapsing them is
+ * what would bounce every existing session to a screen it does not need.
  */
-function isApprovedFromToken(request: NextRequest): boolean {
+function appClaimFromToken(
+  request: NextRequest,
+): { approved?: boolean; email_verified?: boolean } | undefined {
   const projectRef = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).hostname.split('.')[0]
   const cookieName = `sb-${projectRef}-auth-token`
 
@@ -154,7 +191,7 @@ function isApprovedFromToken(request: NextRequest): boolean {
     .map((c) => c.value)
     .join('')
 
-  if (!chunks) return false
+  if (!chunks) return undefined
 
   try {
     const raw = chunks.startsWith('base64-')
@@ -163,14 +200,16 @@ function isApprovedFromToken(request: NextRequest): boolean {
 
     const session = JSON.parse(raw)
     const accessToken: string | undefined = session?.access_token ?? session?.[0]
-    if (!accessToken) return false
+    if (!accessToken) return undefined
 
     const payload = JSON.parse(decodeBase64Url(accessToken.split('.')[1]))
-    return payload?.app?.approved === true
+    const app = payload?.app
+    return app && typeof app === 'object' ? app : undefined
   } catch {
-    // Unparseable cookie: treat as unapproved. Failing closed is correct — the
-    // cost is one redirect to /pending, which self-corrects on refresh.
-    return false
+    // Unparseable cookie: no claim. The caller sends that to /pending, which
+    // self-corrects on the next refresh — one redirect, and never a false
+    // "unverified", which would send somebody to a screen with no way out.
+    return undefined
   }
 }
 

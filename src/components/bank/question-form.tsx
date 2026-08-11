@@ -137,12 +137,6 @@ export function QuestionForm({ question, options, onSubmit }: QuestionFormProps)
   const [difficulty, setDifficulty] = useState<Difficulty | ''>(question?.difficulty ?? '')
   const [brandId, setBrandId] = useState(question?.brandId ?? options.brands[0]?.id ?? '')
   const [topicId, setTopicId] = useState(question?.topicId ?? '')
-  const [referenceDocumentId, setReferenceDocumentId] = useState(
-    question?.referenceDocumentId ?? '',
-  )
-  const [referencePage, setReferencePage] = useState(
-    question?.referencePage ? String(question.referencePage) : '',
-  )
 
   // ── Per-question fields: cleared on "Save and add another" ────────────────
   const [texts, setTexts] = useState<Texts>(() => textsFrom(question))
@@ -216,15 +210,12 @@ export function QuestionForm({ question, options, onSubmit }: QuestionFormProps)
         difficulty: difficulty || undefined,
         brandId: brandId || undefined,
         topicId: topicId || null,
-        referenceDocumentId: referenceDocumentId || null,
-        referencePage: referencePage ? Number(referencePage) : null,
         status,
         texts: payloadTexts,
       }
     },
     [
-      question?.id, qtype, correctOption, difficulty, brandId, topicId,
-      referenceDocumentId, referencePage, texts,
+      question?.id, qtype, correctOption, difficulty, brandId, topicId, texts,
     ],
   )
 
@@ -383,39 +374,6 @@ export function QuestionForm({ question, options, onSubmit }: QuestionFormProps)
                 ))}
               </select>
             </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="q-ref">{t('formReference')}</Label>
-              <select
-                id="q-ref"
-                value={referenceDocumentId}
-                onChange={(e) => setReferenceDocumentId(e.target.value)}
-                disabled={pending}
-                className={selectClass}
-              >
-                <option value="">{t('formReferenceNone')}</option>
-                {options.documents.map((d) => (
-                  <option key={d.id} value={d.id}>{d.title}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Only once a document is chosen — a page number with nothing to
-                be a page OF is refused by 0054, and offering the field first
-                invites exactly that. */}
-            {referenceDocumentId && (
-              <div className="space-y-1.5">
-                <Label htmlFor="q-page">{t('formPage')}</Label>
-                <Input
-                  id="q-page"
-                  type="number"
-                  min={1}
-                  value={referencePage}
-                  onChange={(e) => setReferencePage(e.target.value)}
-                  disabled={pending}
-                />
-              </div>
-            )}
 
             {/* UUID — Editors only. The panel is absent, not disabled, and the
                 value is absent from the payload for everybody else. */}

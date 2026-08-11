@@ -40,7 +40,10 @@ console.log(`\n  ACTUAL SCHEMA: ${counts[0].tables} tables, ${counts[0].function
 const probes = [
   ['0014 exams', `select to_regclass('public.exams') is not null as x`],
   ['0025 attempts', `select to_regclass('public.attempts') is not null as x`],
-  ['0048 source_documents', `select to_regclass('public.source_documents') is not null as x`],
+  // 0068 dropped source_documents with the rest of the Guide, so this probe is
+  // inverted: it must now report ABSENT. Left in rather than deleted because a
+  // table reappearing is exactly the kind of thing a probe list exists to catch.
+  ['0068 source_documents (must be ABSENT)', `select to_regclass('public.source_documents') is not null as x`],
   ['0051 jobs', `select to_regclass('public.jobs') is not null as x`],
   ['0052 difficulty_levels', `select to_regclass('public.difficulty_levels') is not null as x`],
   ['0053 bank_questions (NEW)', `select to_regclass('public.bank_questions') is not null as x`],

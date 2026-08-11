@@ -182,15 +182,20 @@ try {
    * │                                                                         │
    * │ THREE ENTRIES WERE REMOVED FROM THIS LIST ON 10 AUG 2026, and the       │
    * │ reason is a product change rather than a failing check being silenced:  │
-   * │ /exams, /evaluate and /results are now steps in a workflow the product  │
-   * │ supports. 0062 and 0063 made online delivery real, so a chef publishes  │
-   * │ a paper, candidates sit it, and the chef marks it. Every paper carries  │
-   * │ short answers by blueprint, so every submission waits at `evaluating`   │
-   * │ for a human — without /evaluate the results would never come out.       │
+   * │ the exam pages, /evaluate and /results are now steps in a workflow the  │
+   * │ product supports. 0062 and 0063 made online delivery real, so a chef    │
+   * │ publishes a paper, candidates sit it, and the chef marks it. Every      │
+   * │ paper carries short answers by blueprint, so every submission waits at  │
+   * │ `evaluating` for a human — without /evaluate results would never come   │
+   * │ out. (The exam surface is now /exams/live, /upcoming and /closed; the   │
+   * │ authoring pages /exams, /exams/new and /exams/[id] were deleted, and a  │
+   * │ chef is offered no link to a route that does not exist.)               │
    * │                                                                         │
    * │ /verify and /reports STAY forbidden and are still asserted below.       │
-   * │ Paper-backed exams publish with verification_mode 'single', so nothing  │
-   * │ reaches the verify queue, and analytics is separate work.               │
+   * │ Paper-backed exams publish with verification_mode 'auto' — 0067 changed │
+   * │ it from 'single', which required a counter-signer the chef could not be │
+   * │ and stranded every result — so nothing reaches the verify queue, and    │
+   * │ analytics is separate work.                                             │
    * └─────────────────────────────────────────────────────────────────────────┘
    */
   const forbidden = [

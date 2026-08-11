@@ -7,11 +7,7 @@ import { createClient } from '@/lib/supabase/server'
 import { dbId } from '@/lib/db/id'
 import { examFiltersSchema, EXAMS_PAGE_SIZE } from '@/lib/exams/filters'
 import {
-  examSchema,
-  examSectionSchema,
   assignmentSchema,
-  DEFAULT_PAPER_MODE,
-  DEFAULT_COUNTS_TOWARDS_ANALYTICS,
   type ExamKind,
   type ExamStatus,
 } from '@/lib/exams/rules'
@@ -135,21 +131,6 @@ export async function getExam(id: string) {
   }
 }
 
-/**
- * The health report.
- *
- * Straight through to the RPC — deliberately no filtering, reshaping or
- * re-deriving of severity here. The database decides what blocks; this only
- * carries the answer.
- */
-export async function getExamHealth(id: string): Promise<HealthIssue[]> {
-  await requirePermission('exams.update')
-
-  const supabase = await createClient()
-  const { data, error } = await supabase.rpc('exam_health', { p_exam_id: id })
-  if (error) return []
-  return (data ?? []) as unknown as HealthIssue[]
-}
 
 export interface PaperQuestion {
   section_id: string
@@ -174,26 +155,6 @@ export interface PaperQuestion {
   is_preview: boolean
 }
 
-/**
- * What this exam asks.
- *
- * The frozen paper when one exists, otherwise a representative draw flagged
- * `is_preview`. One call either way — a chef asks the same question of a draft
- * and a published exam, and making them reason about which storage backs it
- * would serve the schema rather than the person.
- */
-export async function getExamPaper(examId: string): Promise<PaperQuestion[]> {
-  await requirePermission('exams.read')
-
-  const supabase = await createClient()
-  const { data, error } = await supabase.rpc('exam_paper', {
-    p_exam_id: examId,
-    p_seed: null,
-  })
-
-  if (error) return []
-  return (data ?? []) as unknown as PaperQuestion[]
-}
 
 export interface RuleCount {
   rule_id: string
@@ -203,253 +164,11 @@ export interface RuleCount {
   drawn: number
 }
 
-/**
- * The two numbers the builder shows beside each saved rule.
- *
- * `available` alone would be a trap: two rules can match the same questions, and
- * the second only discovers at publish that the first took them. Showing both
- * turns "your exam is short" at publish time into "19 of these are already
- * taken" while the chef is still editing.
- */
-export async function getRuleCounts(examId: string): Promise<RuleCount[]> {
-  await requirePermission('exams.read')
-
-  const supabase = await createClient()
-  const { data, error } = await supabase.rpc('exam_rule_counts', { p_exam_id: examId })
-  if (error) return []
-  return (data ?? []) as unknown as RuleCount[]
-}
-
-const previewSchema = z.object({
-  examId: dbId(),
-  categoryId: dbId().nullable().default(null),
-  includeSubcategories: z.boolean().default(true),
-  tagIds: z.array(dbId()).default([]),
-  difficultyMin: z.number().int().min(1).max(5).default(1),
-  difficultyMax: z.number().int().min(1).max(5).default(5),
-})
-
-/**
- * How many questions an UNSAVED rule would match.
- *
- * Only the `available` half: a rule with no position in the running order has
- * no meaningful `drawn`, and inventing one would be worse than omitting it.
- */
-export async function previewRuleCount(input: unknown): Promise<number | null> {
-  await requirePermission('exams.read')
-
-  const parsed = previewSchema.safeParse(input)
-  if (!parsed.success) return null
-
-  const supabase = await createClient()
-  const { data, error } = await supabase.rpc('preview_rule_count', {
-    p_exam_id: parsed.data.examId,
-    p_category_id: parsed.data.categoryId,
-    p_include_sub: parsed.data.includeSubcategories,
-    p_tag_ids: parsed.data.tagIds,
-    p_types: null,
-    p_difficulty_min: parsed.data.difficultyMin,
-    p_difficulty_max: parsed.data.difficultyMax,
-  })
-
-  if (error) return null
-  return data as unknown as number
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Writes
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * `sections` is OPTIONAL, and the distinction matters.
- *
- * Omitted  → the section tree is left exactly as it is.
- * Provided → it is replaced wholesale, empty array included.
- *
- * Without that split, the settings form — which knows nothing about sections —
- * would delete the entire paper structure every time somebody corrected a
- * typo in the title. Defaulting to `[]` would make silent data loss the
- * default behaviour.
- */
-const saveExamSchema = examSchema.extend({
-  sections: z.array(examSectionSchema).optional(),
-})
-
-export async function saveExam(
-  input: unknown,
-): Promise<MutationResult & { id?: string }> {
-  const parsed = saveExamSchema.safeParse(input)
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid exam.' }
-  }
-
-  const v = parsed.data
-  const claims = await requirePermission(v.id ? 'exams.update' : 'exams.create')
-  if (!claims.company_id) return { ok: false, error: 'No company on your account.' }
-
-  const supabase = await createClient()
-
-  // paper_mode and counts_towards_analytics default FROM the kind but are
-  // stored as columns, so an explicit choice survives. Only derive when the
-  // caller did not decide.
-  const row = {
-    company_id: claims.company_id,
-    brand_id: v.brandId,
-    title: v.title,
-    description: v.description,
-    instructions: v.instructions,
-    kind: v.kind,
-    paper_mode: v.paperMode ?? DEFAULT_PAPER_MODE[v.kind],
-    counts_towards_analytics: DEFAULT_COUNTS_TOWARDS_ANALYTICS[v.kind],
-    duration_minutes: v.durationMinutes,
-    opens_at: v.opensAt,
-    closes_at: v.closesAt,
-    timezone: v.timezone,
-    max_attempts: v.maxAttempts,
-    pass_mark_percent: v.passMarkPercent,
-    shuffle_questions: v.shuffleQuestions,
-    shuffle_options: v.shuffleOptions,
-    allow_backtrack: v.allowBacktrack,
-    negative_marking_enabled: v.negativeMarkingEnabled,
-    verification_mode: v.verificationMode,
-    updated_by: claims.userId,
-  }
-
-  let examId = v.id
-  if (examId) {
-    const { error } = await supabase.from('exams').update(row).eq('id', examId).is('deleted_at', null)
-    if (error) return { ok: false, error: friendlyWriteError(error) }
-  } else {
-    const { data, error } = await supabase
-      .from('exams')
-      .insert({ ...row, created_by: claims.userId! })
-      .select('id')
-      .single()
-    if (error || !data) return { ok: false, error: friendlyWriteError(error) }
-    examId = data.id
-  }
-
-  // Nothing further to do for a caller that only touched the settings.
-  if (v.sections === undefined) {
-    revalidatePath('/exams')
-    revalidatePath(`/exams/${examId}`)
-    return { ok: true, id: examId }
-  }
-
-  // Sections and rules are a replace-set: the builder sends the whole tree, so
-  // a merge would make deleting a rule impossible. Cascade removes the rules
-  // with their section.
-  const { error: wipeError } = await supabase.from('exam_sections').delete().eq('exam_id', examId)
-  if (wipeError) return { ok: false, error: friendlyWriteError(wipeError) }
-
-  for (const [index, section] of v.sections.entries()) {
-    const { data: created, error: sectionError } = await supabase
-      .from('exam_sections')
-      .insert({
-        exam_id: examId,
-        title: section.title,
-        description: section.description,
-        instructions: section.instructions,
-        duration_minutes: section.durationMinutes,
-        sort_order: index,
-      })
-      .select('id')
-      .single()
-
-    if (sectionError || !created) return { ok: false, error: friendlyWriteError(sectionError) }
-
-    if (section.rules.length > 0) {
-      const { error: ruleError } = await supabase.from('exam_rules').insert(
-        section.rules.map((rule, ruleIndex) => ({
-          section_id: created.id,
-          sort_order: ruleIndex,
-          category_id: rule.categoryId,
-          include_subcategories: rule.includeSubcategories,
-          tag_ids: rule.tagIds,
-          question_types: rule.questionTypes,
-          difficulty_min: rule.difficultyMin,
-          difficulty_max: rule.difficultyMax,
-          question_count: rule.questionCount,
-          marks_per_question: rule.marksPerQuestion,
-        })),
-      )
-      if (ruleError) return { ok: false, error: friendlyWriteError(ruleError) }
-    }
-  }
-
-  revalidatePath('/exams')
-  revalidatePath(`/exams/${examId}`)
-  return { ok: true, id: examId }
-}
-
-const saveSectionsSchema = z.object({
-  examId: dbId(),
-  sections: z.array(examSectionSchema),
-})
-
-/**
- * Replace an exam's section tree, without touching its settings.
- *
- * Separate from saveExam because the two are edited by different forms and
- * neither should have to restate the other's fields. Routing a sections-only
- * save through saveExam would mean sending a title the section builder does not
- * own, which is how a form ends up writing back a stale copy of something
- * somebody else just changed.
- */
-export async function saveSections(input: unknown): Promise<MutationResult> {
-  await requirePermission('exams.update')
-
-  const parsed = saveSectionsSchema.safeParse(input)
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid sections.' }
-  }
-
-  const { examId, sections } = parsed.data
-  const supabase = await createClient()
-
-  // Replace-set: the builder sends the whole tree, so a merge would make
-  // deleting a rule impossible. Rules cascade with their section.
-  const { error: wipeError } = await supabase.from('exam_sections').delete().eq('exam_id', examId)
-  if (wipeError) return { ok: false, error: friendlyWriteError(wipeError) }
-
-  for (const [index, section] of sections.entries()) {
-    const { data: created, error: sectionError } = await supabase
-      .from('exam_sections')
-      .insert({
-        exam_id: examId,
-        title: section.title,
-        description: section.description,
-        instructions: section.instructions,
-        duration_minutes: section.durationMinutes,
-        sort_order: index,
-      })
-      .select('id')
-      .single()
-
-    if (sectionError || !created) return { ok: false, error: friendlyWriteError(sectionError) }
-
-    if (section.rules.length > 0) {
-      const { error: ruleError } = await supabase.from('exam_rules').insert(
-        section.rules.map((rule, ruleIndex) => ({
-          section_id: created.id,
-          sort_order: ruleIndex,
-          category_id: rule.categoryId,
-          include_subcategories: rule.includeSubcategories,
-          tag_ids: rule.tagIds,
-          question_types: rule.questionTypes,
-          difficulty_min: rule.difficultyMin,
-          difficulty_max: rule.difficultyMax,
-          question_count: rule.questionCount,
-          marks_per_question: rule.marksPerQuestion,
-        })),
-      )
-      if (ruleError) return { ok: false, error: friendlyWriteError(ruleError) }
-    }
-  }
-
-  revalidatePath(`/exams/${examId}`)
-  return { ok: true }
-}
 
 const scheduleSchema = z.object({
   examId: dbId(),
@@ -513,56 +232,6 @@ export async function updateSchedule(input: unknown): Promise<MutationResult> {
   return { ok: true }
 }
 
-/**
- * Publish.
- *
- * The RPC runs exam_health() and refuses on any blocking row, returning them in
- * the error. Parsing them back out here means the editor can list exactly which
- * rule fell short rather than showing "publish failed".
- */
-export async function publishExam(id: string): Promise<MutationResult> {
-  await requirePermission('exams.publish')
-
-  const supabase = await createClient()
-  const { error } = await supabase.rpc('publish_exam', { p_exam_id: id })
-
-  if (error) {
-    const issues = parseBlockingIssues(error.message)
-    if (issues) {
-      return { ok: false, error: 'This exam is not ready to publish.', issues }
-    }
-    return { ok: false, error: friendlyWriteError(error) }
-  }
-
-  revalidatePath('/exams')
-  revalidatePath(`/exams/${id}`)
-  return { ok: true }
-}
-
-const duplicateSchema = z.object({
-  id: dbId(),
-  title: z.string().trim().min(3).max(200).optional(),
-})
-
-export async function duplicateExam(
-  input: unknown,
-): Promise<MutationResult & { id?: string }> {
-  await requirePermission('exams.create')
-
-  const parsed = duplicateSchema.safeParse(input)
-  if (!parsed.success) return { ok: false, error: 'Invalid exam.' }
-
-  const supabase = await createClient()
-  const { data, error } = await supabase.rpc('duplicate_exam', {
-    p_exam_id: parsed.data.id,
-    p_title: parsed.data.title ?? null,
-  })
-
-  if (error) return { ok: false, error: friendlyWriteError(error) }
-
-  revalidatePath('/exams')
-  return { ok: true, id: data as unknown as string }
-}
 
 const setAssignmentsSchema = z.object({
   examId: dbId(),
@@ -643,61 +312,8 @@ export async function setExamStatus(input: unknown): Promise<MutationResult> {
   return { ok: true }
 }
 
-/**
- * Archive an exam.
- *
- * ┌───────────────────────────────────────────────────────────────────────────┐
- * │ THIS DID NOT WORK AT ALL UNTIL 0049.                                      │
- * │                                                                           │
- * │ Both of 0015's read policies on `exams` carry `deleted_at is null`, and   │
- * │ an UPDATE that moves a row outside every select policy is refused by      │
- * │ Postgres — even though exams_update's WITH CHECK was satisfied. So this   │
- * │ statement raised, every time, for everyone. 0049 adds the archived-row    │
- * │ read policy that makes the transition legal, and its counterpart for the  │
- * │ way back.                                                                 │
- * │                                                                           │
- * │ The count check below is the second half. RLS refuses by FILTERING, not   │
- * │ by erroring, so archiving another company's exam matches zero rows and    │
- * │ returns no error — and this reported success for an exam it never         │
- * │ touched. Exactly the defect deleteQuestion had (3b52dcc).                 │
- * └───────────────────────────────────────────────────────────────────────────┘
- */
-export async function deleteExam(id: string): Promise<MutationResult> {
-  await requirePermission('exams.archive')
-
-  const supabase = await createClient()
-  const { error, count } = await supabase
-    .from('exams')
-    .update({ deleted_at: new Date().toISOString() }, { count: 'exact' })
-    .eq('id', id)
-    .is('deleted_at', null)
-
-  if (error) return { ok: false, error: friendlyWriteError(error) }
-  if (count === 0) return { ok: false, error: 'That exam could not be archived.' }
-
-  revalidatePath('/exams')
-  revalidatePath(`/exams/${id}`)
-  return { ok: true }
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * publish_exam() raises with the blocking rows serialised as JSON. Recovering
- * them turns "publish failed" into "rule 2 asked for 15 and the bank holds 6",
- * which is the difference between a chef fixing it and a chef filing a bug.
- */
-function parseBlockingIssues(message: string): HealthIssue[] | null {
-  const start = message.indexOf('[')
-  if (start === -1) return null
-  try {
-    const parsed = JSON.parse(message.slice(start, message.lastIndexOf(']') + 1))
-    if (!Array.isArray(parsed)) return null
-    return parsed.map((i) => ({ ...i, severity: 'blocking' as const }))
-  } catch {
-    return null
-  }
-}
 
 /**
  * Postgres errors a chef might actually cause, in words that suggest the fix.

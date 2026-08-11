@@ -2,7 +2,7 @@
 
 import { useActionState } from 'react'
 import { useTranslations } from 'next-intl'
-import { CheckCircle2, Loader2, Mail } from 'lucide-react'
+import { Loader2, Mail } from 'lucide-react'
 import { registerAction, type ActionResult } from '@/server/actions/auth'
 import type { OrgOption } from '@/server/actions/org'
 import { Link } from '@/lib/i18n/navigation'
@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { InlineError } from '@/components/ui/inline-error'
-import { PasswordField } from '@/components/auth/password-field'
+import { PasswordPair } from '@/components/auth/password-pair'
 
 /**
  * Native <select>, styled to match Input.
@@ -41,26 +41,16 @@ export function RegisterForm({
     null,
   )
 
-  if (state?.ok) {
-    return (
-      <div className="flex flex-col items-center gap-3 py-4 text-center" role="status">
-        <span
-          aria-hidden
-          className="grid size-11 place-items-center rounded-xl bg-success/12 text-success"
-        >
-          <CheckCircle2 className="size-5" />
-        </span>
-        <p className="text-sm text-balance">{state.message}</p>
-        <Link
-          href="/login"
-          className="text-sm font-medium underline-offset-4 hover:underline"
-        >
-          {t('signIn')}
-        </Link>
-      </div>
-    )
-  }
-
+  /*
+   * There is no success branch here any more, and its absence is the point.
+   *
+   * This used to render "check your email for a verification link" with a link
+   * back to sign-in — a dead end in two ways. The link 404'd (there was no
+   * /auth/confirm route), and even once it did not, there was nowhere on this
+   * screen to type a code. registerAction now redirects to /verify-email
+   * carrying the address, so a successful signup never returns a result at all:
+   * redirect() throws, and `state` stays null.
+   */
   return (
     <form action={formAction} className="space-y-4">
       <input type="hidden" name="locale" value={locale} />
@@ -69,7 +59,16 @@ export function RegisterForm({
 
       <div className="space-y-2">
         <Label htmlFor="fullName">{t('fullName')}</Label>
-        <Input id="fullName" name="fullName" required autoFocus disabled={pending} />
+        {/* autoComplete="name" was missing, so the one field every phone can
+            fill from its own contact card was the one field typed by hand. */}
+        <Input
+          id="fullName"
+          name="fullName"
+          autoComplete="name"
+          required
+          autoFocus
+          disabled={pending}
+        />
       </div>
 
       <div className="space-y-2">
@@ -92,14 +91,18 @@ export function RegisterForm({
         </div>
       </div>
 
-      <PasswordField
-        id="password"
-        name="password"
-        label={t('password')}
+      {/*
+        A confirmation field, which registration did not have.
+        Reset-password has always had one; signup did not, so the single place
+        where a typo is unrecoverable — you cannot sign in to fix it, and the
+        reset email goes to the address you may also have mistyped — was the
+        one place the password was typed once and never checked.
+      */}
+      <PasswordPair
+        passwordLabel={t('password')}
+        confirmLabel={t('confirmPassword')}
+        mismatchLabel={t('mismatch')}
         hint={t('passwordHint')}
-        autoComplete="new-password"
-        minLength={8}
-        required
         disabled={pending}
       />
 
@@ -143,6 +146,21 @@ export function RegisterForm({
         </div>
       </div>
 
+      {/*
+        ┌───────────────────────────────────────────────────────────────────┐
+        │ THIS CONTROL WAS DECORATIVE, AND ON THIS PRODUCT THAT MATTERS.    │
+        │                                                                   │
+        │ It posted as `preferredLocale`; registerAction read a HIDDEN      │
+        │ `locale` field carrying the URL's locale and ignored this         │
+        │ entirely. So a Gujarati speaker handed an /en/register link chose │
+        │ ગુજરાતી, was told nothing, and got an English account — on an     │
+        │ application whose stated purpose is that a porter can use it in   │
+        │ their own language.                                               │
+        │                                                                   │
+        │ It is now the field the action reads. The hidden `locale` stays,  │
+        │ but only to decide where to redirect afterwards.                  │
+        └───────────────────────────────────────────────────────────────────┘
+      */}
       <div className="space-y-2">
         <Label htmlFor="preferredLocale">{t('preferredLanguage')}</Label>
         <select

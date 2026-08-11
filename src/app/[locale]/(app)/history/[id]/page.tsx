@@ -1,6 +1,15 @@
 import { PaperStatusControl } from '@/components/papers/paper-status'
 import { PublishPaper } from '@/components/papers/publish-paper'
 import { setPaperStatus, publishPaperAsExam } from '@/server/actions/papers'
+import { setExamStatus } from '@/server/actions/exams'
+import { ExamAssignments } from '@/components/exams/exam-assignments'
+import { ExamLifecycle } from '@/components/exams/exam-lifecycle'
+import { ExamMonitoring } from '@/components/exams/exam-monitoring'
+import { ExamStateBadge } from '@/components/exams/exam-state-badge'
+import { loadParticipation, loadParticipants } from '@/server/exams/live'
+import {
+  listOutlets, listDepartments, listBrands, listAssignableRoles, listTeamMembers,
+} from '@/server/actions/directory'
 import { can } from '@/lib/auth/claims'
 import { notFound } from 'next/navigation'
 import { getTranslations, getFormatter } from 'next-intl/server'
@@ -61,7 +70,38 @@ export default async function PaperDetailPage({
   // both — anything else confirms the row exists.
   if (!paper) notFound()
 
+  /*
+   * ┌───────────────────────────────────────────────────────────────────────────┐
+   * │ THIS PAGE IS NOW THE WHOLE STORY OF A PAPER, AND EVERY EXTRA QUERY IS     │
+   * │ GATED ON THE PERMISSION THAT WOULD ANSWER IT.                             │
+   * │                                                                           │
+   * │ The audience and the participation used to live on /exams/[id]. That page │
+   * │ is gone, so they are here — but an EDITOR holds papers.read_history and   │
+   * │ neither exams.assign nor attempts.read_team. Calling the directory or the │
+   * │ participants loader for them would throw and 500 the whole page, which is │
+   * │ exactly the bug that made /exams/[id] unreachable for HR.                 │
+   * │                                                                           │
+   * │ So each loader is asked for only by somebody who may have it, and the     │
+   * │ sections below simply do not render otherwise.                            │
+   * └───────────────────────────────────────────────────────────────────────────┘
+   */
+  const canAssign = can(claims, 'exams.assign')
+  const canMonitor = can(claims, 'attempts.read_all') || can(claims, 'attempts.read_team')
+  const examId = paper.liveExam?.id ?? null
+
+  const [directory, participation, participants] = await Promise.all([
+    canAssign
+      ? Promise.all([listOutlets(), listDepartments(), listBrands(), listAssignableRoles(), listTeamMembers()])
+          .then(([outlets, departments, brands, roles, people]) => ({
+            outlets, departments, brands, roles, people,
+          }))
+      : Promise.resolve(undefined),
+    examId ? loadParticipation(examId) : Promise.resolve(null),
+    examId && canMonitor ? loadParticipants(examId) : Promise.resolve([]),
+  ])
+
   const t = await getTranslations('papers')
+  const te = await getTranslations('exams')
   const format = await getFormatter()
 
   /*
@@ -96,11 +136,35 @@ export default async function PaperDetailPage({
         opensAt: string | null
         closesAt: string | null
         resultsRelease: 'immediate' | 'on_close'
+        assignments: {
+          targetKind: string
+          targetId: string | null
+          targetRole: string | null
+          targetUserId: string | null
+        }[]
       }) => {
         'use server'
         return publishPaperAsExam(input)
       }
     : undefined
+
+  const canEditExam = can(claims, 'exams.update')
+
+  /*
+   * setExamStatus re-checks exams.update itself; this only decides whether the
+   * control is drawn. The union is narrowed to the two endings a paper-backed
+   * exam has — there is no draft to reopen and no archive step in this flow.
+   */
+  const onExamStatusChange = async (input: { id: string; status: 'completed' | 'cancelled' }) => {
+    'use server'
+    return setExamStatus(input)
+  }
+
+  /** One date format for every exam fact on this page. */
+  const when = (iso: string) =>
+    format.dateTime(new Date(iso), {
+      day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    })
 
   const difficultyLabels: Record<Difficulty, string> = {
     easy: t('difficulty.easy'),
@@ -235,13 +299,40 @@ export default async function PaperDetailPage({
              * │ gone wrong; the work is simply half done.                     │
              * └───────────────────────────────────────────────────────────────┘
              */
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline">{t('publishedAs')}</Badge>
-                <span className="text-body-md">{paper.liveExam.title}</span>
+                <span className="text-body-md font-medium">{paper.liveExam.title}</span>
+                <ExamStateBadge
+                  state={paper.liveExam.state}
+                  label={te(
+                    (paper.liveExam.state === 'live' ? 'stateLive'
+                      : paper.liveExam.state === 'scheduled' ? 'stateScheduled'
+                      : paper.liveExam.state === 'closed' ? 'stateClosed'
+                      : paper.liveExam.state === 'draft' ? 'stateDraft'
+                      : 'stateCancelled') as 'stateLive',
+                  )}
+                />
               </div>
 
-              {paper.liveExam.assignmentCount === 0 ? (
+              <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {paper.liveExam.opensAt && (
+                  <Fact label={t('cardStartsLabel')}>{when(paper.liveExam.opensAt)}</Fact>
+                )}
+                {paper.liveExam.closesAt && (
+                  <Fact label={t('cardDeadlineLabel')}>{when(paper.liveExam.closesAt)}</Fact>
+                )}
+                <Fact label={t('publishDuration')}>
+                  <span className="tabular-nums">{paper.liveExam.durationMinutes}</span>
+                </Fact>
+                <Fact label={t('publishPassMark')}>
+                  <span className="tabular-nums">{paper.liveExam.passMarkPercent}%</span>
+                </Fact>
+              </dl>
+
+              {/* The unfinished-setup warning, kept: publishing can still leave
+                  an exam unassigned if the audience write failed, or if a chef
+                  published before choosing anybody. */}
+              {paper.liveExam.assignmentCount === 0 && (
                 <div className="flex items-start gap-3 rounded-lg border border-dashed border-warning/50 bg-warning/5 p-3">
                   <UsersIcon className="mt-0.5 size-4 shrink-0 text-warning" />
                   <div className="min-w-0">
@@ -251,21 +342,32 @@ export default async function PaperDetailPage({
                     </p>
                   </div>
                 </div>
-              ) : (
-                <p className="text-body-sm text-muted-foreground">
-                  {t('publishedAssigned', { count: paper.liveExam.assignmentCount })}
-                </p>
               )}
 
-              <Link
-                href={`/exams/${paper.liveExam.id}`}
-                className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
-              >
-                <UsersIcon />
-                {paper.liveExam.assignmentCount === 0
-                  ? t('publishedChooseWho')
-                  : t('publishedOpenExam')}
-              </Link>
+              {/* The audience, editable in place. 0016's lock covers content,
+                  never who sits it, so this stays available after publish. */}
+              {directory && (
+                <ExamAssignments
+                  examId={paper.liveExam.id}
+                  initial={paper.liveExam.assignments}
+                  options={directory}
+                  canAssign={canAssign}
+                />
+              )}
+
+              {/*
+                The lifecycle control. Until now `setExamStatus` was mounted
+                only inside ExamHealthPanel, which a paper-backed exam never
+                renders — so a published paper could not be cancelled or closed
+                early at all. This is that missing control.
+              */}
+              {canEditExam && paper.liveExam.state !== 'closed' && (
+                <ExamLifecycle
+                  examId={paper.liveExam.id}
+                  state={paper.liveExam.state}
+                  onChange={onExamStatusChange}
+                />
+              )}
             </div>
           ) : (
             <PublishPaper
@@ -273,11 +375,24 @@ export default async function PaperDetailPage({
               paperNo={paper.paperNo}
               marks={paper.marks}
               retired={paper.status === 'retired'}
+              directory={directory}
               onPublish={onPublish}
             />
           )}
         </div>
       </section>
+
+      {/* ── Who has sat it ───────────────────────────────────────────────── */}
+      {/* Below publishing, because until an exam exists there is nothing to
+          report, and above downloads, because once one does this is the reason
+          somebody opened the page. */}
+      {participation && (
+        <ExamMonitoring
+          participation={participation}
+          participants={participants}
+          canSeeTable={canMonitor}
+        />
+      )}
 
       {/* ── Downloads ────────────────────────────────────────────────────── */}
       <section className="rounded-xl border bg-card p-5">

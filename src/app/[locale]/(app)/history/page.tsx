@@ -1,4 +1,5 @@
 import { getTranslations } from 'next-intl/server'
+import { PapersTabs } from '@/components/papers/papers-tabs'
 import { requirePermission } from '@/lib/auth/guards'
 import { PageHeader } from '@/components/ui/page-header'
 import { HistoryList } from '@/components/papers/history-list'
@@ -49,6 +50,7 @@ export default async function HistoryPage({
 
   return (
     <div className="space-y-6">
+      <PapersTabs />
       <PageHeader title={t('historyTitle')} description={t('historySubtitle')} />
 
       <HistoryList

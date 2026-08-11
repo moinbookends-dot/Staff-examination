@@ -379,8 +379,14 @@ try {
       [`/en/history`, 'DENY', 'paper history'],
       [`/en/history/${paperId}`, 'DENY', 'the paper'],
       [`/en/papers/generate`, 'DENY', 'the generator'],
-      [`/en/exams/${examId}`, 'DENY', 'the exam admin screen'],
-      [`/en/exams`, 'DENY', 'the exam list'],
+      // /exams and /exams/[id] were deleted in the consolidation. A DENY row is
+      // satisfied by a 404, so leaving them here would have looked like proof
+      // of an access control while probing nothing at all. The three section
+      // pages that replaced them are what a candidate must actually be kept
+      // out of — they name every colleague sitting the exam and their progress.
+      [`/en/exams/live`, 'DENY', 'who is sitting right now'],
+      [`/en/exams/upcoming`, 'DENY', 'the schedule'],
+      [`/en/exams/closed`, 'DENY', 'closed exams'],
       [`/en/questions`, 'DENY', 'the question bank'],
       [`/en/settings`, 'DENY', 'settings'],
       [`/en/evaluate`, 'DENY', 'the marking queue'],

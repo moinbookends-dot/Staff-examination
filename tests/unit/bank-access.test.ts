@@ -30,6 +30,10 @@ function claimsFor(role: 'super_admin' | 'editor' | 'chef' | 'hr' | 'employee'):
   return {
     userId: `user-${role}`,
     approved: true,
+    // 0070 added this to the claim. Every fixture here is a signed-in,
+    // working user, so it is true — nav and bank access are decided after
+    // both gates, never instead of them.
+    email_verified: true,
     company_id: 'company-1',
     brand_id: 'brand-1',
     outlet_id: null,

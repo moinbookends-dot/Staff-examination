@@ -139,7 +139,7 @@ try {
   attemptId = started.data[0].attempt_id
 
   const sheet = (await db.query(
-    `select question_id, answer_key, snapshot->>'response_format' fmt
+    `select question_id, answer_key, snapshot, snapshot->>'response_format' fmt
        from public.attempt_questions where attempt_id=$1 order by position`, [attemptId])).rows
 
   for (const row of sheet) {
@@ -153,15 +153,63 @@ try {
   await rpc(employee, 'submit_attempt', { p_attempt_id: attemptId, p_reason: 'user' })
 
   // The literal model text this attempt carries — every leak probe searches for it.
-  const models = sheet
+  const allModels = sheet
     .filter((r) => r.fmt === 'text_short')
     .map((r) => r.answer_key?.model)
     .filter((m) => typeof m === 'string' && m.length > 2)
 
-  console.log(`\n  ${models.length} short answer(s), model text e.g. "${models[0]}"`)
-  if (models.length === 0) throw new Error('the paper carried no model answers to test with')
+  /*
+   * ╔═══════════════════════════════════════════════════════════════════════════╗
+   * ║ A MODEL ANSWER THAT IS ALSO PRINTED ON THE PAPER CANNOT BE A CANARY.      ║
+   * ║                                                                           ║
+   * ║ This check searched every candidate-facing body for every model answer    ║
+   * ║ and called any occurrence a leak. It fired on a correct product: the      ║
+   * ║ short answer "5 °C to 63 °C" is ALSO one of the four options on a         ║
+   * ║ different MCQ about the danger zone —                                     ║
+   * ║                                                                           ║
+   * ║   {"id": "a", "text": "0 °C to 40 °C"}, {"id": "b", "text": "5 °C to 63   ║
+   * ║   °C"}, {"id": "c", "text": "10 °C to 50 °C"}                             ║
+   * ║                                                                           ║
+   * ║ — so the string is on the paper by design, printed for the candidate to   ║
+   * ║ choose between. Nothing leaked. In a bank about food safety this is not   ║
+   * ║ a freak coincidence: the same fact is asked twice in two formats.         ║
+   * ║                                                                           ║
+   * ║ THE SNAPSHOT IS THE DEFINITION OF CANDIDATE-VISIBLE. 0062 split the key   ║
+   * ║ into attempt_questions.answer_key precisely so `snapshot` carries only    ║
+   * ║ what a candidate may read, and bank_question_snapshot() builds it that    ║
+   * ║ way. Any model text already inside a snapshot proves nothing when found   ║
+   * ║ in a response, in either direction — so it is not searched for.           ║
+   * ║                                                                           ║
+   * ║ NOT SILENT: what was excluded is printed, and running out of usable       ║
+   * ║ canaries is a hard failure rather than a quietly vacuous pass.            ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   */
+  const visible = JSON.stringify(sheet.map((r) => r.snapshot))
+  const models = allModels.filter((m) => !visible.includes(m))
+  const alsoPrinted = allModels.filter((m) => visible.includes(m))
+
+  console.log(`\n  ${allModels.length} short answer(s), model text e.g. "${allModels[0]}"`)
+  if (alsoPrinted.length) {
+    console.log(
+      `  ${alsoPrinted.length} not usable as a canary — also printed on the paper: ` +
+        alsoPrinted.map((m) => JSON.stringify(m)).join(', '),
+    )
+  }
+  if (allModels.length === 0) throw new Error('the paper carried no model answers to test with')
+  if (models.length === 0) {
+    throw new Error(
+      'every model answer on this paper is also printed on it, so no leak probe below could ' +
+        'distinguish a leak from the paper itself. Re-run — a different paper will be drawn.',
+    )
+  }
 
   const leaks = (haystack) => models.filter((m) => haystack.includes(m))
+
+  /** The 90 characters around a hit, so a failure can be read rather than hunted. */
+  const context = (haystack, needle) => {
+    const at = haystack.indexOf(needle)
+    return at === -1 ? '' : haystack.slice(Math.max(0, at - 45), at + needle.length + 45)
+  }
 
   // ── The bug 0066 fixed ───────────────────────────────────────────────────
   section('the marking view opens at all')
@@ -169,18 +217,21 @@ try {
   const items = await rpc(chef, 'attempt_evaluation_items', { p_attempt_id: attemptId })
   check('an evaluator can open a paper-backed attempt', items.ok,
     items.ok ? '' : `${items.status} ${JSON.stringify(items.data).slice(0, 120)}`)
+  // allModels, not models: the evaluator is entitled to every model answer,
+  // including the one excluded from the leak canaries for being printed on the
+  // paper. Narrowing the canary set must not narrow what marking must deliver.
   check('every short answer is listed for marking',
-    (items.data ?? []).length >= models.length,
+    (items.data ?? []).length >= allModels.length,
     `${(items.data ?? []).length} item(s)`)
 
   // ── The evaluator sees it ────────────────────────────────────────────────
   section('the evaluator sees the model answer')
 
   const withModel = (items.data ?? []).filter((i) => i.model_answer)
-  check('the model answer reaches the evaluator', withModel.length === models.length,
-    `${withModel.length} of ${models.length}`)
+  check('the model answer reaches the evaluator', withModel.length === allModels.length,
+    `${withModel.length} of ${allModels.length}`)
   check('it is the text frozen onto the attempt, not re-read from the bank',
-    withModel.every((i) => models.includes(i.model_answer)))
+    withModel.every((i) => allModels.includes(i.model_answer)))
   check('the marks available are shown', (items.data ?? []).every((i) => i.marks != null))
   check('the candidate answer is shown', (items.data ?? []).some((i) => i.answer != null))
 
@@ -206,14 +257,32 @@ try {
   // ── Every candidate-facing surface ───────────────────────────────────────
   section('no candidate-facing surface carries it')
 
+  /*
+   * NAME THE LEAKED STRING, AND SHOW WHERE IT SAT.
+   *
+   * These three used to fail with the label alone. "attempt_paper carries no
+   * model answer — FAIL" says a key escaped and nothing about which one, and
+   * the difference between a real leak and a model answer that is also a
+   * substring of a question stem is the whole question. A check that cannot
+   * distinguish those two costs an afternoon every time it fires.
+   */
+  const noLeak = (label, body) => {
+    const found = leaks(body)
+    check(
+      label,
+      found.length === 0,
+      found.length ? `LEAKED ${JSON.stringify(found[0])} — …${context(body, found[0])}…` : '',
+    )
+  }
+
   const paperView = await rpc(employee, 'attempt_paper', { p_attempt_id: attemptId, p_locale: 'en' })
-  check('attempt_paper carries no model answer', leaks(paperView.text).length === 0)
+  noLeak('attempt_paper carries no model answer', paperView.text)
 
   const review = await rpc(employee, 'attempt_review', { p_attempt_id: attemptId })
-  check('attempt_review carries no model answer', leaks(review.text).length === 0)
+  noLeak('attempt_review carries no model answer', review.text)
 
   const mine = await rpc(employee, 'my_attempts')
-  check('my_attempts carries no model answer', leaks(mine.text).length === 0)
+  noLeak('my_attempts carries no model answer', mine.text)
 
   const direct = await fetch(
     `${SUPABASE}/rest/v1/attempt_questions?select=answer_key&attempt_id=eq.${attemptId}`,

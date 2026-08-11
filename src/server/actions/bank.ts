@@ -160,8 +160,6 @@ export async function saveQuestion(raw: unknown): Promise<BankMutationResult> {
         qtype: input.qtype,
         topic_id: input.topicId ?? null,
         correct_option: input.qtype === 'mcq' ? input.correctOption : null,
-        reference_document_id: input.referenceDocumentId ?? null,
-        reference_page: input.referencePage ?? null,
         // Held at draft until the texts are rewritten below.
         status: 'draft',
         updated_by: claims.userId,
@@ -179,8 +177,6 @@ export async function saveQuestion(raw: unknown): Promise<BankMutationResult> {
         qtype: input.qtype,
         topic_id: input.topicId ?? null,
         correct_option: input.qtype === 'mcq' ? input.correctOption : null,
-        reference_document_id: input.referenceDocumentId ?? null,
-        reference_page: input.referencePage ?? null,
         status: 'draft',
         // bank_questions_insert requires created_by = auth.uid(), so a question
         // cannot be attributed to somebody who did not write it.

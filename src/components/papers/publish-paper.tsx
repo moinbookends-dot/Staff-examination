@@ -11,6 +11,12 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { InlineError } from '@/components/ui/inline-error'
 import { cn } from '@/lib/utils'
+ import {
+  AssignmentPicker,
+  toAssignmentInput,
+  type AssignmentRow,
+  type DirectoryOptions,
+} from '@/components/exams/assignment-picker'
 import type { PublishPaperResult } from '@/server/actions/papers'
 
 /**
@@ -18,13 +24,19 @@ import type { PublishPaperResult } from '@/server/actions/papers'
  * Put a generated paper on screens.
  *
  * ╔═══════════════════════════════════════════════════════════════════════════╗
- * ║ PUBLISHING DOES NOT ASSIGN ANYBODY, AND THE FORM SAYS SO OUT LOUD.        ║
+ * ║ PUBLISHING NOW CHOOSES THE AUDIENCE TOO, AND THAT REVERSES A DELIBERATE   ║
+ * ║ EARLIER DECISION.                                                         ║
  * ║                                                                           ║
- * ║ On success this navigates to the exam, where the audience is chosen. That ║
- * ║ is one extra step, and it is deliberate: the assignment picker already    ║
- * ║ exists there, and an exam with no audience is invisible rather than       ║
- * ║ visible to everyone. The hint under the button exists so nobody publishes ║
- * ║ and walks away believing the exam is running.                            ║
+ * ║ This form used to publish and then send the reader to /exams/[id], because ║
+ * ║ that was the only screen able to write exam_assignments. The split was     ║
+ * ║ defensible — an exam with no audience is invisible rather than open to     ║
+ * ║ everyone — but it made the commonest outcome a half-finished job: the      ║
+ * ║ exam went live, nobody was assigned, and it reached nobody.                ║
+ * ║                                                                           ║
+ * ║ The picker is now a step in this form, and the two writes happen in one    ║
+ * ║ action. If the audience write fails the publish still stands and the       ║
+ * ║ reader is told — the paper page keeps its "nobody chosen yet" warning as   ║
+ * ║ the safety net.                                                           ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  *
  * A retired paper offers no form at all. 0063 refuses it, and rendering inputs
@@ -45,6 +57,12 @@ export interface PublishPaperProps {
   /** Marks and question count are equal — one mark per question, by product rule. */
   marks: number
   retired: boolean
+  /**
+   * The directory to choose an audience from. Absent for a caller who may
+   * publish but not assign, in which case the audience step is not offered and
+   * they finish on the paper page with the "nobody chosen yet" warning.
+   */
+  directory?: DirectoryOptions
   /** Present only for a caller holding both exams.create and exams.publish. */
   onPublish?: (input: {
     paperId: string
@@ -56,7 +74,10 @@ export interface PublishPaperProps {
     opensAt: string | null
     closesAt: string | null
     resultsRelease: 'immediate' | 'on_close'
+    assignments: ReturnType<typeof toAssignmentInput>
   }) => Promise<PublishPaperResult>
+  /** Where to go after publishing. Defaults to the paper's own page. */
+  onPublished?: (examId: string) => void
 }
 
 /** <input type="datetime-local"> from a Date, in the reader's own zone. */
@@ -65,7 +86,15 @@ function toLocalInput(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-export function PublishPaper({ paperId, paperNo, marks, retired, onPublish }: PublishPaperProps) {
+export function PublishPaper({
+  paperId,
+  paperNo,
+  marks,
+  retired,
+  directory,
+  onPublish,
+  onPublished,
+}: PublishPaperProps) {
   const t = useTranslations('papers')
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -89,6 +118,7 @@ export function PublishPaper({ paperId, paperNo, marks, retired, onPublish }: Pu
     toLocalInput(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
   )
   const [release, setRelease] = useState<'immediate' | 'on_close'>('immediate')
+  const [audience, setAudience] = useState<AssignmentRow[]>([])
 
   if (retired) {
     return <p className="text-body-sm text-muted-foreground">{t('publishRetired')}</p>
@@ -147,6 +177,7 @@ export function PublishPaper({ paperId, paperNo, marks, retired, onPublish }: Pu
         opensAt: opensIso,
         closesAt: closesIso,
         resultsRelease: release,
+        assignments: toAssignmentInput(audience),
       })
 
       if (!result.ok) {
@@ -154,10 +185,25 @@ export function PublishPaper({ paperId, paperNo, marks, retired, onPublish }: Pu
         return
       }
 
-      toast.success(t('publishDone', { no: result.paperNo }))
-      // Straight to the audience picker — the step this form deliberately
-      // does not duplicate.
-      router.push(`/exams/${result.examId}`)
+      /*
+       * The exam published. If only the audience failed to save, say so rather
+       * than celebrating — the paper page will show the "nobody chosen yet"
+       * warning and the picker to fix it.
+       */
+      if (result.assignmentError) {
+        toast.warning(t('publishedButNotAssigned'))
+      } else {
+        toast.success(t('publishDone', { no: result.paperNo }))
+      }
+
+      /*
+       * Stay with the paper. This used to push to /exams/[id] because that was
+       * the only place an audience could be chosen; the picker above removed
+       * that reason, and the paper's own page now carries the exam, its
+       * audience and its participation.
+       */
+      if (onPublished) onPublished(result.examId)
+      else router.refresh()
     })
   }
 
@@ -288,6 +334,33 @@ export function PublishPaper({ paperId, paperNo, marks, retired, onPublish }: Pu
         </div>
       </fieldset>
 
+      {/*
+        ┌───────────────────────────────────────────────────────────────────────┐
+        │ THE AUDIENCE IS LAST, AND IT IS THE STEP THAT MAKES THE EXAM REAL.    │
+        │                                                                       │
+        │ Everything above configures the sitting; this decides whether anybody │
+        │ can see it. It is placed immediately above the button so it is the    │
+        │ last thing read before publishing, rather than something scrolled     │
+        │ past on the way to it.                                                │
+        │                                                                       │
+        │ Absent for a caller who may publish but not assign — they finish on   │
+        │ the paper page, which states that nobody has been chosen.             │
+        └───────────────────────────────────────────────────────────────────────┘
+      */}
+      {directory && (
+        <fieldset className="rounded-lg border p-4">
+          <legend className="px-1 text-label-caps text-muted-foreground">
+            {t('publishAudience')}
+          </legend>
+          <AssignmentPicker
+            rows={audience}
+            onChange={setAudience}
+            options={directory}
+            disabled={pending}
+          />
+        </fieldset>
+      )}
+
       <div className="flex flex-wrap items-center gap-3">
         <Button disabled={pending} onClick={submit}>
           <MonitorPlayIcon />
@@ -295,7 +368,10 @@ export function PublishPaper({ paperId, paperNo, marks, retired, onPublish }: Pu
         </Button>
       </div>
 
-      <p className="text-body-sm text-muted-foreground">{t('publishHint')}</p>
+      {/* Only still true when nobody has been chosen in the step above. */}
+      {audience.length === 0 && (
+        <p className="text-body-sm text-muted-foreground">{t('publishHint')}</p>
+      )}
     </div>
   )
 }

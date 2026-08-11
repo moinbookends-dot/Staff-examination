@@ -86,10 +86,6 @@ export interface BankQuestionRow {
   /** Null for a short answer. The position, never the text — see 0054. */
   correctOption: OptionKey | null
 
-  referenceDocumentId: string | null
-  referenceDocumentTitle: string | null
-  referencePage: number | null
-
   texts: Partial<Record<BankLocale, BankQuestionText>>
 
   /**
@@ -146,13 +142,6 @@ export interface BankBrand {
  * pointing at a document whose bytes never arrived is a broken link on a
  * question, and the Editor has no way to tell from the picker.
  */
-export interface BankReferenceDocument {
-  id: string
-  title: string
-  kind: string
-  pageCount: number | null
-}
-
 /**
  * Everything the editor form needs besides the question itself.
  *
@@ -163,7 +152,6 @@ export interface BankReferenceDocument {
 export interface BankFormOptions {
   brands: BankBrand[]
   topics: BankTopic[]
-  documents: BankReferenceDocument[]
   /** Whether to render the UUID panel. Server-decided, never inferred. */
   showsUuid: boolean
 

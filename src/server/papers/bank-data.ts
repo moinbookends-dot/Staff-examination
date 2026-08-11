@@ -110,18 +110,17 @@ export async function loadFormOptions(): Promise<BankFormOptions> {
   const supabase = await createClient()
   const claims = await getAppClaims()
 
-  const [brands, topics, documents, settings] = await Promise.all([
+  /*
+   * The reference-document picker went with the Guide.
+   *
+   * source_documents was dropped, and with it the only way a question could
+   * cite a page in a cookbook. bank_questions.reference_document_id and
+   * reference_page were dropped in the same migration, so there is nothing
+   * left to populate a picker with.
+   */
+  const [brands, topics, settings] = await Promise.all([
     supabase.from('brands').select('id, name').is('deleted_at', null).order('name'),
     loadTopics(),
-    // Only documents whose bytes actually arrived. A citation pointing at a
-    // half-finished upload is a broken link on a question, and the Editor
-    // cannot tell from the picker.
-    supabase
-      .from('source_documents')
-      .select('id, title, kind, page_count, original_filename')
-      .eq('status', 'processed')
-      .is('deleted_at', null)
-      .order('title'),
     supabase.from('exam_settings').select('required_locales, label_easy, label_medium, label_hard').maybeSingle(),
   ])
 
@@ -139,13 +138,6 @@ export async function loadFormOptions(): Promise<BankFormOptions> {
   return {
     brands: (brands.data ?? []).map((b) => ({ id: b.id, name: b.name })),
     topics,
-    documents: (documents.data ?? []).map((d) => ({
-      id: d.id,
-      // title is nullable in SQL; the filename is what an Editor recognises.
-      title: d.title ?? d.original_filename,
-      kind: d.kind,
-      pageCount: d.page_count,
-    })),
     // Server-decided. The id is absent from the payload for anybody else, and
     // a field the server never sent cannot be recovered in the browser.
     showsUuid: canSeeQuestionUuid(claims),
@@ -344,15 +336,13 @@ export async function loadQuestionsForExport(brandId: string): Promise<ExportRow
     status: ExportRow['status']
     topic_id: string | null
     correct_option: string | null
-    reference_document_id: string | null
-    reference_page: number | null
   }
 
   const questions: QuestionRow[] = []
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await supabase
       .from('bank_questions')
-      .select('id, external_id, difficulty, qtype, status, topic_id, correct_option, reference_document_id, reference_page')
+      .select('id, external_id, difficulty, qtype, status, topic_id, correct_option')
       .eq('brand_id', brandId)
       .is('deleted_at', null)
       // A STABLE tiebreak. Ordering by difficulty alone leaves rows within a
@@ -406,17 +396,8 @@ export async function loadQuestionsForExport(brandId: string): Promise<ExportRow
     }
   }
 
-  // Separate queries rather than embeds — gen-types.mjs emits
-  // `Relationships: []`, so an embedded select cannot be typed.
-  const [topics, documents] = await Promise.all([
-    supabase.from('question_topics').select('id, slug'),
-    supabase.from('source_documents').select('id, title, original_filename'),
-  ])
-
-  const topicSlug = new Map((topics.data ?? []).map((t) => [t.id, t.slug]))
-  const docTitle = new Map(
-    (documents.data ?? []).map((d) => [d.id, d.title ?? d.original_filename]),
-  )
+  const { data: topicRows } = await supabase.from('question_topics').select('id, slug')
+  const topicSlug = new Map((topicRows ?? []).map((t) => [t.id, t.slug]))
 
   /*
    * The invariant the old code could not state: a question with no text is a
@@ -455,10 +436,19 @@ export async function loadQuestionsForExport(brandId: string): Promise<ExportRow
     status: q.status,
     topicSlug: q.topic_id ? (topicSlug.get(q.topic_id) ?? null) : null,
     correctOption: q.correct_option,
-    // The exporter names a document by TITLE, because that is what the import
-    // contract matches on — a UUID would not resolve in another company.
-    referenceTitle: q.reference_document_id ? (docTitle.get(q.reference_document_id) ?? null) : null,
-    referencePage: q.reference_page,
+    /*
+     * ALWAYS NULL NOW, AND THE FIELDS STAY IN THE CONTRACT ON PURPOSE.
+     *
+     * The document library is gone, so nothing can be cited and nothing can be
+     * resolved back to a title. The two keys remain in the export envelope
+     * because the import format was frozen with them and files generated
+     * against that contract must keep importing — see src/lib/bank/import.
+     *
+     * Consequence, stated plainly: a `reference` sent in is accepted and
+     * ignored, and does not come back out.
+     */
+    referenceTitle: null,
+    referencePage: null,
     texts: byQuestion.get(q.id) ?? [],
   }))
 }
@@ -483,7 +473,7 @@ export async function loadQuestion(id: string): Promise<BankQuestionRow | null> 
    */
   const { data, error } = await supabase
     .from('bank_questions')
-    .select('id, brand_id, difficulty, qtype, status, topic_id, correct_option, reference_document_id, reference_page, created_by, created_at, updated_at, deleted_at')
+    .select('id, brand_id, difficulty, qtype, status, topic_id, correct_option, created_by, created_at, updated_at, deleted_at')
     .eq('id', id)
     .maybeSingle()
 
@@ -540,9 +530,6 @@ export async function loadQuestion(id: string): Promise<BankQuestionRow | null> 
     topicId: data.topic_id,
     topicName: topic.data?.name ?? null,
     correctOption: data.correct_option as BankQuestionRow['correctOption'],
-    referenceDocumentId: data.reference_document_id,
-    referenceDocumentTitle: null,
-    referencePage: data.reference_page,
     texts: byLocale,
     completeLocales: complete,
     createdByName: author.data?.full_name ?? '—',

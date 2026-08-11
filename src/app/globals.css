@@ -380,6 +380,42 @@
   }
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   TOUCH TARGETS ON THE SIGNED-OUT SCREENS.
+
+   ╔═══════════════════════════════════════════════════════════════════════════╗
+   ║ 32px CONTROLS, FOR PEOPLE WHOSE ONLY DEVICE IS A PHONE.                   ║
+   ║                                                                           ║
+   ║ The shared Input is `h-8` (32px) and Button `lg` is `h-9` (36px), against ║
+   ║ the 44px both Apple and Google publish as the minimum. Everywhere else in ║
+   ║ the product that is a density choice on screens used by managers at a     ║
+   ║ desk. On login, register, verify and reset it is the first thing a        ║
+   ║ kitchen porter touches, one-handed, mid-shift, often with wet hands, and  ║
+   ║ getting it wrong locks the account after three tries.                     ║
+   ║                                                                           ║
+   ║ SCOPED, NOT GLOBAL. `Input` is used on every screen in the app; changing  ║
+   ║ its height would re-flow every table, filter bar and dialog in the        ║
+   ║ product to fix five pages. This attaches to the auth layout's <main> and  ║
+   ║ reaches only what is inside it.                                           ║
+   ║                                                                           ║
+   ║ min-height, not height: a control that needs to be taller — a select      ║
+   ║ showing a long outlet name, a wrapped button label — still can be.        ║
+   ╚═══════════════════════════════════════════════════════════════════════════╝
+
+   Not restricted to a max-width media query. A 44px target is not worse with a
+   mouse, and a breakpoint here would mean the layout a tester checks on a
+   desktop is not the one a porter uses. */
+[data-auth-surface] :is(input:not([type='hidden']), select, textarea) {
+  min-height: 2.75rem;
+}
+
+/* Buttons get the width too: an icon button is square, so min-height alone
+   would leave a 44×32 target that is still too narrow to hit. */
+[data-auth-surface] button {
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+}
+
 /* Respect the user's own setting. Motion is decoration here; nothing in the
    app depends on an animation completing. */
 @media (prefers-reduced-motion: reduce) {

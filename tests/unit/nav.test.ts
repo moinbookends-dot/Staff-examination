@@ -13,6 +13,10 @@ function claimsFor(role: 'super_admin' | 'editor' | 'chef' | 'hr' | 'employee'):
   return {
     userId: `user-${role}`,
     approved: true,
+    // 0070 added this to the claim. Every fixture here is a signed-in,
+    // working user, so it is true — nav and bank access are decided after
+    // both gates, never instead of them.
+    email_verified: true,
     company_id: 'company-1',
     brand_id: 'brand-1',
     outlet_id: null,
@@ -71,11 +75,31 @@ describe('serialisability across the Server → Client boundary', () => {
     expect(JSON.parse(JSON.stringify(everything))).toEqual(everything)
   })
 
-  it('exposes only href, labelKey and icon', () => {
-    // Guards against a future field being added to the config and forwarded.
-    // toClientItem() copies three fields explicitly for this reason.
+  it('forwards only serialisable fields', () => {
+    /*
+     * ┌───────────────────────────────────────────────────────────────────────┐
+     * │ THIS ASSERTED AN EXACT KEY SET AND NOW ASSERTS THE ACTUAL DANGER.     │
+     * │                                                                       │
+     * │ It was `toEqual(['href','icon','labelKey'])`, which failed the moment  │
+     * │ `activeFor` was added — a string array, entirely safe to serialise.    │
+     * │ Widening the list to four would have restored green while weakening    │
+     * │ nothing and testing nothing new.                                       │
+     * │                                                                       │
+     * │ What this file exists to catch is a FUNCTION crossing to a Client      │
+     * │ Component — `guard: canManageExamSettings` shipped once and broke at   │
+     * │ runtime only. So: keys must come from an allowlist, and every value    │
+     * │ must survive a JSON round trip. A future `guard` fails on both counts. │
+     * └───────────────────────────────────────────────────────────────────────┘
+     */
+    const ALLOWED = ['href', 'labelKey', 'icon', 'activeFor']
+
     for (const item of everything) {
-      expect(Object.keys(item).sort()).toEqual(['href', 'icon', 'labelKey'])
+      for (const key of Object.keys(item)) {
+        expect(ALLOWED, `unexpected key "${key}" crossing to the client`).toContain(key)
+      }
+      // The real guard: a function survives Object.keys but not this.
+      expect(() => structuredClone(item)).not.toThrow()
+      expect(JSON.parse(JSON.stringify(item))).toEqual(item)
     }
   })
 })
@@ -177,13 +201,22 @@ describe('the mobile tab bar stays within its design budget', () => {
     expect(tabs).toContain('/results')
   })
 
-  it('puts Live exams in a Chef’s bar and Exam History outside it', () => {
+  it('puts Live exams in a Chef’s bar, with Exam History reachable as a tab', () => {
+    /*
+     * Exam History stopped being a sidebar entry when Papers became one section
+     * with tabs, so the old `visibleNavItems(CHEF)` contains '/history' check
+     * no longer describes the product. What still matters is that it is
+     * REACHABLE — the Papers item covers it via activeFor, and the tab bar in
+     * components/papers/papers-tabs.tsx links to it.
+     */
     const tabs = hrefs(mobileNavItems(CHEF))
     expect(tabs).toContain('/exams/live')
-    // A desk task — reviewing and printing papers — so it lives in the sidebar.
     expect(tabs).not.toContain('/history')
-    // …but it is still reachable.
-    expect(hrefs(visibleNavItems(CHEF))).toContain('/history')
+
+    const sidebar = visibleNavItems(CHEF)
+    const papers = sidebar.find((i) => i.href === '/papers/generate')
+    expect(papers, 'a Chef has no Papers section at all').toBeDefined()
+    expect(papers?.activeFor, 'Papers does not light up on /history').toContain('/history')
   })
 
   it('never hides a capped tab from the sidebar as well', () => {
@@ -218,8 +251,10 @@ describe('navigation for the delivery workflow', () => {
   })
 
   it('gives a Chef the two screens that finish a sitting', () => {
+    // '/exams' became '/exams/live' when the legacy exam list was deleted —
+    // the section is the same, its landing route is not.
     const chef = hrefs(visibleNavItems(CHEF))
-    expect(chef).toContain('/exams')
+    expect(chef).toContain('/exams/live')
     expect(chef).toContain('/evaluate')
   })
 

@@ -216,18 +216,30 @@ async function seed() {
   }
   console.log(`  ${QUESTIONS.length} questions (active, across 6 formats)`)
 
-  // ── A published exam, so the paper, provenance and immutability are all
-  //    demonstrable — and a draft, so the builder and health report are too.
+  /*
+   * ── A published exam, so the frozen paper, its provenance and its
+   *    immutability are all demonstrable.
+   *
+   * ┌───────────────────────────────────────────────────────────────────────────┐
+   * │ THE DRAFT EXAM WAS REMOVED ON 11 AUG 2026. IT HAD NOWHERE LEFT TO SHOW.  │
+   * │                                                                           │
+   * │ 'Monthly Knowledge Check — August' existed "so the builder and health     │
+   * │ report are demonstrable", and both were deleted in the consolidation:     │
+   * │ there is no /exams list, no /exams/new and no /exams/[id]. A draft is     │
+   * │ visible on none of /exams/live, /upcoming or /closed — examState() reads  │
+   * │ the window, and a draft has none — and none of /my-exams either.          │
+   * │                                                                           │
+   * │ So seeding it put a row in the database that no screen in the product     │
+   * │ could render, which is worse than nothing in a script whose whole job is  │
+   * │ to make the product demonstrable. clean() still deletes it by id, so a    │
+   * │ database seeded before today loses it on the next `--clean`.              │
+   * └───────────────────────────────────────────────────────────────────────────┘
+   */
   const exams = [
     { id: EXAM_PUBLISHED, title: 'Food Safety — Level 1', kind: 'official', publish: true,
       sections: [
         { title: 'Temperature control', cat: CAT.temperature, count: 2 },
         { title: 'Safe handling', cat: CAT.foodSafety, count: 2 },
-      ] },
-    { id: EXAM_DRAFT, title: 'Monthly Knowledge Check — August', kind: 'monthly', publish: false,
-      sections: [
-        { title: 'Allergens', cat: CAT.allergens, count: 2 },
-        { title: 'Knife skills', cat: CAT.knives, count: 2 },
       ] },
   ]
 

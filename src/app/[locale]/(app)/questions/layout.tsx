@@ -1,4 +1,6 @@
-import { getAppClaims } from '@/lib/auth/claims'
+import { getTranslations } from 'next-intl/server'
+import { getAppClaims, can } from '@/lib/auth/claims'
+import { SectionTabs } from '@/components/shell/section-tabs'
 import { AuthorizationError, requireApproved } from '@/lib/auth/guards'
 import { canOpenQuestionBank } from '@/lib/auth/bank-access'
 
@@ -42,5 +44,37 @@ export default async function QuestionBankLayout({
     throw new AuthorizationError('The Question Bank is available to Editors only.', 'bank.read')
   }
 
-  return <>{children}</>
+  const t = await getTranslations('nav')
+
+  /*
+   * ┌───────────────────────────────────────────────────────────────────────────┐
+   * │ TOPICS AND IMPORT MOVED HERE FROM THE SIDEBAR.                            │
+   * │                                                                           │
+   * │ All three were separate nav entries, and useIsActive() lit /questions      │
+   * │ while on either child — so the sidebar showed two items highlighted at     │
+   * │ once and spent three rows on one section.                                  │
+   * │                                                                           │
+   * │ The tabs live in the LAYOUT rather than in each page so a new sub-route    │
+   * │ inherits them, exactly as it already inherits the guard above.             │
+   * │                                                                           │
+   * │ `exact` on Questions: /questions is a prefix of both siblings, so without  │
+   * │ it every tab would read as active on the Import screen.                    │
+   * └───────────────────────────────────────────────────────────────────────────┘
+   *
+   * Import is offered only to somebody who may actually import — a Super Admin
+   * reaching the bank still holds bank.import through the has_perm()
+   * short-circuit, so this is about role, not about hiding a broken link.
+   */
+  const tabs = [
+    { href: '/questions', label: t('questions'), exact: true },
+    { href: '/questions/topics', label: t('topics') },
+    ...(can(claims, 'bank.import') ? [{ href: '/questions/import', label: t('import') }] : []),
+  ]
+
+  return (
+    <div className="space-y-6">
+      <SectionTabs tabs={tabs} label={t('bank')} />
+      {children}
+    </div>
+  )
 }

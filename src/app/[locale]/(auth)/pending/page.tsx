@@ -1,7 +1,7 @@
 import { getTranslations } from 'next-intl/server'
 import { AuthCard } from '@/components/auth/auth-card'
 import { checkApprovalStatus, logoutAction } from '@/server/actions/auth'
-import { Button } from '@/components/ui/button'
+import { SignOutButton } from '@/components/auth/sign-out-button'
 import { PendingClient } from './pending-client'
 
 export default async function PendingPage({
@@ -29,9 +29,11 @@ export default async function PendingPage({
         <PendingClient initialStatus={status} initialReason={reason} />
 
         <form action={signOut}>
-          <Button type="submit" variant="ghost" size="sm" className="w-full">
-            {tc('signOut')}
-          </Button>
+          <SignOutButton
+            label={tc('signOut')}
+            pendingLabel={tc('loading')}
+            className="w-full"
+          />
         </form>
       </div>
     </AuthCard>

@@ -1,4 +1,5 @@
 import { getTranslations } from 'next-intl/server'
+import { PapersTabs } from '@/components/papers/papers-tabs'
 import { requirePermission } from '@/lib/auth/guards'
 import { getAppClaims } from '@/lib/auth/claims'
 import { createClient } from '@/lib/supabase/server'
@@ -100,6 +101,7 @@ export default async function GeneratePaperPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
+      <PapersTabs />
       <PageHeader title={t('generateTitle')} description={t('generateSubtitle')} />
 
       {availability.hasQuestions ? (

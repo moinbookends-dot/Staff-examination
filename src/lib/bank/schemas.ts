@@ -217,7 +217,6 @@ const baseQuestionSchema = z.object({
 
   status: questionStatusSchema.default('draft'),
 
-  referenceDocumentId: dbId().nullable().optional(),
   referencePage: z.coerce
     .number()
     .int()
@@ -303,15 +302,7 @@ function buildQuestionInputSchema(required: readonly BankLocale[]) {
    * flagged: "it is in the Capiche manual somewhere" is a legitimate
    * half-answer while an Editor is still looking for the page.
    */
-  .superRefine((value, ctx) => {
-    if (value.referencePage != null && !value.referenceDocumentId) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['referencePage'],
-        message: 'Choose the document this page number is in.',
-      })
-    }
-  })
+
 }
 
 /**
@@ -365,7 +356,6 @@ export const bankFiltersSchema = z.object({
   qtype: questionTypeSchema.optional(),
   status: questionStatusSchema.optional(),
   topicId: dbId().optional(),
-  referenceDocumentId: dbId().optional(),
   /** The recycle bin. Deliberately a separate view, not a status value. */
   deleted: z.coerce.boolean().optional(),
   locale: bankLocaleSchema.default('en'),
@@ -406,7 +396,6 @@ export function parseBankFilters(raw: Record<string, string | string[] | undefin
     qtype: pick(questionTypeSchema, 'qtype'),
     status: pick(questionStatusSchema, 'status'),
     topicId: pick(dbId(), 'topicId'),
-    referenceDocumentId: pick(dbId(), 'referenceDocumentId'),
     deleted: single('deleted') === '1' || single('deleted') === 'true',
     locale: pick(bankLocaleSchema, 'locale') ?? 'en',
     page: pick(z.coerce.number().int().min(1).max(10_000), 'page') ?? 1,
@@ -428,7 +417,6 @@ export function isNarrowed(filters: BankFilters): boolean {
       filters.difficulty ||
       filters.qtype ||
       filters.status ||
-      filters.topicId ||
-      filters.referenceDocumentId,
+      filters.topicId,
   )
 }

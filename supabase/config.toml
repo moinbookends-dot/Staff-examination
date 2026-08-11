@@ -179,7 +179,18 @@ enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
 enable_manual_linking = false
 # Passwords shorter than this value will be rejected as weak. Minimum 6, recommended 8 or more.
-minimum_password_length = 6
+#
+# 8, to match registerSchema and resetSchema in src/server/actions/auth.ts.
+# It was 6, and the gap was not academic: every path that reaches GoTrue
+# WITHOUT going through those schemas — updateUser from a client, the admin
+# API, a future screen — could set a 6-character password that the app's own
+# rules say is too short. The floor belongs at the auth server, where nothing
+# can route around it; the Zod rules then only decide how the message reads.
+#
+# NOTE: this file configures the LOCAL stack. The hosted project's value is set
+# under Authentication → Policies in the dashboard and must be changed there
+# too — see the checklist in scripts/check-auth.mjs.
+minimum_password_length = 8
 # Passwords that do not meet the following requirements will be rejected as weak. Supported values
 # are: `letters_digits`, `lower_upper_letters_digits`, `lower_upper_letters_digits_symbols`
 password_requirements = ""
