@@ -1,10 +1,12 @@
 import { redirect } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
-import { BellIcon, CircleHelpIcon, SearchIcon, UtensilsCrossedIcon } from 'lucide-react'
+import { CircleHelpIcon, SearchIcon, UtensilsCrossedIcon } from 'lucide-react'
 import { getAppClaims } from '@/lib/auth/claims'
 import { mobileNavItems, visibleFootItems, visibleNavItems } from '@/lib/auth/nav'
 import { logoutAction } from '@/server/actions/auth'
 import { MobileTabBar, SidebarNav } from '@/components/shell/app-nav'
+import { NotificationBell } from '@/components/shell/notification-bell'
+import { loadMyNotifications } from '@/server/actions/notifications'
 import { LocaleSwitcher } from '@/components/shell/locale-switcher'
 import { ThemeToggle } from '@/components/shell/theme-toggle'
 import { Button } from '@/components/ui/button'
@@ -61,6 +63,13 @@ export default async function AppLayout({
   const t = await getTranslations('app')
   const ts = await getTranslations('shell')
   const tc = await getTranslations('common')
+
+  /*
+   * The bell's data, read on the server so the badge is right in the first
+   * HTML frame rather than appearing a round trip later. Cheap: one select
+   * limited to ten rows and one head-only count.
+   */
+  const { items: notifications, unread } = await loadMyNotifications()
 
   const items = visibleNavItems(claims)
   const footItems = visibleFootItems(claims)
@@ -145,9 +154,7 @@ export default async function AppLayout({
           </div>
 
           <div className="ml-auto flex items-center gap-1 md:ml-0">
-            <Button variant="ghost" size="icon" aria-label={ts('notifications')} disabled>
-              <BellIcon />
-            </Button>
+            <NotificationBell items={notifications} unread={unread} />
             <Button variant="ghost" size="icon" aria-label={ts('help')} disabled>
               <CircleHelpIcon />
             </Button>

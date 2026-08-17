@@ -1,4 +1,5 @@
 import 'server-only'
+import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { appClaimsSchema, DENY_ALL, type AppClaims } from './can'
 
@@ -32,7 +33,31 @@ export type { AppClaims } from './can'
  * without try/catch at every site. Anything that must hard-fail should use
  * requirePermission() in ./guards.
  */
-export async function getAppClaims(): Promise<AppClaims> {
+export const getAppClaims = cache(async function getAppClaims(): Promise<AppClaims> {
+  /*
+   * ╔═══════════════════════════════════════════════════════════════════════════╗
+   * ║ MEMOISED PER REQUEST, AND THE COUNT IS WHY.                              ║
+   * ║                                                                           ║
+   * ║ Nothing here is expensive on its own, but it is called from every layer   ║
+   * ║ that needs to know who the caller is, and those layers do not know about  ║
+   * ║ each other. Measured call counts for ONE page render:                     ║
+   * ║                                                                           ║
+   * ║   /history/[id]  9×      /questions  7×      /dashboard  4×               ║
+   * ║                                                                           ║
+   * ║ Each one built a fresh Supabase client, re-read the cookie jar, ran       ║
+   * ║ initialize(), verified the JWT signature with WebCrypto and Zod-parsed    ║
+   * ║ the claim. Nine times, for an answer that cannot change inside a single   ║
+   * ║ request.                                                                  ║
+   * ║                                                                           ║
+   * ║ React's cache() scopes the memo to the request, so concurrent requests    ║
+   * ║ from different users never share an entry — which is the only property    ║
+   * ║ that makes memoising an AUTHORISATION lookup safe. A module-level Map     ║
+   * ║ here would be a cross-user data leak, not an optimisation.                ║
+   * ║                                                                           ║
+   * ║ IT DOES NOT WEAKEN ANYTHING. The verification still happens — once — and  ║
+   * ║ RLS re-checks every query at the database regardless.                     ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   */
   const supabase = await createClient()
 
   // ╔═════════════════════════════════════════════════════════════════════════╗
@@ -71,4 +96,4 @@ export async function getAppClaims(): Promise<AppClaims> {
   // access token hook is not enabled on the project. Symptom: every screen
   // empty, no errors anywhere. Run scripts/verify-auth-hook.mjs.
   return parsed.success ? { ...parsed.data, userId } : { ...DENY_ALL, userId }
-}
+})

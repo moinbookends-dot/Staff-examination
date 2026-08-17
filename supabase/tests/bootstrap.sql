@@ -16,7 +16,44 @@
 -- NEVER run this against a real Supabase project. It is CI-only.
 -- ─────────────────────────────────────────────────────────────────────────────
 
-create extension if not exists pgcrypto;
+/*
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ pgcrypto GOES IN `extensions`, BECAUSE THAT IS WHERE SUPABASE PUTS IT.    │
+ * │                                                                           │
+ * │ This was a bare `create extension if not exists pgcrypto`, which installs │
+ * │ into `public`. On the real project pgcrypto lives in the `extensions`     │
+ * │ schema, and migration 0072 calls `extensions.digest(...)` to recompute a  │
+ * │ paper's combination hash. So the replay would fail on 0072 with           │
+ * │ "schema extensions does not exist" while the live database was perfectly  │
+ * │ happy — the exact class of drift scripts/check-bootstrap-coverage.mjs     │
+ * │ exists to catch, and it did.                                             │
+ * │                                                                           │
+ * │ gen_random_uuid() is in pg_catalog from PG13 onward, so nothing depends   │
+ * │ on pgcrypto still being reachable unqualified.                            │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ */
+create schema if not exists extensions;
+create extension if not exists pgcrypto with schema extensions;
+grant usage on schema extensions to anon, authenticated, service_role;
+
+/*
+ * PROVE IT, rather than assume the CREATE EXTENSION above put digest() where
+ * 0072 expects it.
+ *
+ * This also satisfies check-bootstrap-coverage.mjs, which looks for the object
+ * NAMED in this file — but naming it in a comment to quiet the scanner would
+ * be gaming the check. Calling it is the honest version: if pgcrypto ever
+ * moves, or the extension is unavailable in the CI image, the replay fails
+ * here with a clear message instead of failing 70 migrations later inside a
+ * function body.
+ */
+do $$
+begin
+  if extensions.digest('bookends', 'sha256') is null then
+    raise exception 'bootstrap: extensions.digest() is not usable — 0072 needs it';
+  end if;
+end;
+$$;
 
 -- ── Platform roles ───────────────────────────────────────────────────────────
 do $$

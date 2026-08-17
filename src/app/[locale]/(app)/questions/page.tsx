@@ -28,11 +28,15 @@ import { cn } from '@/lib/utils'
  * ║ Found by scripts/check-shell.mjs asserting the route as well as the nav.  ║
  * ║ A hidden link is not an access control; the route has to refuse.          ║
  * ║                                                                           ║
- * ║ THE GATE IS canOpenQuestionBank, NOT requirePermission('bank.read'):      ║
- * ║ has_perm() short-circuits true for super_admin, so a permission check     ║
- * ║ alone would admit the one role that is deliberately excluded. The         ║
- * ║ predicate is the governance boundary and it is the same function the nav  ║
- * ║ and the server actions call.                                              ║
+ * ║ THE GATE IS canOpenQuestionBank rather than requirePermission('bank.read')║
+ * ║ because it is the SAME function the nav item, the layout and every bank   ║
+ * ║ server action call — one rule with four enforcement points.               ║
+ * ║                                                                           ║
+ * ║ It used to be load-bearing for a second reason that no longer holds: the  ║
+ * ║ predicate expressed a denial the permission model cannot, refusing        ║
+ * ║ super_admin even though has_perm('bank.read') returned true. That lockout ║
+ * ║ was removed on 10 Aug 2026 and 0071 granted the bank to `admin`, so the   ║
+ * ║ two now admit the same people.                                            ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  *
  * ┌───────────────────────────────────────────────────────────────────────────┐

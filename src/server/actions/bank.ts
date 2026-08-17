@@ -16,9 +16,10 @@ import type { BankMutationResult } from '@/lib/bank/types'
  * ╔═══════════════════════════════════════════════════════════════════════════╗
  * ║ THREE GATES, AND NONE OF THEM IS THE NAVIGATION.                          ║
  * ║                                                                           ║
- * ║   1. canOpenQuestionBank / canEditQuestions here — the governance         ║
- * ║      boundary, which excludes super_admin even though has_perm() returns  ║
- * ║      true for them.                                                       ║
+ * ║   1. canOpenQuestionBank / canEditQuestions here — the same predicates    ║
+ * ║      the nav, the layout and the page use, so all four agree by           ║
+ * ║      construction. (They used to also EXCLUDE super_admin; that lockout   ║
+ * ║      was removed on 10 Aug 2026 and 0071 granted the bank to `admin`.)    ║
  * ║   2. RLS on bank_questions and bank_question_texts (0055) — the real one. ║
  * ║      Every write below goes through the caller's own client.              ║
  * ║   3. The database's own constraints — shape by type, the completeness     ║

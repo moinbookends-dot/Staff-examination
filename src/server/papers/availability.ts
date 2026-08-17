@@ -160,7 +160,8 @@ export interface BankStatistics {
   archived: number
   byDifficulty: Record<Difficulty, number>
   papersGenerated: number
-  editors: number
+  /** People who can maintain the bank and run exams. Was the editor count until 0071 merged the two operational roles. */
+  administrators: number
 }
 
 /**
@@ -173,29 +174,73 @@ export interface BankStatistics {
 export async function loadBankStatistics(): Promise<BankStatistics> {
   const supabase = await createClient()
 
-  const [bank, papers, editors] = await Promise.all([
-    supabase.from('bank_questions').select('status, difficulty').is('deleted_at', null),
-    supabase.from('exam_papers').select('id', { count: 'exact', head: true }),
-    supabase
-      .from('user_roles')
-      .select('role_id, roles!inner(key)', { count: 'exact', head: true })
-      .eq('roles.key', 'editor'),
-  ])
+  /*
+   * ╔═══════════════════════════════════════════════════════════════════════════╗
+   * ║ THIS USED TO DOWNLOAD THE ENTIRE QUESTION BANK TO COUNT IT, AND PAST      ║
+   * ║ 1,000 QUESTIONS IT WOULD HAVE COUNTED WRONG WITHOUT SAYING SO.           ║
+   * ║                                                                           ║
+   * ║ The old query was:                                                        ║
+   * ║                                                                           ║
+   * ║   .from('bank_questions').select('status, difficulty').is('deleted_at',null)║
+   * ║                                                                           ║
+   * ║ — every row, on every dashboard render, counted in JavaScript with six    ║
+   * ║ .filter().length passes. Two things were wrong with it:                   ║
+   * ║                                                                           ║
+   * ║ 1. SIZE. The stated target is 3,000 questions per difficulty, 9,000 in    ║
+   * ║    total. That is a multi-megabyte transfer on the most-visited page in   ║
+   * ║    the product, to produce seven integers.                               ║
+   * ║                                                                           ║
+   * ║ 2. CORRECTNESS, which is worse. PostgREST caps a response at 1,000 rows   ║
+   * ║    by default. At 1,001 questions the dashboard would have started        ║
+   * ║    reporting 1,000 — quietly, with no error, forever. A counter that      ║
+   * ║    silently stops counting is more damaging than one that breaks.        ║
+   * ║                                                                           ║
+   * ║ Now: eight HEAD requests that transfer no rows at all, only               ║
+   * ║ Content-Range. The two sibling queries below always did it this way,      ║
+   * ║ which is how the omission stood out.                                      ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   */
+  const countOf = (build: (q: ReturnType<typeof bankQuery>) => ReturnType<typeof bankQuery>) =>
+    build(bankQuery())
 
-  const rows = bank.data ?? []
+  function bankQuery() {
+    return supabase
+      .from('bank_questions')
+      .select('id', { count: 'exact', head: true })
+      .is('deleted_at', null)
+  }
+
+  const [total, active, draft, archived, easy, medium, hard, papers, administrators] =
+    await Promise.all([
+      countOf((q) => q),
+      countOf((q) => q.eq('status', 'active')),
+      countOf((q) => q.eq('status', 'draft')),
+      countOf((q) => q.eq('status', 'archived')),
+      countOf((q) => q.eq('difficulty', 'easy')),
+      countOf((q) => q.eq('difficulty', 'medium')),
+      countOf((q) => q.eq('difficulty', 'hard')),
+      supabase.from('exam_papers').select('id', { count: 'exact', head: true }),
+      supabase
+        .from('user_roles')
+        .select('role_id, roles!inner(key)', { count: 'exact', head: true })
+        // 'editor' until migration 0071 retired that role and folded its
+        // question-bank permissions into 'admin'. Counting a role key that no
+        // longer exists would have shown a permanent zero on the dashboard.
+        .eq('roles.key', 'admin'),
+    ])
 
   return {
-    total: rows.length,
-    active: rows.filter((r) => r.status === 'active').length,
-    draft: rows.filter((r) => r.status === 'draft').length,
-    archived: rows.filter((r) => r.status === 'archived').length,
+    total: total.count ?? 0,
+    active: active.count ?? 0,
+    draft: draft.count ?? 0,
+    archived: archived.count ?? 0,
     byDifficulty: {
-      easy: rows.filter((r) => r.difficulty === 'easy').length,
-      medium: rows.filter((r) => r.difficulty === 'medium').length,
-      hard: rows.filter((r) => r.difficulty === 'hard').length,
+      easy: easy.count ?? 0,
+      medium: medium.count ?? 0,
+      hard: hard.count ?? 0,
     },
     papersGenerated: papers.count ?? 0,
-    editors: editors.count ?? 0,
+    administrators: administrators.count ?? 0,
   }
 }
 

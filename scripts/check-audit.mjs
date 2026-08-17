@@ -78,6 +78,30 @@ async function makeUser(roleKey) {
   made.push(id)
 
   await db.query(`update public.profiles set approval_status='approved' where id=$1`, [id])
+  /*
+   * A role key that matches nothing inserts nothing, and `on conflict do
+   * nothing` hides it — leaving a user with no permissions whose every
+   * refusal looks like a passing access-control check. Migration 0071
+   * renamed chef to admin and deleted editor; without this, that turned
+   * three check scripts into green lights with no bulb behind them.
+   *
+   * Existence is asserted separately from the INSERT on purpose:
+   * handle_new_user() already grants every signup the employee role, so
+   * inserting it again legitimately affects zero rows.
+   */
+  const roleRow = await db.query(
+    'select id from public.roles where key = $1 and company_id is null',
+    [roleKey],
+  )
+  if (roleRow.rowCount !== 1) {
+    const all = await db.query(
+      'select key from public.roles where company_id is null order by sort_order',
+    )
+    throw new Error(
+      `no role named '${roleKey}' exists — this check would have passed vacuously. ` +
+      `Roles are: ${all.rows.map((r) => r.key).join(', ')}`,
+    )
+  }
   await db.query(
     `insert into public.user_roles (user_id, role_id)
      select $1, id from public.roles where key=$2 and company_id is null on conflict do nothing`,
@@ -149,8 +173,17 @@ try {
     await db.query(`select slug from public.question_topics where deleted_at is null order by sort_order limit 1`)
   ).rows[0].slug
 
-  const editor = await makeUser('editor')
-  const chef = await makeUser('chef')
+  /*
+   * PERSONAS RE-POINTED BY MIGRATION 0071.
+   *
+   * `editor` became `admin` (the role that owns the bank) and the denial
+   * persona moved from `chef` to `hr`. Chef was renamed to admin AND granted
+   * the seven bank.* keys, so asserting a 403 for it would now assert the
+   * opposite of the product. HR still holds no bank key, so it is the honest
+   * subject for "somebody who may not export is refused".
+   */
+  const editor = await makeUser('admin')
+  const chef = await makeUser('hr')
   const superAdmin = await makeUser('super_admin')
 
   // ═══ 5. JSON IMPORT ═══════════════════════════════════════════════════════
@@ -341,7 +374,7 @@ try {
    * correct answer and is asserted positively below instead.
    */
   const denials = [
-    ['chef', chef.cookie, `?brand=${brands[0].id}`, 403],
+    ['hr', chef.cookie, `?brand=${brands[0].id}`, 403],
     ['signed out', null, `?brand=${brands[0].id}`, 403],
     ['nonexistent brand', editor.cookie, '?brand=00000000-0000-0000-0000-0000000000ff', 403],
     ['missing brand', editor.cookie, '', 400],

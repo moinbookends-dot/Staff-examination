@@ -21,9 +21,11 @@ import { exportFilename, toExportEnvelope } from '@/lib/bank/import/export'
  * ║ of that applies here and nothing has checked the session before this      ║
  * ║ function runs.                                                            ║
  * ║                                                                           ║
- * ║ It therefore repeats the full check: canOpenQuestionBank (which is what   ║
- * ║ locks a Super Admin out, since has_perm cannot express a denial) AND      ║
- * ║ bank.export. Getting this wrong would hand the entire question bank to    ║
+ * ║ It therefore repeats the full check: canOpenQuestionBank AND bank.export. ║
+ * ║ (canOpenQuestionBank once also locked a Super Admin out, since has_perm   ║
+ * ║ cannot express a denial; that lockout went on 10 Aug 2026 and 0071 gave   ║
+ * ║ the bank to `admin`. The pairing stays because export needs both.)        ║
+ * ║ Getting this wrong would hand the entire question bank to                 ║
  * ║ anybody who could guess the URL — which is exactly what an exam bank      ║
  * ║ must never do.                                                           ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝

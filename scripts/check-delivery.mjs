@@ -31,6 +31,8 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import pg from 'pg'
+import { claimFreePaper } from './free-paper.mjs'
+import { verdictOf } from './verdict.mjs'
 
 const APP = process.env.APP_URL ?? 'http://localhost:3000'
 
@@ -123,14 +125,12 @@ async function rpc(user, fn, args) {
   return res.ok ? { ok: true, data: body } : { ok: false, error: body, status: res.status }
 }
 
-function verdict(status) {
-  if (status === 200) return 'ALLOW'
-  if (status === 307 || status === 302) return 'REDIRECT'
-  if (status === 403) return 'DENY(403)'
-  if (status === 500) return 'DENY(500)'
-  if (status === 404) return 'NOTFOUND'
-  return `OTHER(${status})`
-}
+/*
+ * Reads the BODY, not just the status — see scripts/verdict.mjs. Since
+ * loading.tsx made these routes stream, a refused page answers 200 with the
+ * refusal digest in its payload, and a status-only check would call that ALLOW.
+ */
+const verdict = verdictOf
 
 let examId = null
 let attemptId = null
@@ -142,7 +142,10 @@ try {
 
   const chef = await signIn('sample-chef@example.com')
   const employee = await signIn('sample-employee@example.com')
-  const editor = await signIn('editor@example.com')
+  // HR replaces the editor persona retired with the role in 0071: HR holds
+  // neither exams.create nor exams.publish, so it is the honest subject for
+  // "somebody who may not publish is refused".
+  const hr = await signIn('sample-hr@example.com')
 
   const [{ id: employeeId, outlet_id: outletId }] = (
     await db.query(`select id, outlet_id from public.profiles where email = 'sample-employee@example.com'`)
@@ -155,25 +158,7 @@ try {
    * their row and — worse — its cleanup would be tempted to delete an exam it
    * did not create. It picks a free paper instead, and says so if there is none.
    */
-  const [paper] = (
-    await db.query(
-      `select p.id, p.paper_no, p.marks, p.mcq_n, p.short_n,
-              p.status, p.status_changed_at, p.status_changed_by
-         from public.exam_papers p
-        where p.status <> 'retired'
-          and not exists (
-            select 1 from public.exams e
-             where e.paper_id = p.id
-               and e.deleted_at is null
-               and e.status in ('draft', 'scheduled', 'active'))
-        order by p.generated_at desc limit 1`,
-    )
-  ).rows
-  if (!paper) {
-    throw new Error(
-      'every generated paper is already published as an open exam — generate one, or archive an exam, and re-run',
-    )
-  }
+  const paper = await claimFreePaper(db)
   paperId = paper.id
   /*
    * The WHOLE status triple, not just the status.
@@ -199,12 +184,12 @@ try {
   })
   check('an employee cannot publish', !asEmployee.ok, `${asEmployee.status}`)
 
-  const asEditor = await rpc(editor, 'publish_paper_as_exam', {
+  const asHr = await rpc(hr, 'publish_paper_as_exam', {
     p_paper_id: paper.id, p_title: 'x', p_duration_minutes: 30,
     p_opens_at: null, p_closes_at: CLOSES_AT, p_max_attempts: 1,
     p_pass_mark_percent: 60, p_instructions: null,
   })
-  check('an editor cannot publish — they author, chefs run exams', !asEditor.ok, `${asEditor.status}`)
+  check('HR cannot publish — they read, they do not run exams', !asHr.ok, `${asHr.status}`)
 
   const published = await rpc(chef, 'publish_paper_as_exam', {
     p_paper_id: paper.id,
@@ -388,7 +373,16 @@ try {
       [`/en/exams/upcoming`, 'DENY', 'the schedule'],
       [`/en/exams/closed`, 'DENY', 'closed exams'],
       [`/en/questions`, 'DENY', 'the question bank'],
-      [`/en/settings`, 'DENY', 'settings'],
+      /*
+       * ALLOW since 11 Aug 2026. /settings was company configuration behind
+       * settings.manage; it is now the candidate's OWN profile — their name,
+       * phone, language, and the role and outlet a manager gave them.
+       *
+       * The isolation that matters is asserted separately and still holds:
+       * loadMyProfile() reads through the caller's own client, so RLS scopes
+       * the row to auth.uid() and the page cannot show another person.
+       */
+      [`/en/settings`, 'ALLOW', 'their own profile'],
       [`/en/evaluate`, 'DENY', 'the marking queue'],
       [`/api/papers/${paperId}/en/paper.pdf`, 'DENY', 'THE PRINTED PAPER'],
       [`/api/papers/${paperId}/en/key.pdf`, 'DENY', 'THE ANSWER KEY'],
@@ -402,7 +396,7 @@ try {
     for (const [path, expect, note] of ROUTES) {
       const res = await fetch(`${APP}${path}`, { headers: { cookie: employee.cookie }, redirect: 'manual' })
       const body = await res.text()
-      const got = verdict(res.status)
+      const got = verdict(res.status, body)
       const pass = expect === 'ALLOW' ? got === 'ALLOW' : got !== 'ALLOW'
 
       check(`${expect.padEnd(5)} ${note}`, pass, `${got}  ${path.slice(0, 46)}`)

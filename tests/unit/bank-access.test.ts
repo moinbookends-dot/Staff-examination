@@ -26,7 +26,7 @@ import type { AppClaims } from '@/lib/auth/can'
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
-function claimsFor(role: 'super_admin' | 'editor' | 'chef' | 'hr' | 'employee'): AppClaims {
+function claimsFor(role: 'super_admin' | 'admin' | 'hr' | 'employee'): AppClaims {
   return {
     userId: `user-${role}`,
     approved: true,
@@ -46,16 +46,15 @@ function claimsFor(role: 'super_admin' | 'editor' | 'chef' | 'hr' | 'employee'):
 }
 
 const SUPER_ADMIN = claimsFor('super_admin')
-const EDITOR = claimsFor('editor')
-const CHEF = claimsFor('chef')
+const ADMIN = claimsFor('admin')
 const HR = claimsFor('hr')
 const EMPLOYEE = claimsFor('employee')
 
 describe('Question Bank access', () => {
   it('lets an Editor in', () => {
-    expect(canOpenQuestionBank(EDITOR)).toBe(true)
-    expect(canEditQuestions(EDITOR)).toBe(true)
-    expect(canSeeQuestionUuid(EDITOR)).toBe(true)
+    expect(canOpenQuestionBank(ADMIN)).toBe(true)
+    expect(canEditQuestions(ADMIN)).toBe(true)
+    expect(canSeeQuestionUuid(ADMIN)).toBe(true)
   })
 
   it('lets a Super Admin into every bank surface', () => {
@@ -81,27 +80,33 @@ describe('Question Bank access', () => {
     expect(canSeeQuestionUuid(SUPER_ADMIN)).toBe(true)
   })
 
-  it('keeps a Chef out of the bank', () => {
-    // Structural rather than a policy decision: a chef holds no bank.* key and
-    // no RLS policy on bank_questions admits them.
-    expect(canOpenQuestionBank(CHEF)).toBe(false)
-    expect(canEditQuestions(CHEF)).toBe(false)
-    expect(canSeeQuestionUuid(CHEF)).toBe(false)
-  })
-
+  /*
+   * ╔═══════════════════════════════════════════════════════════════════════════╗
+   * ║ "KEEPS A CHEF OUT OF THE BANK" WAS DELETED HERE, NOT RENAMED.            ║
+   * ║                                                                           ║
+   * ║ Migration 0071 renamed chef to admin and gave it the seven bank.* keys,  ║
+   * ║ so the assertion became the exact opposite of the product. A mechanical  ║
+   * ║ rename would have left this file asserting canOpenQuestionBank(ADMIN)    ║
+   * ║ both true and false, a few lines apart.                                  ║
+   * ║                                                                           ║
+   * ║ The boundary that still exists — and still matters — is HR and Employee, ║
+   * ║ who hold no bank key and must never see a question's answer. That is     ║
+   * ║ what the two tests below assert, from both directions.                   ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   */
   it('keeps HR and employees out of the bank', () => {
     for (const claims of [HR, EMPLOYEE]) {
       expect(canOpenQuestionBank(claims)).toBe(false)
+      expect(canEditQuestions(claims)).toBe(false)
       expect(canSeeQuestionUuid(claims)).toBe(false)
     }
   })
 
-  it('grants the UUID to Editors and Super Admins only', () => {
-    // The rule stated positively AND negatively, across every role. A Super
-    // Admin moved from `denied` to `allowed` with the 10 Aug 2026 change; a
-    // Chef, HR and an Employee are unaffected and still hold no bank key.
-    const allowed = [EDITOR, SUPER_ADMIN]
-    const denied = [CHEF, HR, EMPLOYEE]
+  it('grants the UUID to Administrators and Super Admins only', () => {
+    // The rule stated positively AND negatively, across every role, so neither
+    // direction can rot unnoticed.
+    const allowed = [ADMIN, SUPER_ADMIN]
+    const denied = [HR, EMPLOYEE]
 
     for (const claims of allowed) expect(canSeeQuestionUuid(claims)).toBe(true)
     for (const claims of denied) expect(canSeeQuestionUuid(claims)).toBe(false)
@@ -109,15 +114,14 @@ describe('Question Bank access', () => {
 })
 
 describe('paper generation access', () => {
-  it('lets a Chef generate and download', () => {
-    expect(canGeneratePapers(CHEF)).toBe(true)
-    expect(canReadPaperHistory(CHEF)).toBe(true)
+  it('lets an Administrator generate and download', () => {
+    expect(canGeneratePapers(ADMIN)).toBe(true)
+    expect(canReadPaperHistory(ADMIN)).toBe(true)
   })
 
-  it('lets an Editor generate too', () => {
-    // Not scope creep: an Editor is the only person able to judge whether a
-    // paper the bank produces is any good.
-    expect(canGeneratePapers(EDITOR)).toBe(true)
+  it('lets a Super Admin generate too', () => {
+    expect(canGeneratePapers(SUPER_ADMIN)).toBe(true)
+    expect(canReadPaperHistory(SUPER_ADMIN)).toBe(true)
   })
 
   it('lets HR read history but not generate', () => {
@@ -141,12 +145,11 @@ describe('administration', () => {
     expect(canOpenQuestionBank(SUPER_ADMIN)).toBe(true)
   })
 
-  it('does not let an Editor grant the Editor role', () => {
-    expect(canManageEditors(EDITOR)).toBe(false)
-  })
-
-  it('does not let a Chef grant roles', () => {
-    expect(canManageEditors(CHEF)).toBe(false)
+  it('does not let an Administrator grant roles', () => {
+    // Granting roles is users.assign_roles, which an Administrator does not
+    // hold. Running the examination system and deciding who else may run it
+    // are still separate powers — 0071 merged the operational roles, not this.
+    expect(canManageEditors(ADMIN)).toBe(false)
   })
 
   it('reserves the generation reset for the Super Admin', () => {
@@ -156,29 +159,35 @@ describe('administration', () => {
      * the intent: the safety valve exists and using it is conspicuous.
      */
     expect(canResetGenerationHistory(SUPER_ADMIN)).toBe(true)
-    for (const claims of [EDITOR, CHEF, HR, EMPLOYEE]) {
+    for (const claims of [ADMIN, HR, EMPLOYEE]) {
       expect(canResetGenerationHistory(claims)).toBe(false)
     }
   })
 
-  it('reserves settings for the Super Admin', () => {
+  it('opens settings to Administrators as well as Super Admins', () => {
+    // 0071 granted settings.manage to admin: the person who generates papers
+    // is now the person who configures how papers are built. Before it, the
+    // settings screen was unreachable by anyone who used it.
     expect(canManageExamSettings(SUPER_ADMIN)).toBe(true)
-    for (const claims of [EDITOR, CHEF, HR, EMPLOYEE]) {
+    expect(canManageExamSettings(ADMIN)).toBe(true)
+    for (const claims of [HR, EMPLOYEE]) {
       expect(canManageExamSettings(claims)).toBe(false)
     }
   })
 })
 
 describe('brand scoping', () => {
-  it('pins a Chef to their own brand', () => {
-    // Mirrors public.brand_unscoped() in 0056: a chef sees their brand's
-    // papers, an Editor maintains every brand's bank.
-    expect(canSwitchBrand(CHEF)).toBe(false)
+  it('lets Administrators and Super Admins move between brands', () => {
+    // canSwitchBrand mirrors public.brand_unscoped() in 0056: it is keyed on
+    // bank.read, which an Administrator now holds. Before 0071 a Chef was
+    // pinned to one brand precisely because they had no bank key.
+    expect(canSwitchBrand(ADMIN)).toBe(true)
+    expect(canSwitchBrand(SUPER_ADMIN)).toBe(true)
   })
 
-  it('lets Editors and Super Admins move between brands', () => {
-    expect(canSwitchBrand(EDITOR)).toBe(true)
-    expect(canSwitchBrand(SUPER_ADMIN)).toBe(true)
+  it('does not offer the brand switch to HR or an Employee', () => {
+    expect(canSwitchBrand(HR)).toBe(false)
+    expect(canSwitchBrand(EMPLOYEE)).toBe(false)
   })
 })
 
@@ -190,7 +199,7 @@ describe('the approval gate still applies', () => {
      * database. Asserted here because these predicates wrap can() and a future
      * rewrite could bypass it.
      */
-    const pendingEditor: AppClaims = { ...EDITOR, approved: false }
+    const pendingEditor: AppClaims = { ...ADMIN, approved: false }
 
     expect(canOpenQuestionBank(pendingEditor)).toBe(false)
     expect(canEditQuestions(pendingEditor)).toBe(false)

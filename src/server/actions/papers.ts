@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { getAppClaims, can } from '@/lib/auth/claims'
+import { loadEligibleQuestions, type EligibleQuestion } from '@/server/papers/paper-edit'
 import { canGeneratePapers } from '@/lib/auth/bank-access'
 import { createClient } from '@/lib/supabase/server'
 import { dbId } from '@/lib/db/id'
@@ -42,10 +43,22 @@ import type { GenerateOutcome } from '@/components/papers/generate-panel'
 
 const generateInput = z.object({
   difficulty: z.enum(DIFFICULTIES),
-  // Only the sizes the product offers. blueprintFor() would throw on anything
-  // that cannot split 80/20 into whole questions, and a thrown error inside a
-  // Server Action has no boundary to catch it.
-  marks: z.union([z.literal(PAPER_SIZES[0]), z.literal(PAPER_SIZES[1])]),
+  /*
+   * Only the sizes the product offers. blueprintFor() would throw on anything
+   * that cannot split 80/20 into whole questions, and a thrown error inside a
+   * Server Action has no boundary to catch it.
+   *
+   * WRITTEN AGAINST THE ARRAY'S LENGTH, NOT AGAINST TWO FIXED ENTRIES. This
+   * was `z.union([z.literal(PAPER_SIZES[0]), z.literal(PAPER_SIZES[1])])`,
+   * which stopped compiling the moment the 50-mark size was retired and
+   * PAPER_SIZES became a one-element tuple — z.union also requires at least
+   * two members, so it could never have expressed a single size. A refinement
+   * over the array is correct for one size or ten.
+   */
+  marks: z.number().refine(
+    (n): n is (typeof PAPER_SIZES)[number] => (PAPER_SIZES as readonly number[]).includes(n),
+    { message: 'That paper size is not offered.' },
+  ),
   brandId: dbId().optional(),
 })
 
@@ -386,5 +399,134 @@ export async function publishPaperAsExam(raw: unknown): Promise<PublishPaperResu
     examId: result.data.examId,
     paperNo: result.data.paperNo,
     assignmentError,
+  }
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * Saving an edited paper, and finding a question to put on it.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║ ONE SAVE, NOT ONE REQUEST PER CHANGE.                                     ║
+ * ║                                                                           ║
+ * ║ Removing, replacing and reordering all happen in the browser as local     ║
+ * ║ state. Nothing reaches the database until Save is pressed, and then the   ║
+ * ║ WHOLE list goes at once.                                                  ║
+ * ║                                                                           ║
+ * ║ That is not only about latency, though a round trip to this project costs ║
+ * ║ a measured ~120ms and nobody should pay it to nudge question 7 up one     ║
+ * ║ place. It is about validity: the invariants are properties of the whole   ║
+ * ║ paper — the MCQ/short split, the total, no duplicates — and a paper that  ║
+ * ║ is briefly 19 questions long between two requests is a paper that could   ║
+ * ║ be published in that state if the second request never arrives.           ║
+ * ║                                                                           ║
+ * ║ NO OPTIMISTIC UPDATE ON THE SAVE ITSELF. The local list can move freely;  ║
+ * ║ whether the SAVE succeeded is answered by the server and nothing else. An ║
+ * ║ optimistic "saved!" that later turned out to be a duplicate paper or an   ║
+ * ║ ineligible question would be a lie about an exam.                         ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+const editInput = z.object({
+  paperId: dbId(),
+  questions: z
+    .array(
+      z.object({
+        questionId: dbId(),
+        questionNo: z.number().int().min(1).max(200),
+        section: z.enum(['mcq', 'short_answer']),
+      }),
+    )
+    // Bounded so a malformed client cannot post a million rows at the RPC. The
+    // real composition rules are the database's — this only stops nonsense
+    // arriving.
+    .min(1)
+    .max(200),
+})
+
+export type SavePaperResult =
+  | { ok: true; paperNo: number; questions: number }
+  | { ok: false; message: string }
+
+export async function savePaperQuestions(raw: unknown): Promise<SavePaperResult> {
+  const claims = await getAppClaims()
+
+  if (!canGeneratePapers(claims) || !claims.company_id) {
+    return { ok: false, message: 'You are not permitted to edit a paper.' }
+  }
+
+  const parsed = editInput.safeParse(raw)
+  if (!parsed.success) {
+    return { ok: false, message: 'That paper could not be saved. Reload and try again.' }
+  }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('edit_paper_questions', {
+    p_paper_id: parsed.data.paperId,
+    p_questions: parsed.data.questions,
+  })
+
+  if (error) {
+    /*
+     * 0072's messages are written for this screen and are surfaced verbatim —
+     * "Paper 8 needs 16 MCQ and 4 short answers; got 15 and 5" tells somebody
+     * exactly what to do, and a generic "could not be saved" does not.
+     *
+     * The exception is no_data_found, which covers both "no such paper" and
+     * "not yours". Those must stay indistinguishable.
+     */
+    if (error.code === 'P0002') return { ok: false, message: 'That paper could not be found.' }
+    return { ok: false, message: error.message }
+  }
+
+  const result = z
+    .object({ paperNo: z.number().int(), questions: z.number().int() })
+    .safeParse(data)
+
+  if (!result.success) {
+    return { ok: false, message: 'The paper was saved but its new state could not be read.' }
+  }
+
+  revalidatePath('/history')
+  revalidatePath(`/history/${parsed.data.paperId}`)
+
+  return { ok: true, paperNo: result.data.paperNo, questions: result.data.questions }
+}
+
+const eligibleInput = z.object({
+  paperId: dbId(),
+  topicId: dbId().nullable().optional(),
+  qtype: z.enum(['mcq', 'short_answer']).nullable().optional(),
+  search: z.string().trim().max(200).nullable().optional(),
+})
+
+export type EligibleResult =
+  | { ok: true; questions: EligibleQuestion[] }
+  | { ok: false; message: string }
+
+/**
+ * Candidates for a replacement.
+ *
+ * DIFFICULTY IS NOT A FILTER, here or in the RPC. A paper is one difficulty,
+ * fixed when it was generated, and the product rule is that difficulty is
+ * never inferred. Offering it as a control would imply a paper can mix levels.
+ */
+export async function findEligibleQuestions(raw: unknown): Promise<EligibleResult> {
+  const claims = await getAppClaims()
+  if (!canGeneratePapers(claims)) {
+    return { ok: false, message: 'You are not permitted to edit a paper.' }
+  }
+
+  const parsed = eligibleInput.safeParse(raw)
+  if (!parsed.success) return { ok: false, message: 'Those filters could not be read.' }
+
+  try {
+    const questions = await loadEligibleQuestions(parsed.data.paperId, {
+      topicId: parsed.data.topicId ?? null,
+      qtype: parsed.data.qtype ?? null,
+      search: parsed.data.search ?? null,
+    })
+    return { ok: true, questions }
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : 'The bank could not be read.' }
   }
 }

@@ -65,8 +65,10 @@ function grantedKeysFor(roleId: string): string[] {
  * puts the error on this object, where the fix is.
  */
 const ROLE_IDS: Record<Exclude<RoleKey, 'super_admin'>, string> = {
-  editor: '00000000-0000-0000-0000-00000000e005',
-  chef: '00000000-0000-0000-0000-00000000e002',
+  // …e002 was 'chef' until migration 0071 renamed it in place. The id is
+  // deliberately unchanged: renaming rather than replacing is what let every
+  // user_roles and role_permissions row follow the role automatically.
+  admin: '00000000-0000-0000-0000-00000000e002',
   hr: '00000000-0000-0000-0000-00000000e003',
   employee: '00000000-0000-0000-0000-00000000e004',
 }
@@ -151,5 +153,67 @@ describe('permission key hygiene', () => {
       (p) => p.endsWith('.read_all') || p.endsWith('.read_team'),
     )
     expect(leaks, 'employees may read only their own records').toEqual([])
+  })
+})
+
+describe('the Editor role is retired (migration 0071)', () => {
+  /*
+   * ╔═══════════════════════════════════════════════════════════════════════════╗
+   * ║ "REMOVED" HAS TO MEAN REMOVED FROM EVERY SOURCE OF TRUTH, NOT JUST ONE.  ║
+   * ║                                                                           ║
+   * ║ A role lives in four places here: ROLE_KEYS, DEFAULT_ROLE_PERMISSIONS,    ║
+   * ║ the seed, and the database. Deleting it from one and not the others is    ║
+   * ║ the failure mode worth a test — a stale seed would recreate the role on   ║
+   * ║ the next `npm run db:seed`, quietly undoing the migration and handing     ║
+   * ║ somebody bank access through a role nothing in the app knows about.       ║
+   * ║                                                                           ║
+   * ║ The live database is asserted separately, by scripts/check-authz.mjs,     ║
+   * ║ which now refuses to run at all if a persona names a role that does not   ║
+   * ║ exist.                                                                    ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   */
+  it('is absent from ROLE_KEYS', () => {
+    expect(ROLE_KEYS as readonly string[]).not.toContain('editor')
+    expect(ROLE_KEYS as readonly string[]).not.toContain('chef')
+  })
+
+  it('is absent from DEFAULT_ROLE_PERMISSIONS', () => {
+    expect(Object.keys(DEFAULT_ROLE_PERMISSIONS)).not.toContain('editor')
+    expect(Object.keys(DEFAULT_ROLE_PERMISSIONS)).not.toContain('chef')
+  })
+
+  it('is not re-created by the seed', () => {
+    /*
+     * COMMENTS ARE STRIPPED FIRST, and that is not a detail.
+     *
+     * The first version of this test scanned the raw INSERT and failed on the
+     * seed's own line explaining the rename — `-- Renamed from 'chef' by
+     * migration 0071`. A scanner that cannot tell code from prose reports the
+     * documentation as the defect, which is the third time this repository has
+     * hit that exact trap (see check-bootstrap-coverage.mjs and 0068's guard).
+     */
+    const start = seedSql.indexOf('insert into public.roles')
+    const sql = seedSql
+      .slice(start, seedSql.indexOf('on conflict do nothing', start))
+      .split('\n')
+      .map((line) => line.replace(/--.*$/, ''))
+      .join('\n')
+
+    expect(sql).not.toContain("'editor'")
+    expect(sql).not.toContain("'chef'")
+    expect(sql).toContain("'admin'")
+  })
+
+  it('leaves the Administrator holding both halves of the old split', () => {
+    // The whole point of 0071: one role that can fill the bank AND run an exam.
+    const admin = DEFAULT_ROLE_PERMISSIONS.admin
+    for (const authoring of ['bank.read', 'bank.write', 'bank.import', 'bank.export']) {
+      expect(admin, `admin lost the editor half: ${authoring}`).toContain(authoring)
+    }
+    for (const delivery of ['exams.publish', 'evaluation.evaluate', 'users.approve']) {
+      expect(admin, `admin lost the chef half: ${delivery}`).toContain(delivery)
+    }
+    // And the key that made the settings screen unreachable by anyone who used it.
+    expect(admin).toContain('settings.manage')
   })
 })

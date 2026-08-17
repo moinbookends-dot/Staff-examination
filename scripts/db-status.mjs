@@ -92,7 +92,7 @@ const { rows: tables } = await db.query(
     where table_schema = 'public'
       and table_name in ('bank_questions','bank_question_texts','question_topics',
                          'exam_papers','exam_settings','paper_settings','paper_counters',
-                         'jobs','difficulty_levels','questions','profiles')
+                         'difficulty_levels','questions','profiles')
     order by table_name`,
 )
 console.log('\n  RELEVANT TABLES PRESENT:')

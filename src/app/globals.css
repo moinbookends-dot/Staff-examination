@@ -416,6 +416,26 @@
   min-width: 2.75rem;
 }
 
+/* A STANDALONE LINK IS A BUTTON WITH A DIFFERENT HAT.
+   "Back to sign in", "Request a new link", "Wrong address?" and the forgot-
+   password link are the only route onward from four of these screens, and they
+   measured 20px tall — under half the minimum, and the easiest thing on the
+   page to miss.
+
+   `:not(p a)` is the whole rule: a link inside a paragraph is prose ("Already
+   registered? Sign in"), and spacing those out to 44px would tear the sentence
+   apart. Everything else is a control.
+
+   `display: flex` rather than padding: it keeps the full-width `block`
+   variants full-width and centred, while a link that is already a flex item —
+   the right-aligned "Forgot password?" — still shrinks to its own content. */
+[data-auth-surface] a:not(p a) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+}
+
 /* Respect the user's own setting. Motion is decoration here; nothing in the
    app depends on an animation completing. */
 @media (prefers-reduced-motion: reduce) {

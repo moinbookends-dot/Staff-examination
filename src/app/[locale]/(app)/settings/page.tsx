@@ -1,149 +1,96 @@
-import { getTranslations } from 'next-intl/server'
-import { LockIcon } from 'lucide-react'
-import { requirePermission } from '@/lib/auth/guards'
+import { getFormatter, getTranslations } from 'next-intl/server'
+import { notFound } from 'next/navigation'
 import { PageHeader } from '@/components/ui/page-header'
-import { Badge } from '@/components/ui/badge'
-import { blueprintFor, PAPER_SIZES } from '@/lib/papers/blueprint'
-import { BANK_LOCALES, BANK_LOCALE_LABELS, DIFFICULTIES } from '@/lib/bank/vocabulary'
+import { loadMyProfile } from '@/server/actions/profile'
+import { ProfileForm } from './profile-form'
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * Settings, per the Stitch design.
+ * /settings — your own details.
  *
  * ╔═══════════════════════════════════════════════════════════════════════════╗
- * ║ THE 80/20 SPLIT IS PRINTED, NOT EDITED — AND THE STITCH DESIGN OFFERS     ║
- * ║ FIELDS FOR IT.                                                            ║
+ * ║ THIS ROUTE CHANGED MEANING ON 11 AUG 2026, AND ITS GUARD CHANGED WITH IT. ║
  * ║                                                                           ║
- * ║ That screen shows "MCQ Count [10]" and "Short Answer Count [5]" as        ║
- * ║ number inputs, with short answers worth 2 marks each. This product does   ║
- * ║ not work that way: every question is worth exactly one mark, so a paper   ║
- * ║ SIZE determines its own split — 20 can only ever be 16 + 4.               ║
+ * ║ It used to be COMPANY configuration — paper sizes, required languages,    ║
+ * ║ difficulty labels, PDF header and footer — behind                         ║
+ * ║ requirePermission('settings.manage'), so HR and every employee got a 500. ║
  * ║                                                                           ║
- * ║ An input here would have no legal value other than the one already        ║
- * ║ shown. Rendering it as a field would be a control whose every edit is     ║
- * ║ rejected by paper_settings' CHECK constraint, which is a worse experience ║
- * ║ than not offering it.                                                     ║
+ * ║ Two things were true of that screen: the owner did not want it, and it    ║
+ * ║ could not do anything. It rendered a <dl> of values with no form, no      ║
+ * ║ inputs and no save — there is no exam_settings mutation anywhere in the   ║
+ * ║ application. Nothing was lost by replacing it, and the underlying         ║
+ * ║ exam_settings row is untouched and still read by the bank and the PDFs.   ║
  * ║                                                                           ║
- * ║ So the numbers are DERIVED by blueprintFor() — the same function the      ║
- * ║ generator uses — and shown with the rule beside them. The visual intent   ║
- * ║ of the design (this is where you understand the paper format) is kept;    ║
- * ║ the editability is not.                                                   ║
+ * ║ It is now the one screen every signed-in person needs and did not have:   ║
+ * ║ what am I in this system, and how do I correct my own name?               ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  *
- * Everything below is read-only in this pass. The write path needs
- * exam_settings, which arrives with the migrations; the form fields and their
- * validation schema land with the server action rather than as inputs that
- * silently discard what somebody types.
+ * THE GUARD IS requireApproved(), NOT a permission. Editing your own name is
+ * not a privilege anybody grants — it is the floor. loadMyProfile() applies it
+ * and reads through the caller's own client, so RLS scopes the row to
+ * auth.uid() and this page cannot be pointed at somebody else.
  * ═══════════════════════════════════════════════════════════════════════════
  */
-export default async function SettingsPage() {
-  await requirePermission('settings.manage')
+/**
+ * At module scope, not inside the page.
+ *
+ * Declaring it in the render body makes a NEW component type on every render,
+ * which React cannot reconcile — it unmounts and remounts the subtree rather
+ * than updating it. `react-hooks/static-components` catches this, and it is
+ * right to: the same mistake on a component that held state would lose what
+ * the user had typed.
+ */
+function Fact({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <dt className="text-label-caps text-muted-foreground">{label}</dt>
+      <dd className="mt-0.5 text-body-sm">{children}</dd>
+    </div>
+  )
+}
 
-  const t = await getTranslations('papers')
+export default async function ProfilePage() {
+  const t = await getTranslations('profile')
+  const format = await getFormatter()
+
+  const profile = await loadMyProfile()
+
+  // requireApproved() has already thrown for anybody unapproved; a null here
+  // means the profile row is genuinely absent, which is a 404 rather than an
+  // empty screen pretending to be a profile.
+  if (!profile) notFound()
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <PageHeader title={t('settingsTitle')} description={t('settingsSubtitle')} />
+    <div className="mx-auto max-w-3xl space-y-6">
+      <PageHeader title={t('title')} description={t('subtitle')} />
 
-      {/* ── Paper format ─────────────────────────────────────────────────── */}
+      {/* ── What you can change ──────────────────────────────────────────── */}
       <section className="rounded-xl border bg-card p-5">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-title-md">{t('settingsPaper')}</h2>
-          <Badge variant="outline" className="gap-1.5">
-            <LockIcon aria-hidden className="size-3" />
-            80 / 20
-          </Badge>
-        </div>
-
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          {PAPER_SIZES.map((marks) => {
-            const blueprint = blueprintFor(marks)
-            return (
-              <div key={marks} className="rounded-lg border p-4">
-                <span className="text-label-caps text-muted-foreground">
-                  {t('sizeMarks', { marks })}
-                </span>
-                <p className="mt-2 text-title-md">
-                  {t('sizeBreakdown', {
-                    mcq: blueprint.mcqCount,
-                    short: blueprint.shortAnswerCount,
-                  })}
-                </p>
-              </div>
-            )
-          })}
-        </div>
-
-        <p className="mt-4 text-body-sm text-muted-foreground">{t('distributionLocked')}</p>
-
-        <dl className="mt-4 border-t pt-4">
-          <dt className="text-label-caps text-muted-foreground">{t('passingPercent')}</dt>
-          <dd className="mt-1 text-body-md">—</dd>
-          <dd className="text-body-sm text-muted-foreground">{t('passingHint')}</dd>
-        </dl>
+        <h2 className="text-title-md">{t('yourDetails')}</h2>
+        <p className="mt-1 mb-4 text-body-sm text-muted-foreground">{t('yourDetailsHint')}</p>
+        <ProfileForm profile={profile} />
       </section>
 
-      {/* ── Languages ────────────────────────────────────────────────────── */}
+      {/* ── What a manager set ───────────────────────────────────────────── */}
       <section className="rounded-xl border bg-card p-5">
-        <h2 className="text-title-md">{t('settingsLanguages')}</h2>
-        <p className="mt-1 text-body-sm text-muted-foreground">{t('requiredLanguagesHint')}</p>
-
-        <div className="mt-4 flex flex-wrap gap-2">
-          {BANK_LOCALES.map((locale) => (
-            <Badge
-              key={locale}
-              // English is the floor: the bank is authored in it and the
-              // duplicate-refusal index is scoped to it. hi and gu become
-              // required by editing exam_settings.required_locales.
-              variant={locale === 'en' ? 'default' : 'outline'}
-            >
-              {BANK_LOCALE_LABELS[locale]}
-            </Badge>
-          ))}
-        </div>
-      </section>
-
-      {/* ── Difficulty labels ────────────────────────────────────────────── */}
-      <section className="rounded-xl border bg-card p-5">
-        <h2 className="text-title-md">{t('settingsDifficulty')}</h2>
-        <p className="mt-1 text-body-sm text-muted-foreground">{t('labelsHint')}</p>
-
-        <dl className="mt-4 grid gap-3 sm:grid-cols-3">
-          {DIFFICULTIES.map((d) => (
-            <div key={d} className="rounded-lg border p-4">
-              {/* The enum value in mono, the label beneath it. The point of the
-                  hint above is that the left-hand side never changes, so it is
-                  shown rather than described. */}
-              <dt className="text-label-caps text-muted-foreground">{d}</dt>
-              <dd className="mt-1 text-body-md">{t(`difficulty.${d}`)}</dd>
-            </div>
-          ))}
-        </dl>
-      </section>
-
-      {/* ── PDF ──────────────────────────────────────────────────────────── */}
-      <section className="rounded-xl border bg-card p-5">
-        <h2 className="text-title-md">{t('settingsPdf')}</h2>
+        <h2 className="text-title-md">{t('yourPlace')}</h2>
+        <p className="mt-1 text-body-sm text-muted-foreground">{t('yourPlaceHint')}</p>
 
         <dl className="mt-4 grid gap-4 sm:grid-cols-2">
-          <div>
-            <dt className="text-label-caps text-muted-foreground">{t('pdfHeader')}</dt>
-            <dd className="mt-1 text-body-md">—</dd>
-            <dd className="text-body-sm text-muted-foreground">{t('pdfHeaderHint')}</dd>
-          </div>
-          <div>
-            <dt className="text-label-caps text-muted-foreground">{t('pdfFooter')}</dt>
-            <dd className="mt-1 text-body-md">—</dd>
-          </div>
-          <div>
-            <dt className="text-label-caps text-muted-foreground">{t('pdfLogo')}</dt>
-            <dd className="mt-1 text-body-md">—</dd>
-          </div>
-          <div>
-            <dt className="text-label-caps text-muted-foreground">{t('pdfWatermark')}</dt>
-            <dd className="mt-1 text-body-md">—</dd>
-            <dd className="text-body-sm text-muted-foreground">{t('pdfWatermarkHint')}</dd>
-          </div>
+          <Fact label={t('email')}>{profile.email}</Fact>
+          <Fact label={t('role')}>
+            {profile.roles.length > 0 ? profile.roles.join(', ') : t('noRole')}
+          </Fact>
+          <Fact label={t('company')}>{profile.companyName ?? t('unset')}</Fact>
+          <Fact label={t('brand')}>{profile.brandName ?? t('unset')}</Fact>
+          <Fact label={t('outlet')}>{profile.outletName ?? t('unset')}</Fact>
+          <Fact label={t('department')}>{profile.departmentName ?? t('unset')}</Fact>
+          <Fact label={t('employeeCode')}>{profile.employeeCode ?? t('unset')}</Fact>
+          <Fact label={t('joined')}>
+            {profile.joinedAt
+              ? format.dateTime(new Date(profile.joinedAt), { dateStyle: 'medium' })
+              : format.dateTime(new Date(profile.createdAt), { dateStyle: 'medium' })}
+          </Fact>
         </dl>
       </section>
     </div>

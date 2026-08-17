@@ -25,6 +25,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import pg from 'pg'
+import { verdictOf } from './verdict.mjs'
 
 const APP = process.env.APP_URL ?? 'http://localhost:3000'
 const PASSWORD = 'authz-check-password-1'
@@ -74,6 +75,45 @@ async function makeUser(roleKey) {
   made.push(id)
 
   await db.query(`update public.profiles set approval_status='approved' where id=$1`, [id])
+  /*
+   * ╔═══════════════════════════════════════════════════════════════════════╗
+   * ║ THE rowCount CHECK IS THE POINT OF THIS BLOCK.                        ║
+   * ║                                                                       ║
+   * ║ `insert … select … where key=$2` inserts NOTHING when the key matches ║
+   * ║ no role, and `on conflict do nothing` swallows that silently. The user ║
+   * ║ is then created with no role at all — and every DENY in the matrix    ║
+   * ║ below passes, because a user with no permissions is refused           ║
+   * ║ everything.                                                           ║
+   * ║                                                                       ║
+   * ║ That is exactly what happened after migration 0071 renamed chef to    ║
+   * ║ admin and deleted editor: this script reported a clean run while      ║
+   * ║ proving nothing whatsoever about either role. A permission matrix     ║
+   * ║ that passes because nobody has any permissions is worse than no       ║
+   * ║ matrix — it is a green light with no bulb behind it.                  ║
+   * ╚═══════════════════════════════════════════════════════════════════════╝
+   */
+  const role = await db.query(
+    'select id from public.roles where key = $1 and company_id is null',
+    [roleKey],
+  )
+  if (role.rowCount !== 1) {
+    const all = await db.query(
+      'select key from public.roles where company_id is null order by sort_order',
+    )
+    throw new Error(
+      `no role named '${roleKey}' exists — this check would have passed vacuously. ` +
+        `Roles are: ${all.rows.map((r) => r.key).join(', ')}`,
+    )
+  }
+
+  /*
+   * Existence is checked ABOVE, separately from the insert, and the two are
+   * not the same question. handle_new_user() (0003) already grants 'employee'
+   * to every new signup, so inserting it again legitimately affects zero rows.
+   * An earlier version asserted rowCount on the INSERT and refused to run at
+   * all for the employee persona — the guard was right about the danger and
+   * wrong about where to look for it.
+   */
   await db.query(
     `insert into public.user_roles (user_id, role_id)
      select $1, id from public.roles where key=$2 and company_id is null on conflict do nothing`,
@@ -108,14 +148,12 @@ async function makeUser(roleKey) {
  * would be a bug. Both are reported verbatim so nothing is hidden behind a
  * label.
  */
-function verdict(status) {
-  if (status === 200) return 'ALLOW'
-  if (status === 307 || status === 302) return 'REDIRECT'
-  if (status === 403) return 'DENY(403)'
-  if (status === 500) return 'DENY(500)'
-  if (status === 404) return 'NOTFOUND'
-  return `OTHER(${status})`
-}
+/*
+ * Reads the BODY, not just the status — see scripts/verdict.mjs. Since
+ * loading.tsx made these routes stream, a refused page answers 200 with the
+ * refusal digest in its payload, and a status-only check would call that ALLOW.
+ */
+const verdict = verdictOf
 
 const ROUTES = [
   ['/en/dashboard', 'page'],
@@ -129,6 +167,9 @@ const ROUTES = [
   ['/en/questions/quality', 'no-page'],
   ['/en/questions/topics', 'page'],
   ['/en/questions/import', 'page'],
+  // Everybody signed in: /settings is now the person's own profile, scoped
+  // by RLS to auth.uid(). It was admin-only company configuration until
+  // 11 Aug 2026.
   ['/en/settings', 'page'],
   ['/api/bank/export?brand=00000000-0000-0000-0000-00000000b001', 'api'],
   ['/api/bank/export', 'api'],
@@ -144,8 +185,9 @@ try {
 
   const cookies = {
     super_admin: await makeUser('super_admin'),
-    editor: await makeUser('editor'),
-    chef: await makeUser('chef'),
+    admin: await makeUser('admin'),
+    hr: await makeUser('hr'),
+    employee: await makeUser('employee'),
     'signed-out': null,
   }
 
@@ -160,7 +202,7 @@ try {
       })
       const body = await res.text()
 
-      results[path][role] = verdict(res.status)
+      results[path][role] = verdict(res.status, body)
 
       // The assertion that matters more than the status: no denied response
       // may contain question data.
@@ -172,7 +214,7 @@ try {
   }
 
   // ── Print the matrix ─────────────────────────────────────────────────────
-  const roles = ['super_admin', 'editor', 'chef', 'signed-out']
+  const roles = ['super_admin', 'admin', 'hr', 'employee', 'signed-out']
   const pad = (s, n) => String(s).padEnd(n)
 
   console.log('')

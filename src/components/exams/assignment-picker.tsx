@@ -28,6 +28,26 @@ import type { DirectoryOption, PersonOption } from '@/server/actions/directory'
  * ║ id; ExamAssignments saves them straight away. One picker, two moments.    ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║ THE HALF-MADE CHOICE IS PART OF THE VALUE, NOT PRIVATE STATE.             ║
+ * ║                                                                           ║
+ * ║ Picking "Role · Employee" and pressing Save used to assign NOBODY. The    ║
+ * ║ two dropdowns were local state that only `add()` ever read, so a choice   ║
+ * ║ made but not Added was invisible to the parent — which then saved the     ║
+ * ║ list without it and reported success. Publishing did the same thing, and  ║
+ * ║ there it is worse: the exam goes live, reaches no one, and the only clue  ║
+ * ║ is a warning on a page nobody has a reason to revisit.                    ║
+ * ║                                                                           ║
+ * ║ So `pending` is lifted to the caller and withPending() folds it in at     ║
+ * ║ submit. A selection the reader can SEE is a selection that counts, and    ║
+ * ║ the failure is structurally gone rather than warned about — the parent    ║
+ * ║ cannot save the list without also holding the unadded choice.             ║
+ * ║                                                                           ║
+ * ║ "+ Add" stays. It is how several targets get chosen and it is where the   ║
+ * ║ duplicate is refused; it is simply no longer the only way a choice is     ║
+ * ║ kept.                                                                     ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
  * Five target kinds. Four are groups; the fifth names one person, which exists
  * so a retake does not mean raising max_attempts for everybody who already
  * passed.
@@ -69,26 +89,70 @@ export function toAssignmentInput(rows: AssignmentRow[]) {
   }))
 }
 
+/** What the two dropdowns are showing but the reader has not Added yet. */
+export interface PendingSelection {
+  kind: AssignmentTarget
+  /** '' while the "Which" dropdown is still on its placeholder. */
+  value: string
+}
+
+/** Outlet first, nothing chosen — the state both callers start in. */
+export const NO_PENDING: PendingSelection = { kind: 'outlet', value: '' }
+
+/** A pending selection as a row, or null when nothing is chosen. */
+export function pendingRow(pending: PendingSelection): AssignmentRow | null {
+  if (!pending.value) return null
+
+  return {
+    target_kind: pending.kind,
+    target_id: pending.kind === 'role' || pending.kind === 'user' ? null : pending.value,
+    target_role: pending.kind === 'role' ? pending.value : null,
+    target_user_id: pending.kind === 'user' ? pending.value : null,
+  }
+}
+
+/**
+ * The rows to actually save: what was Added, plus what is still on screen.
+ *
+ * EVERY submit path must go through this. A duplicate is dropped rather than
+ * appended — it is already in `rows`, so folding it in again would only trip
+ * the unique index to no purpose.
+ */
+export function withPending(rows: AssignmentRow[], pending: PendingSelection): AssignmentRow[] {
+  const row = pendingRow(pending)
+  if (!row) return rows
+
+  const already = rows.some(
+    (r) => r.target_kind === row.target_kind && assignmentValue(r) === assignmentValue(row),
+  )
+
+  return already ? rows : [...rows, row]
+}
+
 const selectClass =
   'h-9 rounded-md border border-input bg-transparent px-2 text-sm disabled:opacity-50'
 
 export function AssignmentPicker({
   rows,
   onChange,
+  pending,
+  onPendingChange,
   options,
   disabled = false,
   readOnly = false,
 }: {
   rows: AssignmentRow[]
   onChange: (rows: AssignmentRow[]) => void
+  /** Held by the caller so submitting can fold it in — see the box above. */
+  pending: PendingSelection
+  onPendingChange: (pending: PendingSelection) => void
   options: DirectoryOptions
   disabled?: boolean
   /** Show the chosen audience but offer no controls. */
   readOnly?: boolean
 }) {
   const t = useTranslations('exams.assign')
-  const [kind, setKind] = useState<AssignmentTarget>('outlet')
-  const [value, setValue] = useState('')
+  const { kind, value } = pending
   const [error, setError] = useState<string | null>(null)
 
   const optionsFor = (target: AssignmentTarget): DirectoryOption[] => {
@@ -123,16 +187,8 @@ export function AssignmentPicker({
     }
 
     setError(null)
-    onChange([
-      ...rows,
-      {
-        target_kind: kind,
-        target_id: kind === 'role' || kind === 'user' ? null : value,
-        target_role: kind === 'role' ? value : null,
-        target_user_id: kind === 'user' ? value : null,
-      },
-    ])
-    setValue('')
+    onChange(withPending(rows, pending))
+    onPendingChange({ kind, value: '' })
   }
 
   return (
@@ -173,10 +229,9 @@ export function AssignmentPicker({
             <Label className="text-xs">{t('assignTo')}</Label>
             <select
               value={kind}
-              onChange={(e) => {
-                setKind(e.target.value as AssignmentTarget)
-                setValue('')
-              }}
+              onChange={(e) =>
+                onPendingChange({ kind: e.target.value as AssignmentTarget, value: '' })
+              }
               disabled={disabled}
               aria-label={t('assignTo')}
               className={selectClass}
@@ -193,7 +248,7 @@ export function AssignmentPicker({
             <Label className="text-xs">{t('which')}</Label>
             <select
               value={value}
-              onChange={(e) => setValue(e.target.value)}
+              onChange={(e) => onPendingChange({ kind, value: e.target.value })}
               disabled={disabled}
               aria-label={t('which')}
               className={`${selectClass} w-full`}

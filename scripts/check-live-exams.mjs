@@ -26,6 +26,8 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import pg from 'pg'
+import { claimFreePaper } from './free-paper.mjs'
+import { verdictOf } from './verdict.mjs'
 
 const APP = process.env.APP_URL ?? 'http://localhost:3000'
 const PASSWORD = 'Sample-2026!'
@@ -144,25 +146,13 @@ try {
 
   const chef = await signIn('sample-chef@example.com')
   const employee = await signIn('sample-employee@example.com')
-  const editor = await signIn('editor@example.com')
   const hr = await signIn('sample-hr@example.com')
 
   const [{ outlet_id: outletId }] = (
     await db.query(`select outlet_id from public.profiles where email='sample-employee@example.com'`)
   ).rows
 
-  const [paper] = (
-    await db.query(
-      `select p.id, p.paper_no, p.marks, p.status, p.status_changed_at, p.status_changed_by
-         from public.exam_papers p
-        where p.status <> 'retired'
-          and not exists (
-            select 1 from public.exams e
-             where e.paper_id = p.id and e.deleted_at is null
-               and e.status in ('draft','scheduled','active'))
-        order by p.generated_at desc limit 1`)
-  ).rows
-  if (!paper) throw new Error('no free paper — every generated paper is already published')
+  const paper = await claimFreePaper(db)
   paperId = paper.id
   paperWas = { status: paper.status, at: paper.status_changed_at, by: paper.status_changed_by }
 
@@ -252,9 +242,44 @@ try {
   await db.query(`update public.exams set closes_at = now() - interval '1 minute' where id=$1`, [liveId])
   check('past the deadline it is CLOSED', (await stateOf(liveId)) === 'closed')
 
-  const firstQuestion = (await db.query(
-    `select question_id from public.attempt_questions where attempt_id=$1 limit 1`, [attemptId]
-  )).rows[0].question_id
+  /*
+   * ╔═══════════════════════════════════════════════════════════════════════════╗
+   * ║ `limit 1` WITH NO `order by` IS NOT "THE FIRST QUESTION". IT IS A DICE    ║
+   * ║ ROLL, AND IT MADE THIS SCRIPT FAIL ABOUT HALF THE TIME.                   ║
+   * ║                                                                           ║
+   * ║ Postgres is free to return any row when nothing orders the result, and    ║
+   * ║ every paper here carries both MCQs and short answers. The save below      ║
+   * ║ hard-coded a choice_single payload, so whenever the roll produced a       ║
+   * ║ text_short question the database refused it:                              ║
+   * ║                                                                           ║
+   * ║   22023 answer format does not match                                      ║
+   * ║                                                                           ║
+   * ║ — reported as "a running attempt keeps its own clock when the exam        ║
+   * ║ deadline moves", an assertion about expiry that had nothing to do with    ║
+   * ║ the actual failure. It went unnoticed because a single run passes more    ║
+   * ║ often than not; it only showed up running the suite back to back.         ║
+   * ║                                                                           ║
+   * ║ Fixed at both ends: ORDER BY position, so the same question is chosen     ║
+   * ║ every run, and the answer is BUILT FROM the question's own snapshot       ║
+   * ║ rather than assumed — so this keeps testing expiry no matter which        ║
+   * ║ question sits at position 1 in a future blueprint.                        ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   */
+  const [firstRow] = (await db.query(
+    `select question_id,
+            snapshot->>'response_format' as fmt,
+            snapshot->'options'->0->>'id' as first_option
+       from public.attempt_questions
+      where attempt_id = $1
+      order by position
+      limit 1`,
+    [attemptId],
+  )).rows
+  const firstQuestion = firstRow.question_id
+  const firstAnswer =
+    firstRow.fmt === 'choice_single'
+      ? { format: 'choice_single', choice: firstRow.first_option ?? 'a' }
+      : { format: 'text_short', text: 'An answer, for the expiry check.' }
 
   /*
    * ┌───────────────────────────────────────────────────────────────────────────┐
@@ -277,7 +302,7 @@ try {
   const stillOpen = await rpc(employee, 'save_answer', {
     p_attempt_id: attemptId,
     p_question_id: firstQuestion,
-    p_answer: { format: 'choice_single', choice: 'a' },
+    p_answer: firstAnswer,
   })
   check('a running attempt keeps its own clock when the exam deadline moves',
     stillOpen.ok, JSON.stringify(stillOpen.error ?? '').slice(0, 80))
@@ -293,12 +318,30 @@ try {
         set started_at = now() - interval '2 hours',
             expires_at = now() - interval '1 minute'
       where id = $1`, [attemptId])
+  /*
+   * THE SAME `firstAnswer`, AND HERE IT MATTERS MORE THAN ABOVE.
+   *
+   * This asserts a REFUSAL. The hardcoded choice_single payload made it pass
+   * whenever the drawn question was a short answer — because a 22023 "answer
+   * format does not match" is also a refusal. So on roughly half of all runs
+   * this check reported that expiry was enforced without ever exercising
+   * expiry, and it would have gone on reporting that if the expiry rule were
+   * deleted outright.
+   *
+   * With a well-formed answer the only thing left to refuse it is the clock,
+   * and the assertion below insists the refusal actually says so.
+   */
   const late = await rpc(employee, 'save_answer', {
     p_attempt_id: attemptId,
     p_question_id: firstQuestion,
-    p_answer: { format: 'choice_single', choice: 'b' },
+    p_answer: firstAnswer,
   })
-  check('an answer after the ATTEMPT expires is refused', !late.ok, `${late.status}`)
+  const lateMessage = JSON.stringify(late.error ?? '')
+  check(
+    'an answer after the ATTEMPT expires is refused',
+    !late.ok && !/format does not match/.test(lateMessage),
+    `${late.status} ${lateMessage.slice(0, 80)}`,
+  )
 
   const lateStart = await rpc(employee, 'start_attempt', { p_exam_id: liveId })
   check('a new attempt after the deadline is refused', !lateStart.ok, `${lateStart.status}`)
@@ -386,9 +429,12 @@ try {
     leaked.length === 0,
     leaked.length ? `${leaked.length} score(s) LEAKED before release` : '')
 
-  const partsEditor = await rpc(editor, 'exam_participants', { p_exam_id: monId })
-  check('an editor cannot read the per-employee table', !partsEditor.ok, `${partsEditor.status}`)
-
+  /*
+   * The editor probe was removed with the role in 0071. Its point — "a role
+   * without attempts.read_* cannot see who scored what" — is still proved by
+   * the candidate probe below, and the HR probe after it is the positive
+   * control that stops both from passing against a broken RPC.
+   */
   const partsEmployee = await rpc(employee, 'exam_participants', { p_exam_id: monId })
   check('a candidate cannot read the per-employee table', !partsEmployee.ok, `${partsEmployee.status}`)
 
@@ -404,11 +450,11 @@ try {
   } else {
     section(`direct URL, by typing the address (${APP})`)
 
-    const people = { chef, editor, hr, employee }
+    const people = { chef, hr, employee }
     const expect = {
-      '/en/exams/live':     { chef: 'ALLOW', editor: 'DENY', hr: 'ALLOW', employee: 'DENY' },
-      '/en/exams/upcoming': { chef: 'ALLOW', editor: 'DENY', hr: 'ALLOW', employee: 'DENY' },
-      '/en/exams/closed':   { chef: 'ALLOW', editor: 'DENY', hr: 'ALLOW', employee: 'DENY' },
+      '/en/exams/live':     { chef: 'ALLOW', hr: 'ALLOW', employee: 'DENY' },
+      '/en/exams/upcoming': { chef: 'ALLOW', hr: 'ALLOW', employee: 'DENY' },
+      '/en/exams/closed':   { chef: 'ALLOW', hr: 'ALLOW', employee: 'DENY' },
     }
 
     /*
@@ -428,13 +474,19 @@ try {
       headers: { cookie: chef.cookie },
       redirect: 'manual',
     })
-    check('there is no per-exam admin page left behind', gone.status === 404, `got ${gone.status}`)
+    const goneBody = await gone.text()
+    check(
+      'there is no per-exam admin page left behind',
+      verdictOf(gone.status, goneBody) === 'NOTFOUND',
+      `got ${verdictOf(gone.status, goneBody)}`,
+    )
 
     for (const [path, wanted] of Object.entries(expect)) {
       for (const [who, user] of Object.entries(people)) {
         const res = await fetch(`${APP}${path}`, { headers: { cookie: user.cookie }, redirect: 'manual' })
         const body = await res.text()
-        const allowed = res.status === 200
+        // Body-aware: a refused page streams 200 now. See scripts/verdict.mjs.
+        const allowed = verdictOf(res.status, body) === 'ALLOW'
         const want = wanted[who] === 'ALLOW'
         check(`${wanted[who].padEnd(5)} ${who.padEnd(9)} ${path.slice(0, 40)}`,
           allowed === want, `got ${res.status}`)

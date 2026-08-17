@@ -60,6 +60,13 @@ const ICONS: Record<NavIcon, LucideIcon> = {
  * `activeFor` adds prefixes a section owns but does not share a path with —
  * Papers is one item covering /papers/generate and /history, and without it the
  * sidebar would go dark on the paper page.
+ *
+ * IT ALSO ABSORBS A PER-VIEWER HREF. The Papers item resolves its href from the
+ * reader's permissions (nav.ts, `hrefFor`): a generate-holder lands on
+ * /papers/generate, somebody with history access alone lands on /history. Both
+ * prefixes stay in `activeFor` for both of them, so the rule below —
+ * `matches(href) || any(matches(activeFor))` — lights the item on either route
+ * regardless of which one it points at.
  */
 function useIsActive() {
   const pathname = usePathname()

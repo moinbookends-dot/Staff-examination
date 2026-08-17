@@ -25,6 +25,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import pg from 'pg'
+import { verdictOf } from './verdict.mjs'
 
 const APP = process.env.APP_URL ?? 'http://localhost:3000'
 const PASSWORD = 'shell-check-password-1'
@@ -88,16 +89,23 @@ try {
   await db.query(`update public.profiles set approval_status='approved' where id=$1`, [userId])
 
   /*
-   * Give the account the chef role.
+   * Give the account the admin role.
    *
-   * Chef is the harder case for the bug being verified: they hold NO bank.*
-   * permission, so visibleNavItems() filters items out and mobileNavItems()
-   * returns four tabs rather than five. If anything about the guard evaluation
-   * or the stripping is wrong, a chef hits it first.
+   * This said "chef", and that role no longer exists — 0071 renamed it to
+   * admin and granted it the bank. The rest of the paragraph described why a
+   * chef was the harder case (no bank.* permission, so items are filtered out
+   * and the tab bar renders four rather than five), and that is no longer true
+   * of this account either: an admin holds everything.
+   *
+   * The role kept here is still the right one for what this script verifies —
+   * that the shell renders at all and no guard function crosses to a client
+   * component. The role most likely to expose a FILTERING mistake is now HR,
+   * and that is covered by render-check.mjs, which holds the only
+   * authenticated HR session in the repository.
    */
   await db.query(
     `insert into public.user_roles (user_id, role_id)
-     select $1, id from public.roles where key='chef' and company_id is null
+     select $1, id from public.roles where key='admin' and company_id is null
      on conflict do nothing`,
     [userId],
   )
@@ -198,9 +206,18 @@ try {
    * │ analytics is separate work.                                             │
    * └─────────────────────────────────────────────────────────────────────────┘
    */
+  /*
+   * ┌─────────────────────────────────────────────────────────────────────────┐
+   * │ TWO ENTRIES LEFT THIS LIST ON 11 AUG 2026 — MIGRATION 0071.             │
+   * │                                                                         │
+   * │ /questions and /settings were forbidden because this account held the   │
+   * │ `chef` role, which had no bank.* key and no settings.manage. 0071        │
+   * │ renamed chef to admin and granted both, so asserting they are hidden     │
+   * │ would now assert the opposite of the product. They are asserted as       │
+   * │ REACHABLE in the route sweep below instead — moved, not dropped.        │
+   * └─────────────────────────────────────────────────────────────────────────┘
+   */
   const forbidden = [
-    ['/en/questions', 'the Question Bank'],
-    ['/en/settings', 'Settings'],
     ['/en/verify', 'Verify'],
     ['/en/reports', 'Analytics'],
   ]
@@ -208,8 +225,23 @@ try {
   for (const [href, what] of forbidden) {
     check(
       !new RegExp(`href="${href}"`).test(dash.html),
-      `a chef is offered no link to ${what}`,
-      `a chef was offered ${what} (${href}) — check the page body, not just the nav`,
+      `an admin is offered no link to ${what}`,
+      `an admin was offered ${what} (${href}) — check the page body, not just the nav`,
+    )
+  }
+
+  // The positive half of the same idea: the sections this role exists to use
+  // must actually be offered, or "nothing forbidden appeared" would pass just
+  // as well against a sidebar that rendered nothing at all.
+  for (const [href, what] of [
+    ['/en/questions', 'the Question Bank'],
+    ['/en/papers/generate', 'Papers'],
+    ['/en/exams/live', 'Live exams'],
+  ]) {
+    check(
+      new RegExp(`href="${href}"`).test(dash.html),
+      `an admin is offered ${what}`,
+      `an admin was NOT offered ${what} (${href})`,
     )
   }
 
@@ -240,34 +272,53 @@ try {
    * │ one that exists.                                                        │
    * └─────────────────────────────────────────────────────────────────────────┘
    */
+  /*
+   * ╔═══════════════════════════════════════════════════════════════════════════╗
+   * ║ EVERY EXPECTATION IN THIS BLOCK FLIPPED FROM 500 TO 200 ON 11 AUG 2026.   ║
+   * ║                                                                           ║
+   * ║ This account holds `admin`, which migration 0071 created by renaming      ║
+   * ║ `chef` and granting it the seven bank.* keys plus settings.manage. The    ║
+   * ║ whole point of that migration was that one role can now run an            ║
+   * ║ examination end to end — fill the bank, generate the paper, publish it,   ║
+   * ║ mark it — so a check asserting the bank REFUSES this role would be        ║
+   * ║ asserting the bug the migration fixed.                                    ║
+   * ║                                                                           ║
+   * ║ The refusals still worth proving moved to the roles that genuinely lack   ║
+   * ║ the permission: scripts/check-authz.mjs runs the same routes as HR and    ║
+   * ║ an Employee, and both are still refused there.                            ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   */
   for (const [path, expected, why] of [
-    ['/en/papers/generate', 200, 'a chef can reach Generate'],
-    ['/en/history', 200, 'a chef can reach Exam History'],
-    ['/en/questions', 500, 'a chef is REFUSED the Question Bank'],
-    // The sub-routes. These were reachable at 200 by a chef until a layout
-    // gated the whole subtree — each page carried requirePermission
-    // ('questions.read'), which the chef role holds.
-    ['/en/questions/new', 500, 'a chef is REFUSED Create Question'],
-    // Topic Management sits inside the same subtree and is therefore covered by
-    // the same gate. Asserted separately rather than assumed: the layout is what
-    // protects it, and a future route added OUTSIDE the subtree would look
-    // identical in nav.ts while being wide open.
-    ['/en/questions/topics', 500, 'a chef is REFUSED Topic Management'],
+    ['/en/papers/generate', 200, 'an admin can reach Generate'],
+    ['/en/history', 200, 'an admin can reach Exam History'],
+    ['/en/questions', 200, 'an admin can reach the Question Bank'],
+    ['/en/questions/new', 200, 'an admin can reach Create Question'],
+    ['/en/questions/topics', 200, 'an admin can reach Topic Management'],
     // The import screen is the one route that can write thousands of rows in a
-    // single act, so it gets its own assertion rather than relying on the
+    // single act, so it keeps its own assertion rather than relying on the
     // subtree gate being remembered.
-    ['/en/questions/import', 500, 'a chef is REFUSED Import'],
-    // The subtree layout runs BEFORE route resolution, so even a path with no
-    // page refuses rather than 404s — the gate cannot be probed for which
-    // editor routes exist.
-    ['/en/questions/00000000-0000-0000-0000-0000000000ff', 500, 'a chef is REFUSED Edit Question'],
-    ['/en/settings', 500, 'a chef is REFUSED Settings'],
+    ['/en/questions/import', 200, 'an admin can reach Import'],
+    // /settings became the user's own profile on 11 Aug 2026 and lost its
+    // settings.manage guard with it. Still 200 for an admin — but now for
+    // the reason that everybody reaches it, which check-authz asserts.
+    ['/en/settings', 200, 'an admin can reach their profile'],
+    // Still a refusal, and deliberately so: the subtree layout runs BEFORE
+    // route resolution, so an id that matches no question must not 404 and
+    // reveal which ids exist. 404 here is the page's own not-found.
+    ['/en/questions/00000000-0000-0000-0000-0000000000ff', 'NOTFOUND', 'an unknown question is not found rather than erroring'],
   ]) {
     const res = await get(path)
+    /*
+     * Compared as a VERDICT, not a status. loading.tsx made these routes
+     * stream, so Next flushes 200 before the page runs and notFound() can no
+     * longer set 404 — the signal moved into the body. See scripts/verdict.mjs.
+     */
+    const got = verdictOf(res.status, res.html)
+    const want = expected === 200 ? 'ALLOW' : expected
     check(
-      res.status === expected,
-      `${why} (${res.status})`,
-      `${path} returned ${res.status}, expected ${expected}`,
+      got === want,
+      `${why} (${got})`,
+      `${path} was ${got}, expected ${want}`,
     )
     check(
       !/Functions cannot be passed directly to Client Components/.test(res.html),
@@ -292,16 +343,16 @@ try {
 
   const badId = await get('/en/history/not-a-uuid')
   check(
-    badId.status === 404,
-    `a malformed paper id is 404 (${badId.status})`,
-    `/en/history/not-a-uuid returned ${badId.status}, expected 404`,
+    verdictOf(badId.status, badId.html) === 'NOTFOUND',
+    `a malformed paper id is not found (${verdictOf(badId.status, badId.html)})`,
+    `/en/history/not-a-uuid was ${verdictOf(badId.status, badId.html)}, expected NOTFOUND`,
   )
 
   const missingId = await get('/en/history/00000000-0000-0000-0000-0000000000ff')
   check(
-    missingId.status === 404,
-    `an unknown paper id is 404 (${missingId.status})`,
-    `an unknown paper id returned ${missingId.status}, expected 404`,
+    verdictOf(missingId.status, missingId.html) === 'NOTFOUND',
+    `an unknown paper id is not found (${verdictOf(missingId.status, missingId.html)})`,
+    `an unknown paper id was ${verdictOf(missingId.status, missingId.html)}, expected NOTFOUND`,
   )
 
   for (const res of [badId, missingId, historyEmpty]) {
@@ -324,20 +375,28 @@ try {
    * │ checked the session before the handler runs. Its own check is the only   │
    * │ thing standing between a caller and the entire question bank as a file.  │
    * │                                                                         │
-   * │ Asserted for a chef AND signed out, because those fail on different      │
-   * │ lines of the handler.                                                   │
+   * │ Asserted for an admin (who MAY) and signed out (who may not), because    │
+   * │ those take different paths through the handler.                          │
+   * │                                                                         │
+   * │ THE ADMIN EXPECTATION FLIPPED ON 11 AUG 2026. It asserted a 403,         │
+   * │ because this account held `chef` and the export needs bank.export.       │
+   * │ Migration 0071 granted it. Keeping the 403 would have meant asserting    │
+   * │ that the role which owns the bank cannot take a backup of it.            │
+   * │                                                                         │
+   * │ The refusal that matters is still asserted — signed out below, and HR    │
+   * │ and Employee in check-authz.mjs, both of whom still get 403.             │
    * └─────────────────────────────────────────────────────────────────────────┘
    */
-  const exportAsChef = await get('/api/bank/export?brand=00000000-0000-0000-0000-00000000b001')
+  const exportAsAdmin = await get('/api/bank/export?brand=00000000-0000-0000-0000-00000000b001')
   check(
-    exportAsChef.status === 403,
-    `a chef is REFUSED the question-bank export (${exportAsChef.status})`,
-    `A CHEF DOWNLOADED THE QUESTION BANK (${exportAsChef.status})`,
+    exportAsAdmin.status === 200,
+    `an admin can export the question bank (${exportAsAdmin.status})`,
+    `an admin was REFUSED the export they hold bank.export for (${exportAsAdmin.status})`,
   )
   check(
-    !/"questions"\s*:/.test(exportAsChef.html),
-    'the refused export returned no question data',
-    'THE REFUSED EXPORT STILL RETURNED QUESTIONS',
+    /"questions"\s*:/.test(exportAsAdmin.html),
+    'the export actually contains questions',
+    'the export returned 200 but carried no question data',
   )
 
   const exportSignedOut = await fetch(

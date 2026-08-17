@@ -44,7 +44,11 @@ const probes = [
   // inverted: it must now report ABSENT. Left in rather than deleted because a
   // table reappearing is exactly the kind of thing a probe list exists to catch.
   ['0068 source_documents (must be ABSENT)', `select to_regclass('public.source_documents') is not null as x`],
-  ['0051 jobs', `select to_regclass('public.jobs') is not null as x`],
+  // Dropped by 0068 alongside the Guide: `jobs` was the queue for AI question
+  // generation, which is not how questions are made any more. Inverted like
+  // source_documents above rather than deleted — a table coming back is worth
+  // seeing.
+  ['0068 jobs (must be ABSENT)', `select to_regclass('public.jobs') is not null as x`],
   ['0052 difficulty_levels', `select to_regclass('public.difficulty_levels') is not null as x`],
   ['0053 bank_questions (NEW)', `select to_regclass('public.bank_questions') is not null as x`],
   ['0056 exam_papers (NEW)', `select to_regclass('public.exam_papers') is not null as x`],

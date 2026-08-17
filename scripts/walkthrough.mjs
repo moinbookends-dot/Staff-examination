@@ -153,14 +153,15 @@ try {
   )
   await db.query(
     `insert into public.user_roles (user_id, role_id)
-     select $1, id from public.roles where key='chef' on conflict do nothing`,
+     select $1, id from public.roles where key='admin' on conflict do nothing`,
     [chef.id],
   )
   await db.query(`delete from public.user_roles where user_id=$1 and role_id=(select id from public.roles where key='employee')`, [chef.id])
 
   const chefSession = await signIn(chef.email)
   const chefApp = claimsOf(chefSession.access_token).app
-  check(chefApp.roles.includes('chef'), 'chef role present in chef token', `chef roles = ${JSON.stringify(chefApp.roles)}`)
+  // 'chef' until migration 0071 renamed the role to 'admin' in place.
+  check(chefApp.roles.includes('admin'), 'admin role present in the token', `roles = ${JSON.stringify(chefApp.roles)}`)
   check(chefApp.perms.includes('users.approve'), 'chef holds users.approve', 'chef missing users.approve')
 
   // The chef should see the pending employee via profiles_read_team.

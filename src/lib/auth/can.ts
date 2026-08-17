@@ -86,9 +86,16 @@ export function isSuperAdmin(claims: AppClaims): boolean {
  * actions the database then refuses, or worse, hides actions the database
  * would allow. Change one, change the other.
  *
- * NOTE the super-admin short-circuit is deliberate here and is OVERRIDDEN for
- * the question bank by src/lib/auth/bank-access.ts. That module exists because
- * this one cannot express a denial — see the box at the top of it.
+ * The super-admin short-circuit is deliberate: a Super Admin passes every
+ * permission check without holding any key, exactly as public.has_perm() does.
+ *
+ * This paragraph used to say the short-circuit was OVERRIDDEN for the question
+ * bank by src/lib/auth/bank-access.ts. It is not, and has not been since
+ * 10 Aug 2026 — that lockout was removed on the owner's instruction, and every
+ * predicate in bank-access.ts is now a plain wrapper over this function. The
+ * stale note is recorded rather than merely deleted because it survived here
+ * for a day describing behaviour that no longer existed, which is precisely
+ * how a reader ends up "fixing" something that is already correct.
  */
 export function can(claims: AppClaims, permission: Permission): boolean {
   if (!claims.approved) return false

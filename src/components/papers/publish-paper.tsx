@@ -13,9 +13,12 @@ import { InlineError } from '@/components/ui/inline-error'
 import { cn } from '@/lib/utils'
  import {
   AssignmentPicker,
+  NO_PENDING,
   toAssignmentInput,
+  withPending,
   type AssignmentRow,
   type DirectoryOptions,
+  type PendingSelection,
 } from '@/components/exams/assignment-picker'
 import type { PublishPaperResult } from '@/server/actions/papers'
 
@@ -119,6 +122,14 @@ export function PublishPaper({
   )
   const [release, setRelease] = useState<'immediate' | 'on_close'>('immediate')
   const [audience, setAudience] = useState<AssignmentRow[]>([])
+  const [selection, setSelection] = useState<PendingSelection>(NO_PENDING)
+  /*
+   * What actually gets published — the Added rows plus whatever is still shown
+   * in the picker's dropdowns. Publishing `audience` alone meant a reader who
+   * chose an audience without pressing Add put a live exam in front of nobody,
+   * and the only sign was a warning on the paper page.
+   */
+  const chosenAudience = withPending(audience, selection)
 
   if (retired) {
     return <p className="text-body-sm text-muted-foreground">{t('publishRetired')}</p>
@@ -177,7 +188,7 @@ export function PublishPaper({
         opensAt: opensIso,
         closesAt: closesIso,
         resultsRelease: release,
-        assignments: toAssignmentInput(audience),
+        assignments: toAssignmentInput(chosenAudience),
       })
 
       if (!result.ok) {
@@ -355,6 +366,8 @@ export function PublishPaper({
           <AssignmentPicker
             rows={audience}
             onChange={setAudience}
+            pending={selection}
+            onPendingChange={setSelection}
             options={directory}
             disabled={pending}
           />
@@ -368,8 +381,9 @@ export function PublishPaper({
         </Button>
       </div>
 
-      {/* Only still true when nobody has been chosen in the step above. */}
-      {audience.length === 0 && (
+      {/* Only still true when nobody has been chosen in the step above —
+          including a choice made but not yet Added, which does count. */}
+      {chosenAudience.length === 0 && (
         <p className="text-body-sm text-muted-foreground">{t('publishHint')}</p>
       )}
     </div>

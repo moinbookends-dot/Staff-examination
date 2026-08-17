@@ -10,9 +10,12 @@ import { InlineError } from '@/components/ui/inline-error'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   AssignmentPicker,
+  NO_PENDING,
   toAssignmentInput,
+  withPending,
   type AssignmentRow,
   type DirectoryOptions,
+  type PendingSelection,
 } from './assignment-picker'
 
 /**
@@ -45,12 +48,24 @@ export function ExamAssignments({
   const t = useTranslations('exams.assign')
   const [pending, startTransition] = useTransition()
   const [rows, setRows] = useState<AssignmentRow[]>(initial)
+  const [selection, setSelection] = useState<PendingSelection>(NO_PENDING)
   const [error, setError] = useState<string | null>(null)
 
   function save() {
     setError(null)
+
+    /*
+     * A choice still sitting in the dropdowns counts. Saving `rows` alone is
+     * what let "Role · Employee" be picked, saved, confirmed — and assigned to
+     * nobody. The state is updated too, so the badge appears rather than the
+     * row arriving only after the refresh.
+     */
+    const toSave = withPending(rows, selection)
+    setRows(toSave)
+    setSelection({ kind: selection.kind, value: '' })
+
     startTransition(async () => {
-      const result = await setAssignments({ examId, assignments: toAssignmentInput(rows) })
+      const result = await setAssignments({ examId, assignments: toAssignmentInput(toSave) })
       if (!result.ok) {
         setError(result.error ?? 'Could not save the assignments.')
         return
@@ -72,6 +87,8 @@ export function ExamAssignments({
         <AssignmentPicker
           rows={rows}
           onChange={setRows}
+          pending={selection}
+          onPendingChange={setSelection}
           options={options}
           disabled={pending}
           readOnly={!canAssign}

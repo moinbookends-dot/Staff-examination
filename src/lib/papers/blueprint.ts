@@ -32,8 +32,23 @@ export const MCQ_SHARE = 4 / 5
 /** Short-answer share. Stated rather than computed so both read the same way. */
 export const SHORT_ANSWER_SHARE = 1 / 5
 
-/** The sizes the product offers today. Settings may add more; the ratio holds. */
-export const PAPER_SIZES = [20, 50] as const
+/**
+ * The sizes the product offers today.
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ 50 WAS REMOVED ON 11 AUG 2026, AT THE OWNER'S INSTRUCTION.               │
+ * │                                                                           │
+ * │ It had been offered since 0056 and never once chosen — every paper ever   │
+ * │ generated on this project is 20 marks, which is what made the removal     │
+ * │ safe. Migration 0074 deletes the matching paper_settings row and REFUSES  │
+ * │ to run if any 50-mark paper exists, so the two cannot disagree.           │
+ * │                                                                           │
+ * │ Nothing about the 80/20 rule changed: it is still derived below, and a    │
+ * │ future size only has to be added back to this array. The box above still  │
+ * │ describes the arithmetic for any multiple of five.                        │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ */
+export const PAPER_SIZES = [20] as const
 export type PaperSize = (typeof PAPER_SIZES)[number]
 
 export interface PaperBlueprint {

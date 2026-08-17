@@ -54,6 +54,31 @@ const PUBLIC_PATHS = [
   '/auth/confirm',
 ]
 
+/**
+ * Public paths a SIGNED-IN user may still sit on.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║ WITHOUT /verify-email IN HERE, THE VERIFICATION GATE IS A REDIRECT LOOP.  ║
+ * ║                                                                           ║
+ * ║ Rule 4 below bounces a signed-in visitor off any public path to           ║
+ * ║ /dashboard, which is right for /login and /register — you are already in. ║
+ * ║ Applied to /verify-email it is catastrophic:                              ║
+ * ║                                                                           ║
+ * ║   /verify-email → (rule 4) → /dashboard → (rule 5, unverified)            ║
+ * ║                → /verify-email → …                                        ║
+ * ║                                                                           ║
+ * ║ The browser gives up with ERR_TOO_MANY_REDIRECTS and the user cannot      ║
+ * ║ reach the one screen that would let them fix it. Caught by check-auth's   ║
+ * ║ "…and /verify-email is reachable", which is exactly why that assertion is ║
+ * ║ paired with the redirect one rather than trusting the redirect alone.     ║
+ * ║                                                                           ║
+ * ║ /auth/callback and /auth/confirm are here for the same reason they always ║
+ * ║ were: they are endpoints that DO something and then redirect, so bouncing ║
+ * ║ them would skip the work.                                                 ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+const SIGNED_IN_MAY_VISIT = ['/verify-email', '/auth/callback', '/auth/confirm']
+
 /** Reachable with a session but before approval. */
 const PENDING_ALLOWED_PATHS = ['/pending', '/logout']
 
@@ -101,8 +126,9 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // 4 — Signed in, sitting on an auth page. Send them onward.
-  if (user && isPublic && path !== '/auth/callback' && path !== '/auth/confirm') {
+  // 4 — Signed in, sitting on an auth page. Send them onward — unless it is a
+  // page a signed-in user legitimately needs. See SIGNED_IN_MAY_VISIT.
+  if (user && isPublic && !SIGNED_IN_MAY_VISIT.includes(path)) {
     const url = request.nextUrl.clone()
     url.pathname = `/${locale}/dashboard`
     url.search = ''

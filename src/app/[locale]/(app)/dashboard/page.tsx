@@ -289,8 +289,8 @@ export default async function DashboardPage() {
               tone="primary"
             />
             <StatCard
-              label={t('statEditors')}
-              value={stats.editors.toLocaleString()}
+              label={t('statAdministrators')}
+              value={stats.administrators.toLocaleString()}
               icon={<UsersIcon className="size-5" />}
             />
           </div>

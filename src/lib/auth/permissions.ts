@@ -108,7 +108,23 @@ export const PERMISSIONS = [
 
 export type Permission = (typeof PERMISSIONS)[number]
 
-export const ROLE_KEYS = ['super_admin', 'editor', 'chef', 'hr', 'employee'] as const
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * FOUR ROLES. `editor` AND `chef` WERE ONE ROLE ALL ALONG.
+ *
+ * Migration 0071 renamed `chef` to `admin` and deleted `editor`, folding the
+ * question-bank permissions into `admin`. The reason is in that file, and it
+ * is worth repeating here because this list is what a reader checks first:
+ * neither old role could run an examination on its own. A Chef could publish,
+ * mark and release but could not open the bank the paper came from; an Editor
+ * owned the bank and could generate a paper but could not publish or mark it.
+ *
+ * Removing a key from this union is a compile error at every site that named
+ * it, which is the point — a role that no longer exists should not be
+ * something the type system will let you ask about.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const ROLE_KEYS = ['super_admin', 'admin', 'hr', 'employee'] as const
 export type RoleKey = (typeof ROLE_KEYS)[number]
 
 /**
@@ -131,35 +147,42 @@ export type RoleKey = (typeof ROLE_KEYS)[number]
  */
 export const DEFAULT_ROLE_PERMISSIONS: Record<Exclude<RoleKey, 'super_admin'>, Permission[]> = {
   /**
-   * The examination system's authoring role. Owns the question bank and
-   * nothing else — no user administration, no company settings.
+   * The one operational role: everything needed to run an examination
+   * end to end.
    *
-   * An Editor may generate a paper. That is not scope creep: they are the one
-   * person who can tell whether a paper the bank produced is any good, and
-   * withholding it would mean they could fill 6,000 questions without ever
-   * seeing what comes out of them.
+   * This is the former `chef` list plus the eight keys that used to belong to
+   * `editor` — the seven `bank.*` keys and `settings.manage`. Migration 0071
+   * makes the same grant in the database; `tests/unit/permissions.test.ts`
+   * asserts the two agree, so a key added here and forgotten there fails CI
+   * rather than producing a UI that offers something the database refuses.
+   *
+   * `bank.read_uuid` is in the list on purpose. It exists so that seeing a
+   * question's UUID is a deliberate grant rather than a side effect of reading
+   * the bank — and whoever edits a generated paper needs the id to say which
+   * question they are replacing.
+   *
+   * `papers.reset_history` is still granted to NOBODY. Resetting the epoch
+   * lets an already-issued paper be generated a second time; super_admin
+   * reaches it through the has_perm() short-circuit, where it is conspicuous
+   * in the audit log.
    */
-  editor: [
+  admin: [
     'bank.read', 'bank.write', 'bank.archive', 'bank.delete',
     'bank.import', 'bank.export', 'bank.read_uuid',
-    'papers.generate', 'papers.read_history',
-  ],
 
-  chef: [
-    // The new system: generate a paper, download it, look at the history.
-    // These are ADDED beside the legacy keys rather than replacing them —
-    // the old screens are still live and still gated on the old keys, and
-    // revoking those before the replacements exist would lock a chef out of
-    // a working application. The removal ships with the drop migration.
     'papers.generate', 'papers.read_history',
 
+    // The legacy public.questions keys. Still here because the old authoring
+    // screens are still gated on them; they go with the drop migration.
     'questions.read', 'questions.create', 'questions.update', 'questions.retire',
     'questions.import', 'questions.translate',
+
     'exams.read', 'exams.create', 'exams.update', 'exams.publish', 'exams.assign', 'exams.archive',
     'attempts.read_team', 'attempts.read_own',
     'evaluation.evaluate', 'evaluation.verify', 'evaluation.return', 'evaluation.publish',
     'users.read_team', 'users.approve',
     'reports.read_team', 'reports.read_own', 'reports.export',
+    'settings.manage',
     'learning.read', 'learning.manage',
   ],
 

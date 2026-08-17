@@ -1836,6 +1836,10 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "edit_paper_questions": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "enforce_attempt_status_transition": {
         Args: Record<string, unknown>
         Returns: unknown
@@ -1936,6 +1940,10 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "is_email_verified": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "is_exam_assigned_to_me": {
         Args: Record<string, unknown>
         Returns: unknown
@@ -2004,7 +2012,19 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "paper_eligible_questions": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "paper_generation_state": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "paper_is_editable": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "paper_review_questions": {
         Args: Record<string, unknown>
         Returns: unknown
       }

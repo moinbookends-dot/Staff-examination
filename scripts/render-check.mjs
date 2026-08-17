@@ -248,7 +248,7 @@ try {
   )
   await db.query(
     `insert into public.user_roles (user_id, role_id)
-     select $1, id from public.roles where key='chef' on conflict do nothing`,
+     select $1, id from public.roles where key='admin' on conflict do nothing`,
     [user.id],
   )
   await db.query(
@@ -388,6 +388,45 @@ try {
     !/>To approve</.test(hrDashboard.html),
     'HR is not shown registration approvals',
     'HR WAS SHOWN REGISTRATION APPROVALS',
+  )
+
+  /*
+   * ┌───────────────────────────────────────────────────────────────────────────┐
+   * │ THE ASSERTION THAT WOULD HAVE CAUGHT THE HR NAVIGATION 500.               │
+   * │                                                                           │
+   * │ The Papers nav item is ORed on ['papers.generate','papers.read_history'], │
+   * │ and pointed at /papers/generate for everybody. HR holds only the second,  │
+   * │ so the sidebar offered them a link that returned 500 — for months, on the │
+   * │ dashboard this very block already fetched.                                │
+   * │                                                                           │
+   * │ It went unnoticed because every OTHER check runs as an admin or a chef,   │
+   * │ who hold both keys, and because the unit suite asserted the Papers href   │
+   * │ only against ADMIN. This is the one authenticated HR session in the       │
+   * │ repository, which makes it the right place for the assertion.             │
+   * │                                                                           │
+   * │ Asserted on the RENDERED DOCUMENT rather than the nav array: a link is    │
+   * │ equally wrong in a sidebar, a tab bar or a dashboard tile, and the array  │
+   * │ cannot see the last two.                                                  │
+   * └───────────────────────────────────────────────────────────────────────────┘
+   */
+  check(
+    !/href="\/en\/papers\/generate"/.test(hrDashboard.html),
+    'HR is offered no link to the paper generator they cannot open',
+    'HR WAS OFFERED /en/papers/generate, WHICH RETURNS 500 FOR THEM',
+  )
+  // The positive half. Without it, hiding the item entirely would pass the
+  // check above while removing HR's only route into the history they hold
+  // papers.read_history for.
+  check(
+    /href="\/en\/history"/.test(hrDashboard.html),
+    'HR still reaches the paper history they are entitled to',
+    'HR HAS NO ROUTE TO PAPER HISTORY AT ALL',
+  )
+  const hrHistory = await hrGet('/en/history')
+  check(
+    hrHistory.status === 200,
+    'and that link actually opens',
+    `HR got ${hrHistory.status} from the link they were offered`,
   )
 
   // The old dashboard printed the JWT `app` claim: a raw role-slug list and a
@@ -945,7 +984,7 @@ try {
   )
   await db.query(
     `insert into public.user_roles (user_id, role_id)
-     select $1, id from public.roles where key='chef' on conflict do nothing`,
+     select $1, id from public.roles where key='admin' on conflict do nothing`,
     [verUser.id],
   )
   await db.query(

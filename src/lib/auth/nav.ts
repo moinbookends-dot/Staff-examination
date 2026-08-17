@@ -1,7 +1,7 @@
 import type { Permission } from './permissions'
 import type { AppClaims } from './can'
 import { can } from './can'
-import { canManageExamSettings, canOpenQuestionBank } from './bank-access'
+import { canGeneratePapers, canOpenQuestionBank } from './bank-access'
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -102,18 +102,43 @@ interface NavItemConfig extends NavItem {
    * ┌───────────────────────────────────────────────────────────────────────┐
    * │ AN EXTRA PREDICATE, ANDed WITH THE PERMISSIONS ABOVE.                 │
    * │                                                                       │
-   * │ Question Bank is the item permissions alone cannot gate. A Super      │
-   * │ Admin passes can(claims, 'bank.read') — has_perm() short-circuits for │
-   * │ them and claims.ts mirrors it — yet they are deliberately locked out  │
-   * │ of the bank. There is no way to express that as a permission, because │
-   * │ the model has no concept of a denial.                                 │
+   * │ This existed to express a DENIAL the permission model cannot state:   │
+   * │ a Super Admin passed can(claims, 'bank.read') and was nevertheless    │
+   * │ locked out of the question bank. That lockout was removed on 10 Aug   │
+   * │ 2026, so no item currently needs the escape hatch for that reason.    │
    * │                                                                       │
-   * │ So the item carries canOpenQuestionBank as its guard, which is the    │
-   * │ SAME function the route and the server actions call. One rule, three  │
-   * │ enforcement points, no chance of the nav disagreeing with the page.   │
+   * │ It is kept because the mechanism is still the right one: the guard is │
+   * │ the SAME function the route and the server actions call, so the nav   │
+   * │ cannot drift from the page. If a denial is ever needed again, it goes │
+   * │ here and is enforced in all three places at once.                     │
    * └───────────────────────────────────────────────────────────────────────┘
    */
   guard?: (claims: AppClaims) => boolean
+  /**
+   * ╔═══════════════════════════════════════════════════════════════════════════╗
+   * ║ WHERE THE ITEM LANDS, WHEN THAT DEPENDS ON WHAT THE READER MAY DO.        ║
+   * ║                                                                           ║
+   * ║ `permissions` is ORed — any one of them shows the item — and that is      ║
+   * ║ right for a SECTION that several capabilities can enter. It is wrong for  ║
+   * ║ the HREF, which can only point at one route.                              ║
+   * ║                                                                           ║
+   * ║ Papers is the case that proved it. It declares                            ║
+   * ║ ['papers.generate', 'papers.read_history'] and points at                  ║
+   * ║ /papers/generate. HR holds the SECOND key only, so the item rendered for  ║
+   * ║ them and the link 500'd — verified against the running app, not inferred: ║
+   * ║ the HR dashboard contained href="/en/papers/generate" and following it    ║
+   * ║ returned 500.                                                             ║
+   * ║                                                                           ║
+   * ║ That contradicted this module's opening promise — "a link can never       ║
+   * ║ appear for something the user cannot actually do". Hiding the item        ║
+   * ║ instead would have been the other wrong answer: HR is entitled to paper   ║
+   * ║ history and would have lost their only route to it.                       ║
+   * ║                                                                           ║
+   * ║ Evaluated on the server beside `guard`, so nothing but a string crosses   ║
+   * ║ to the client.                                                            ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   */
+  hrefFor?: (claims: AppClaims) => string
   /** Shown in the mobile tab bar. The bar holds five at most. */
   mobile?: boolean
 }
@@ -179,11 +204,36 @@ const NAV_ITEMS: NavItemConfig[] = [
     labelKey: 'papers',
     icon: 'generate',
     permissions: ['papers.generate', 'papers.read_history'],
+    /*
+     * ╔═══════════════════════════════════════════════════════════════════════╗
+     * ║ THE ITEM IS ORed ON TWO PERMISSIONS AND CAN ONLY POINT AT ONE ROUTE.  ║
+     * ║                                                                       ║
+     * ║ HR holds papers.read_history and NOT papers.generate, so isVisible()  ║
+     * ║ showed them this item and the href 500'd. Confirmed against the       ║
+     * ║ running app: the HR dashboard carried href="/en/papers/generate" and  ║
+     * ║ following it returned 500.                                            ║
+     * ║                                                                       ║
+     * ║ Hiding the item instead would have been the other wrong answer — HR   ║
+     * ║ is entitled to paper history, and SectionTabs renders nothing below   ║
+     * ║ two tabs, so this sidebar entry is their ONLY route into /history.    ║
+     * ║                                                                       ║
+     * ║ canGeneratePapers is the same predicate PapersTabs already uses to    ║
+     * ║ choose between these two routes (components/papers/papers-tabs.tsx),  ║
+     * ║ so the sidebar and the section tabs cannot disagree about where a     ║
+     * ║ given person's Papers section begins.                                 ║
+     * ╚═══════════════════════════════════════════════════════════════════════╝
+     */
+    hrefFor: (claims) => (canGeneratePapers(claims) ? '/papers/generate' : '/history'),
     mobile: true,
     /*
      * /history does NOT share a prefix with /papers/generate, so without this
      * the Papers item would go dark the moment somebody opened a paper — the
      * sidebar would say they were nowhere.
+     *
+     * BOTH prefixes are kept for BOTH hrefs. A generate-holder needs '/history'
+     * to stay lit on a paper page; a read-only holder needs '/papers' for the
+     * same reason in reverse. Narrowing it per viewer would reintroduce the
+     * dark-sidebar bug for one of them.
      */
     activeFor: ['/papers', '/history'],
   },
@@ -236,8 +286,31 @@ const SIDEBAR_FOOT: NavItemConfig[] = [
     href: '/settings',
     labelKey: 'settings',
     icon: 'settings',
-    permissions: ['settings.manage'],
-    guard: canManageExamSettings,
+    /*
+     * ┌───────────────────────────────────────────────────────────────────────┐
+     * │ NO PERMISSION, AND THAT IS THE CHANGE.                                │
+     * │                                                                       │
+     * │ This was `permissions: ['settings.manage']` + canManageExamSettings,  │
+     * │ because /settings was company configuration. It is now the person's   │
+     * │ own profile — their name, phone, language, and what role and outlet   │
+     * │ they have been given.                                                 │
+     * │                                                                       │
+     * │ Gating that on a permission would mean HR and every employee had no   │
+     * │ way to see or correct their own details, which is the opposite of     │
+     * │ what the screen is for. An empty `permissions` array is the           │
+     * │ established way this module says "everybody signed in".               │
+     * │                                                                       │
+     * │ THE GUARD IS NOT REDUNDANT WITH THAT, and the difference is easy to   │
+     * │ miss: an empty array skips can(), and can() is what ANDs in           │
+     * │ `approved`. Without this line an UNAPPROVED account would be offered  │
+     * │ the item. nav.test.ts's "shows an unapproved user nothing but the     │
+     * │ always-visible items" failed the instant the permission was removed,  │
+     * │ which is exactly what that test is for. It mirrors the                │
+     * │ requireApproved() inside loadMyProfile().                             │
+     * └───────────────────────────────────────────────────────────────────────┘
+     */
+    permissions: [],
+    guard: (claims) => claims.approved,
   },
 ]
 
@@ -253,25 +326,47 @@ const SIDEBAR_FOOT: NavItemConfig[] = [
  * next `guard`-shaped property would then reach the client exactly as this one
  * did, and typecheck and build would both pass again.
  */
-function toClientItem(item: NavItemConfig): NavItem {
+function toClientItem(item: NavItemConfig, claims: AppClaims): NavItem {
   // Field by field, still — see the box above. `activeFor` is a string array
-  // and therefore safe to forward; `permissions`, `guard` and `mobile` are not
-  // forwarded and must never be.
+  // and therefore safe to forward; `permissions`, `guard`, `hrefFor` and
+  // `mobile` are not forwarded and must never be.
   return {
-    href: item.href,
+    /*
+     * THE ONE PLACE hrefFor IS EVALUATED, and it is deliberately here rather
+     * than in the three list functions.
+     *
+     * visibleNavItems, visibleFootItems and mobileNavItems all end in
+     * `.map(toClientItem)`. Resolving in the callers would mean writing the
+     * same line three times, and getting it right in two of them is a real
+     * failure mode with a real symptom: HR's tab bar would carry
+     * /papers/generate while HR's sidebar carried /history. nav.test.ts's
+     * "never hides a capped tab from the sidebar as well" is what catches
+     * exactly that, and one evaluation site makes it impossible.
+     */
+    href: item.hrefFor?.(claims) ?? item.href,
     labelKey: item.labelKey,
     icon: item.icon,
+    /*
+     * activeFor is forwarded UNCHANGED, whatever the href resolved to.
+     *
+     * useIsActive() is `matches(href) || any(matches(activeFor))`, so this
+     * array is what keeps the Papers item lit on /history for somebody whose
+     * href is /papers/generate — and lit on /papers for somebody whose href is
+     * /history. Narrowing it to "the routes this viewer can open" would make
+     * the sidebar go dark on the paper page, which is the bug activeFor was
+     * added to fix in the first place.
+     */
     ...(item.activeFor ? { activeFor: item.activeFor } : {}),
   }
 }
 
 /** Everything the sidebar and the mobile bar filter against. */
 export function visibleNavItems(claims: AppClaims): NavItem[] {
-  return NAV_ITEMS.filter((item) => isVisible(item, claims)).map(toClientItem)
+  return NAV_ITEMS.filter((item) => isVisible(item, claims)).map((i) => toClientItem(i, claims))
 }
 
 export function visibleFootItems(claims: AppClaims): NavItem[] {
-  return SIDEBAR_FOOT.filter((item) => isVisible(item, claims)).map(toClientItem)
+  return SIDEBAR_FOOT.filter((item) => isVisible(item, claims)).map((i) => toClientItem(i, claims))
 }
 
 /**
@@ -309,7 +404,10 @@ const MOBILE_TABS = 5
 export function mobileNavItems(claims: AppClaims): NavItem[] {
   return NAV_ITEMS.filter((item) => item.mobile && isVisible(item, claims))
     .slice(0, MOBILE_TABS)
-    .map(toClientItem)
+    // Same resolution the sidebar gets. The .slice() runs BEFORE this, so the
+    // cap is unaffected by href resolution — membership is decided by
+    // `mobile` and isVisible(), neither of which this touches.
+    .map((i) => toClientItem(i, claims))
 }
 
 function isVisible(item: NavItemConfig, claims: AppClaims): boolean {

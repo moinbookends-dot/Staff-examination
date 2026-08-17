@@ -49,17 +49,16 @@ on conflict do nothing;
 insert into public.roles (id, company_id, key, name, description, is_system, sort_order) values
   ('00000000-0000-0000-0000-00000000e001', null, 'super_admin', 'Super Admin',
    'Full platform access. Manages organisation, roles and settings.', true, 1),
-  ('00000000-0000-0000-0000-00000000e002', null, 'chef', 'Chef / Kitchen Manager',
-   'Creates questions and exams, evaluates and verifies answers, approves registrations.', true, 2),
+  -- Renamed from 'chef' by migration 0071, keeping the same id so every
+  -- existing user_roles and role_permissions row followed automatically.
+  -- The editor role (…e005) was deleted by the same migration; its
+  -- question-bank permissions are in the admin grant below.
+  ('00000000-0000-0000-0000-00000000e002', null, 'admin', 'Administrator',
+   'Runs the examination system: owns the question bank, generates and publishes papers, marks attempts, releases results and approves registrations.', true, 2),
   ('00000000-0000-0000-0000-00000000e003', null, 'hr', 'HR Manager',
    'Read-only access to reports, analytics and employee profiles.', true, 3),
   ('00000000-0000-0000-0000-00000000e004', null, 'employee', 'Employee',
-   'Takes assigned exams, studies materials, tracks own performance.', true, 4),
-  -- The examination system's authoring role. Sorted second because in the new
-  -- product it is the role that does the most work: nothing can be generated
-  -- until an Editor has filled the bank.
-  ('00000000-0000-0000-0000-00000000e005', null, 'editor', 'Question Editor',
-   'Owns the examination question bank: writes, imports, archives and exports questions in all three languages.', true, 5)
+   'Takes assigned exams, studies materials, tracks own performance.', true, 4)
 on conflict do nothing;
 
 -- ── Permissions ──────────────────────────────────────────────────────────────
@@ -133,35 +132,27 @@ on conflict (key) do nothing;
 -- once would lock the platform owner out of their own feature.
 -- ═════════════════════════════════════════════════════════════════════════════
 
--- Editor — the examination question bank, and nothing outside it.
+-- Administrator — everything needed to run an examination end to end.
 --
--- papers.generate is here on purpose: an Editor is the only person able to
--- judge whether a paper the bank produces is any good, and withholding it
--- would mean filling 6,000 questions without ever seeing one come out.
+-- This list MUST match DEFAULT_ROLE_PERMISSIONS.admin in
+-- src/lib/auth/permissions.ts; tests/unit/permissions.test.ts asserts it, so a
+-- key added to one and forgotten in the other fails CI rather than shipping a
+-- UI that offers what the database refuses.
+--
+-- The bank.* keys and settings.manage arrived here from the retired editor
+-- role (migration 0071). The legacy questions.* keys are still granted because
+-- the old authoring screens are still gated on them; they go with the drop
+-- migration.
 --
 -- papers.reset_history is granted to NOBODY, here or anywhere. Resetting lets
 -- an already-issued paper be generated again; super_admin reaches it via the
 -- has_perm() short-circuit, which is conspicuous in the audit log.
 insert into public.role_permissions (role_id, permission_id)
-select '00000000-0000-0000-0000-00000000e005', p.id
+select '00000000-0000-0000-0000-00000000e002', p.id
   from public.permissions p
  where p.key in (
    'bank.read','bank.write','bank.archive','bank.delete',
    'bank.import','bank.export','bank.read_uuid',
-   'papers.generate','papers.read_history'
- )
-on conflict do nothing;
-
--- Chef
---
--- The two papers.* keys are ADDED beside the legacy set rather than replacing
--- it. The old authoring screens are still live and still gated on the old
--- keys; revoking them before their replacements exist would lock a chef out of
--- a working application. The narrowing ships with the drop migration.
-insert into public.role_permissions (role_id, permission_id)
-select '00000000-0000-0000-0000-00000000e002', p.id
-  from public.permissions p
- where p.key in (
    'papers.generate','papers.read_history',
    'questions.read','questions.create','questions.update','questions.retire',
    'questions.import','questions.translate',
@@ -170,6 +161,7 @@ select '00000000-0000-0000-0000-00000000e002', p.id
    'evaluation.evaluate','evaluation.verify','evaluation.return','evaluation.publish',
    'users.read_team','users.approve',
    'reports.read_team','reports.read_own','reports.export',
+   'settings.manage',
    'learning.read','learning.manage'
  )
 on conflict do nothing;

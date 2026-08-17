@@ -24,6 +24,8 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import pg from 'pg'
+import { verdictOf } from './verdict.mjs'
+import { claimFreePaper } from './free-paper.mjs'
 
 const APP = process.env.APP_URL ?? 'http://localhost:3000'
 const PASSWORD = 'Sample-2026!'
@@ -99,24 +101,12 @@ try {
   const chef = await signIn('sample-chef@example.com')
   const employee = await signIn('sample-employee@example.com')
   const hr = await signIn('sample-hr@example.com')
-  const editor = await signIn('editor@example.com')
 
   const [{ outlet_id: outletId }] = (
     await db.query(`select outlet_id from public.profiles where email='sample-employee@example.com'`)
   ).rows
 
-  const [paper] = (
-    await db.query(
-      `select p.id, p.paper_no, p.status, p.status_changed_at, p.status_changed_by
-         from public.exam_papers p
-        where p.status <> 'retired'
-          and not exists (
-            select 1 from public.exams e
-             where e.paper_id = p.id and e.deleted_at is null
-               and e.status in ('draft','scheduled','active'))
-        order by p.generated_at desc limit 1`)
-  ).rows
-  if (!paper) throw new Error('no free paper to publish')
+  const paper = await claimFreePaper(db)
   paperId = paper.id
   paperWas = { status: paper.status, at: paper.status_changed_at, by: paper.status_changed_by }
 
@@ -238,7 +228,9 @@ try {
   // ── Nobody else does ─────────────────────────────────────────────────────
   section('nobody without evaluation.evaluate sees it')
 
-  for (const [who, user] of [['a candidate', employee], ['HR', hr], ['an editor', editor]]) {
+  // The editor persona went with the role in 0071. A candidate and HR both
+  // still hold no evaluation.evaluate, which is what this proves.
+  for (const [who, user] of [['a candidate', employee], ['HR', hr]]) {
     const r = await rpc(user, 'attempt_evaluation_items', { p_attempt_id: attemptId })
     check(`${who} is refused the marking view`, !r.ok, `${r.status}`)
     check(`  …and the refusal carries no model answer`, leaks(r.text).length === 0,
@@ -360,14 +352,14 @@ try {
     section(`the marking page by direct URL (${APP})`)
     for (const [who, user, want] of [
       ['chef', chef, true], ['employee', employee, false],
-      ['hr', hr, false], ['editor', editor, false],
+      ['hr', hr, false],
     ]) {
       const res = await fetch(`${APP}/en/evaluate/${attemptId}`, {
         headers: { cookie: user.cookie }, redirect: 'manual',
       })
       const body = await res.text()
       check(`${who.padEnd(9)} ${want ? 'reaches' : 'is refused'} /evaluate/[id]`,
-        (res.status === 200) === want, `${res.status}`)
+        (verdictOf(res.status, body) === 'ALLOW') === want, `${verdictOf(res.status, body)}`)
       if (want) {
         check('  …and the page actually shows the model answer',
           models.some((m) => body.includes(m)))

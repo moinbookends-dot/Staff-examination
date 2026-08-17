@@ -76,21 +76,21 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
         </p>
       </aside>
 
-      {/* ── Form column ────────────────────────────────────────────────────── */}
-      <div className="flex flex-1 flex-col">
+      {/* ── Form column ──────────────────────────────────────────────────────
+          data-auth-surface raises every control inside to a 44px touch target —
+          see the box in globals.css.
+
+          It is on the COLUMN and not on <main>, which is where it started. The
+          header's theme toggle and language switcher measured 28px tall in
+          Chrome, and the language switcher is the one control on this screen a
+          Gujarati speaker must find before they can read anything else. */}
+      <div data-auth-surface className="flex flex-1 flex-col">
         <header className="flex items-center justify-end gap-1 p-4">
           <ThemeToggle />
           <LocaleSwitcher />
         </header>
 
-        {/* data-auth-surface raises every control inside to a 44px touch
-            target — see the box in globals.css. It is on <main> rather than on
-            the page wrapper so it also covers anything a future auth screen
-            renders outside the card. */}
-        <main
-          data-auth-surface
-          className="flex flex-1 items-center justify-center px-6 pt-2 pb-14"
-        >
+        <main className="flex flex-1 items-center justify-center px-6 pt-2 pb-14">
           <div className="w-full max-w-sm space-y-6">
             {/* The wordmark the brand panel carries above lg. */}
             <div className="flex items-center justify-center gap-2.5 lg:hidden">

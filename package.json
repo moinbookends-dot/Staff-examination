@@ -30,7 +30,9 @@
     "test:rls:local": "node scripts/rls-test-db.mjs test",
     "test:rls:up": "node scripts/rls-test-db.mjs up",
     "test:rls:down": "node scripts/rls-test-db.mjs down",
-    "check:bootstrap": "node scripts/check-bootstrap-coverage.mjs"
+    "check:bootstrap": "node scripts/check-bootstrap-coverage.mjs",
+    "check:auth": "node scripts/check-auth.mjs",
+    "check:touch": "node scripts/check-touch.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

@@ -142,6 +142,30 @@ async function makeUser(roleKey) {
     `update public.profiles set approval_status='approved', outlet_id = $2 where id = $1`,
     [id, outlet?.id ?? null],
   )
+  /*
+   * A role key that matches nothing inserts nothing, and `on conflict do
+   * nothing` hides it — leaving a user with no permissions whose every
+   * refusal looks like a passing access-control check. Migration 0071
+   * renamed chef to admin and deleted editor; without this, that turned
+   * three check scripts into green lights with no bulb behind them.
+   *
+   * Existence is asserted separately from the INSERT on purpose:
+   * handle_new_user() already grants every signup the employee role, so
+   * inserting it again legitimately affects zero rows.
+   */
+  const roleRow = await db.query(
+    'select id from public.roles where key = $1 and company_id is null',
+    [roleKey],
+  )
+  if (roleRow.rowCount !== 1) {
+    const all = await db.query(
+      'select key from public.roles where company_id is null order by sort_order',
+    )
+    throw new Error(
+      `no role named '${roleKey}' exists — this check would have passed vacuously. ` +
+      `Roles are: ${all.rows.map((r) => r.key).join(', ')}`,
+    )
+  }
   await db.query(
     `insert into public.user_roles (user_id, role_id)
      select $1, id from public.roles where key=$2 and company_id is null on conflict do nothing`,

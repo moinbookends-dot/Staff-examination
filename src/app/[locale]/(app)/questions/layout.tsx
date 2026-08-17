@@ -22,13 +22,21 @@ import { canOpenQuestionBank } from '@/lib/auth/bank-access'
  * ║ every descendant, so a new page under this directory is protected before  ║
  * ║ it is written.                                                           ║
  * ║                                                                           ║
- * ║ THE PREDICATE, NOT THE PERMISSION: has_perm() short-circuits true for     ║
- * ║ super_admin, so requirePermission('bank.read') would admit the one role   ║
- * ║ deliberately excluded. canOpenQuestionBank is the governance boundary and ║
- * ║ is the same function the nav and the server actions call.                 ║
+ * ║ THE PREDICATE, NOT THE PERMISSION — and the reason has CHANGED TWICE, so  ║
+ * ║ do not "simplify" it back without reading this.                           ║
  * ║                                                                           ║
- * ║ This is a UI boundary. RLS is the real one — a chef holds no policy on    ║
- * ║ bank_questions at all — and neither replaces the other.                   ║
+ * ║ It was canOpenQuestionBank because that predicate expressed a DENIAL the  ║
+ * ║ permission model cannot: super_admin passed has_perm('bank.read') and was ║
+ * ║ nevertheless refused. That lockout was removed on 10 Aug 2026, and 0071   ║
+ * ║ then granted the bank to `admin` outright — so today the predicate and    ║
+ * ║ requirePermission('bank.read') admit exactly the same people.             ║
+ * ║                                                                           ║
+ * ║ It stays because it is the SAME function the nav item and every bank      ║
+ * ║ server action call. One rule, four enforcement points, no chance of the   ║
+ * ║ sidebar offering a section the route then refuses.                        ║
+ * ║                                                                           ║
+ * ║ This is a UI boundary. RLS is the real one — HR and Employee hold no      ║
+ * ║ policy on bank_questions at all — and neither replaces the other.         ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  * ═══════════════════════════════════════════════════════════════════════════
  */

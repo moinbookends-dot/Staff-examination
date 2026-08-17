@@ -90,6 +90,30 @@ async function makeUser(roleKey) {
   made.push(id)
 
   await db.query(`update public.profiles set approval_status='approved' where id=$1`, [id])
+  /*
+   * A role key that matches nothing inserts nothing, and `on conflict do
+   * nothing` hides it — leaving a user with no permissions whose every
+   * refusal looks like a passing access-control check. Migration 0071
+   * renamed chef to admin and deleted editor; without this, that turned
+   * three check scripts into green lights with no bulb behind them.
+   *
+   * Existence is asserted separately from the INSERT on purpose:
+   * handle_new_user() already grants every signup the employee role, so
+   * inserting it again legitimately affects zero rows.
+   */
+  const roleRow = await db.query(
+    'select id from public.roles where key = $1 and company_id is null',
+    [roleKey],
+  )
+  if (roleRow.rowCount !== 1) {
+    const all = await db.query(
+      'select key from public.roles where company_id is null order by sort_order',
+    )
+    throw new Error(
+      `no role named '${roleKey}' exists — this check would have passed vacuously. ` +
+      `Roles are: ${all.rows.map((r) => r.key).join(', ')}`,
+    )
+  }
   await db.query(
     `insert into public.user_roles (user_id, role_id)
      select $1, id from public.roles where key=$2 and company_id is null
@@ -167,7 +191,7 @@ try {
 
   const before = (await db.query(`select count(*)::int as n from public.bank_questions`)).rows[0].n
 
-  const editor = await makeUser('editor')
+  const editor = await makeUser('admin')
 
   // ── 1. The happy path ────────────────────────────────────────────────────
   const first = await commit(editor.token, brand.id, [mcq(1, topic.slug), mcq(2, topic.slug)])
@@ -247,16 +271,20 @@ try {
     `PARTIAL WRITE: ${countBeforeBad} before, ${countAfterBad} after. The import is not atomic.`,
   )
 
-  // ── 4. A chef holds no policy on the bank ────────────────────────────────
-  const chef = await makeUser('chef')
+  // ── 4. A role with no bank policy is refused ─────────────────────────────
+  //
+  // Was a chef until migration 0071 renamed that role to admin and granted
+  // it the bank. HR is now the role that holds no policy on bank_questions,
+  // so it is what this refusal has to be proved against.
+  const chef = await makeUser('hr')
   const refused = await commit(chef.token, brand.id, [mcq(95, topic.slug)])
-  check(refused.status >= 400, `a chef is refused the import RPC (${refused.status})`,
-    `A CHEF IMPORTED QUESTIONS (${refused.status})`)
+  check(refused.status >= 400, `HR is refused the import RPC (${refused.status})`,
+    `HR IMPORTED QUESTIONS (${refused.status})`)
 
   const afterChef = (
     await db.query(`select count(*)::int as n from public.bank_questions where external_id like $1`, [`${PREFIX}-%`])
   ).rows[0].n
-  check(afterChef === countBeforeBad, 'the chef wrote nothing', `chef wrote ${afterChef - countBeforeBad} rows`)
+  check(afterChef === countBeforeBad, 'HR wrote nothing', `HR wrote ${afterChef - countBeforeBad} rows`)
 
   // ── 5. A draft stays a draft ─────────────────────────────────────────────
   const draft = mcq(50, topic.slug)
