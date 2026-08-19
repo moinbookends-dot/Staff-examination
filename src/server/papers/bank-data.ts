@@ -9,7 +9,9 @@ import type {
   BankImportOptions,
   BankQuestionPage,
   BankQuestionRow,
+  BankImportRun,
   BankTopic,
+  PaperImportOptions,
 } from '@/lib/bank/types'
 import type { ExportRow } from '@/lib/bank/import/export'
 
@@ -619,4 +621,88 @@ export async function loadQuestion(id: string): Promise<BankQuestionRow | null> 
     updatedAt: data.updated_at,
     deletedAt: data.deleted_at,
   }
+}
+
+/**
+ * What the Paper Import tab needs before a file is chosen.
+ *
+ * Deliberately does NOT fetch every externalId in the bank, which is what
+ * loadImportOptions does for the JSON tab. A paper names its own ids and they
+ * are looked up on demand by resolvePaperTargets() — which has to return the
+ * bank's ANSWER LETTER for each one, so a list of ids would not be enough
+ * anyway, and fetching 3,000 ids that the paper tab then ignores would put a
+ * quarter of a second on a screen that has not been given a file yet.
+ */
+export async function loadPaperImportOptions(): Promise<PaperImportOptions> {
+  const form = await loadFormOptions()
+
+  return {
+    brands: form.brands,
+    topics: form.topics.map((topic) => ({ name: topic.name, slug: topic.slug })),
+    requiredLocales: form.requiredLocales,
+    difficultyLabels: form.difficultyLabels,
+  }
+}
+
+/**
+ * The most recent import runs.
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ NOT PAGINATED, AND BOUNDED INSTEAD.                                       │
+ * │                                                                           │
+ * │ This answers one question — "where did those questions come from, and     │
+ * │ who ran it" — and the answer is always in the last handful of rows. A     │
+ * │ paginated history would be a screen nobody visits twice; a fixed recent   │
+ * │ list is read at a glance and cannot grow into a slow query.               │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ *
+ * Names are resolved separately rather than through a join, because the
+ * generated types carry no relationships and every other read in this file
+ * does the same.
+ */
+export async function loadImportRuns(limit = 10): Promise<BankImportRun[]> {
+  const supabase = await createClient()
+
+  const { data } = await supabase
+    .from('bank_import_runs')
+    .select(
+      'id, occurred_at, kind, locale, filename, answer_key_filename, brand_id, actor_id, detected, created, updated, skipped, rejected, warnings, status, message',
+    )
+    .order('occurred_at', { ascending: false })
+    .limit(Math.min(Math.max(limit, 1), 50))
+
+  const runs = data ?? []
+  if (runs.length === 0) return []
+
+  const brands = await loadBrandNames()
+
+  const actorIds = [...new Set(runs.map((run) => run.actor_id).filter((id): id is string => Boolean(id)))]
+  const { data: profiles } = actorIds.length
+    ? await supabase.from('profiles').select('id, full_name').in('id', actorIds)
+    : { data: [] as { id: string; full_name: string | null }[] }
+  const actorNames = new Map((profiles ?? []).map((profile) => [profile.id, profile.full_name]))
+
+  return runs.map((run) => ({
+    id: run.id,
+    occurredAt: run.occurred_at,
+    kind: run.kind === 'paper' ? 'paper' : 'json',
+    locale: (BANK_LOCALES as readonly string[]).includes(run.locale ?? '')
+      ? (run.locale as BankLocale)
+      : null,
+    filename: run.filename,
+    answerKeyFilename: run.answer_key_filename,
+    brandName: brands.get(run.brand_id) ?? '—',
+    // An import run outlives the person who ran it — actor_id is ON DELETE SET
+    // NULL — so a missing name is a real state and is shown as one.
+    actorName: (run.actor_id ? actorNames.get(run.actor_id) : null) ?? '—',
+    detected: run.detected,
+    created: run.created,
+    updated: run.updated,
+    skipped: run.skipped,
+    rejected: run.rejected,
+    warnings: run.warnings,
+    status:
+      run.status === 'failed' ? 'failed' : run.status === 'partial' ? 'partial' : 'completed',
+    message: run.message,
+  }))
 }

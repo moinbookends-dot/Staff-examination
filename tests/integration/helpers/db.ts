@@ -233,6 +233,51 @@ export function hr(id: string): TestClaims {
 }
 
 /** Super admin holds no explicit perms — has_perm() short-circuits on the role. */
+/**
+ * Mirrors DEFAULT_ROLE_PERMISSIONS.admin in src/lib/auth/permissions.ts.
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ THIS IS THE ROLE THAT USED TO BE CALLED `editor`.                         │
+ * │                                                                           │
+ * │ Migration 0071 renamed `chef` to `admin` and deleted `editor`, folding    │
+ * │ the seven bank.* keys into it. So a test that wants "somebody who may     │
+ * │ import" wants THIS, and the `chef()` builder above — which grants the     │
+ * │ legacy questions.* keys and no bank.* key at all — is now the natural     │
+ * │ DENY case rather than a second allow case.                                │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ *
+ * Kept complete for the same reason chef() is: a fixture granting less than
+ * the real role turns every allow-case into a false negative, and one granting
+ * more turns every deny-case into a silent false pass.
+ */
+export function admin(id: string, outlet = OUTLET_AIKO): TestClaims {
+  return {
+    sub: id,
+    app: {
+      approved: true,
+      company_id: COMPANY,
+      outlet_id: outlet,
+      brand_id: brandOf(outlet),
+      roles: ['admin'],
+      perms: [
+        'bank.read', 'bank.write', 'bank.archive', 'bank.delete',
+        'bank.import', 'bank.export', 'bank.read_uuid',
+        'papers.generate', 'papers.read_history',
+        'questions.read', 'questions.create', 'questions.update',
+        'questions.retire', 'questions.import', 'questions.translate',
+        'exams.read', 'exams.create', 'exams.update', 'exams.publish',
+        'exams.assign', 'exams.archive',
+        'attempts.read_team', 'attempts.read_own',
+        'evaluation.evaluate', 'evaluation.verify', 'evaluation.return', 'evaluation.publish',
+        'users.read_team', 'users.approve',
+        'reports.read_team', 'reports.read_own', 'reports.export',
+        'settings.manage',
+        'learning.read', 'learning.manage',
+      ],
+    },
+  }
+}
+
 export function superAdmin(id: string): TestClaims {
   return {
     sub: id,

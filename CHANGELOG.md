@@ -7,6 +7,219 @@ remembering, and anything left behind as debt.
 
 ---
 
+## M10 — Paper Import
+
+A second way into the question bank: the printed question paper and its answer
+key, read in the browser and matched against the bank before anything is
+written. Built to land the Hard tier's missing Hindi, which it did — 1,030
+questions, 0 errors.
+
+### Shipped — /questions/import is now two tabs
+
+**JSON import** is unchanged. **Paper import** takes an HTML question paper and
+its answer key as two separate files, matches every block to the bank by its
+`data-id`, and shows a searchable, filterable, editable preview of all of them
+before the button does anything.
+
+The parser lives in `src/lib/bank/paper/` and is pure — no database, no network,
+no DOM — so the same code runs in the browser and in vitest, where it is pinned
+against all 1,030 real questions rather than a sample.
+
+### The file is never uploaded, and that is a hard limit rather than a taste
+
+A Server Action body is capped at 1 MB. The Hindi Hard paper is 1.0 MB and its
+answer key 573 KB, so posting either would fail as a *request error* on exactly
+the file the feature exists for. The document is parsed in the browser; only the
+reviewed rows cross the wire, in batches of 100.
+
+### The browser sends one language. The server sends all of them.
+
+`bank_import_commit()` deletes any locale absent from its payload — deliberately,
+so a bad translation can be retracted. That has destroyed real data once: an
+earlier Easy importer re-sent only English plus the locale it was adding, so
+importing Gujarati deleted all 1,023 Hindi rows from an hour before, reported
+"1023 updated", and exited zero.
+
+So the merge happens on the **server**, where the other languages can be read
+back from the bank, and the wire shape the browser uses cannot express them at
+all. A structural fix rather than a rule somebody has to remember.
+
+Everything except the text — difficulty, type, status, topic, correct option —
+is taken from the bank row and the payload's copy discarded. Correctness first (a
+translated document has no difficulty and its topic heading is translated), and a
+security property second: no client can relevel, retopic or re-answer a question
+by editing a payload.
+
+### The check that matters is the answer letter
+
+For a question already in the bank, the key's letter must **equal** the bank's
+`correct_option`. Checking only that the named option exists is not enough and
+has already failed once — the first translation export agreed with English on
+267 of 1,000 answers, which is chance, and importing it by position would have
+marked three quarters of the bank against another question's answer. That
+failure is invisible on every screen and surfaces months later as "I answered
+correctly and was marked wrong", so it is a blocking error, never a warning.
+
+### A heading is never turned into a topic
+
+`topicSlug()` keeps `[a-z0-9]`, so every Devanagari heading slugifies to the
+**empty string** — an automatic match would collapse every topic in the document
+onto one. A person maps them; it takes five clicks and it is right.
+
+### Import history (0076)
+
+`bank_import_runs` — filename, answer-key filename, locale, brand, actor,
+timestamp and the five counts. Not `audit_logs`: that table has no insert policy
+*on purpose* (its only writer is a `SECURITY DEFINER` trigger, which is what
+makes it unforgeable), and an import is 1,030 rows over eleven transactions,
+which a per-row diff cannot describe. Append-only — no update policy, no delete
+policy. The uploaded file is not stored.
+
+### Three defects found by driving the real screen
+
+`scripts/check-paper-import.mjs` attaches the real files to the real inputs over
+raw CDP and presses the real button. It found what neither the unit suite nor
+`render-check.mjs` could:
+
+- **A block with no `data-id` was silently dropped.** The walk pattern required
+  the attribute, so such a block was not parsed, not counted and not reported —
+  a document with ten of them would say "990 detected", import cleanly, and be
+  ten questions short with nothing to say so. Now matched optionally, read,
+  counted, and *rejected* with a sentence.
+- **"Not looked up yet" was treated as "this question is new."** Before the bank
+  lookup returned, the create-path rules ran against a state where `existing` is
+  false for everything, showing 1,030 blocking "no topic has been chosen" errors
+  for a second and a half — against a document whose questions all exist and all
+  have topics.
+- **The "not checked yet" banner was hidden during the check**, so the screen
+  rendered a confident verdict on a state it had not established.
+
+### Verified against the real files, end to end
+
+Driven through the browser as an Administrator, twice.
+
+```
+paper questions   1030      answer-key entries  1030
+matched           1030      imported (new)         0
+updated           1030      skipped                0
+rejected             0      warnings               0      errors  0
+```
+
+Checked from SQL afterwards, and independently by
+`import-translation-hard.mjs --lang hi` in verify-only mode:
+
+```
+hard × hi          1030 rows, 0 blank      hard × en still 1030, 0 lost
+stems              1030/1030 byte-identical to the source file
+options            4000/4000 byte-identical
+short answers        30/30 exact
+correct_option     1000/1000 unchanged
+residual English      0% (the 17 Aug export was 90% and was held back)
+duplicate ids         0    ·  re-import of the same file: 0 created, 1030 updated
+```
+
+### The Gujarati run is the one that proves the locale fix
+
+Gujarati Hard was then imported through the same screen — 1,030 detected, 0
+created, 1,030 updated, 0 rejected, 0 errors — and **the Hindi rows imported
+twenty minutes earlier were still there afterwards**.
+
+That is not a second success story. It is the *exact* scenario that destroyed
+data before: adding Gujarati is what deleted all 1,023 Hindi rows the last time,
+silently, while reporting "1023 updated" and exiting zero. Doing the merge on the
+server, where the payload physically cannot omit a locale it did not read back
+from the bank, is what makes that failure unreachable rather than unlikely.
+
+The Hard tier is now complete in all three languages:
+
+```
+             en        hi        gu
+easy       1023      1023      1023
+medium     1030      1030      1030
+hard       1030      1030      1030      ← hi and gu both landed via this screen
+
+both translations   1030/1030 in the native script · 0 empty · 0 mojibake
+                    1000/1000 answer letters unchanged · 0% residual English
+                    3083 questions · 0 lost English · 0 duplicate ids
+```
+
+### Hindi papers were splitting words across lines (patched upstream)
+
+Printing the Hard Hindi paper showed `…अन्य गुणवत्ता ज` at the end of one line
+and `ांच बिंदु…` at the start of the next — **जांच** cut between its consonant
+and its own vowel sign. Not a hyphenation; two fragments that are not words.
+
+**Not our data.** The stored text is byte-identical to the source export:
+ordinary U+0020 spaces, zero zero-width/soft-hyphen/NBSP characters across all
+2,060 translated Hard strings. And **not new** — Easy and Medium Hindi have been
+live for weeks; their stems are just short enough never to wrap, while Hard runs
+to 218 characters.
+
+**The cause,** traced through `@react-pdf/textkit@6.3.0`: `resolve()` and
+`resolve$1()` build the glyph↔string index map by walking the shaped glyphs and
+accumulating `codePoints.length`, which assumes the shaper returns glyphs in
+*logical* order and that their code points partition the string. Neither holds
+for Indic scripts. fontkit returns Devanagari in **visual** order — a pre-base
+`ि` is emitted before the consonant it belongs to — and its per-glyph
+`codePoints` do not add up: **153 reported for a 152-character stem**. The map
+drifts, so `slice()` cuts the line one character past the space the breaker
+actually chose.
+
+`patches/@react-pdf+textkit+6.3.0.patch` re-anchors both walks on every space. A
+space is never reordered, never ligated and never part of a cluster, so its true
+offset is knowable; breaks only ever land on spaces, so anchoring there makes
+every cut exact without pretending to reconstruct cluster order. It is a no-op
+for Latin, where the walk is already correct.
+
+Patching a dependency is the established route here — `patches/` already carries
+`fontkit+2.0.4.patch` for a neighbouring Devanagari mark-attachment bug.
+
+**Measured over all 1,030 Hindi and 1,030 Gujarati Hard questions**, rendered one
+per document and checked for a line beginning with a combining mark (excluding
+the pre-base vowels `ि`/`િ`, which the shaper legitimately draws first):
+
+```
+                    before      after
+Hindi                   94         31
+Gujarati                 0          0     ← never reproduced in Gujarati
+```
+
+**Four approaches were tried and rejected**, which is worth recording so they
+are not retried:
+
+- `hyphenationPenalty` — no effect. The break is not a hyphenation point.
+- removing `wrap={false}` — no effect.
+- upgrading to `@react-pdf/renderer` 4.6.1 — does not fix it. Reverted.
+- rendering each word as its own `<Text>` — fixed the break and **silently
+  dropped the `ु` from बिंदु**. A lost character is far worse than a bad break.
+
+`tests/unit/pdf-line-break.test.ts` is the tripwire on the patch: it renders a
+real paper and asserts no line begins with a combining mark. Verified to fail
+with the patch reverted.
+
+### Known limitations, stated rather than discovered later
+
+- **31 Hindi questions still split a word**, all of the same shape: a break
+  immediately after a conjunct ligature (`क्र`, `स्र`, `फ्र`) and before its
+  following `ी`. Confirmed real, not an extraction artifact — `aiko-hard-0421,
+  0440, 0602, 0646, 0648, 0655, 0664, 0680` and others. The word arrives whole
+  at the line breaker, so no legal break exists there; `slice()` is keeping one
+  glyph too many when the boundary falls next to a multi-code-point ligature.
+  Cosmetic — no answer, mark or character is wrong — but it is on a printed exam
+  and is not finished.
+
+- **PDF is not supported.** Nothing here extracts text from a PDF, and
+  Devanagari in a PDF is glyph indices against a subset font — recovering it
+  produces Hindi that looks right and is not. HTML and TXT only.
+- **A non-English paper can only update.** A question needs English to exist, so
+  a Hindi-only document has nothing to create one from. Reported per id.
+- **An English stem moved between two existing questions** is caught within a
+  file but not against the bank; the 23505 is translated into a sentence naming
+  what to fix. `scripts/lib/import-order.mjs` is still the tool for that case.
+- **Status is not promoted.** A draft that becomes complete stays a draft.
+
+---
+
 ## M9 — Question Quality Intelligence
 
 Three migrations, one dashboard, and one silent gap closed that had nothing to
@@ -116,6 +329,57 @@ any list screen.
 ---
 
 ## M8 — Question Bank & Metadata · *in progress*
+
+### Built but deliberately not applied — Hard in Hindi and Gujarati
+
+`scripts/import-translation-hard.mjs` reads the Hard translation exports and
+verifies them against the bank. It has never been run with `--apply`, and Hard
+is still English-only. Both halves of that sentence are the point.
+
+**Why a second importer.** `import-translation.mjs` is wired to the *Easy*
+export, and Hard — like Medium — uses a different one: `class="q-block
+sa-block"` for short answers, `<span class="opt-label">A)</span>` for options,
+an `.answer-grid` of five cells per question instead of an `.ak-item` letter
+grid, and `.sa-answer-block` instead of `.answer`/`.explanation`. Run against
+Hard it does not fail — it reads every one of the 1,000 MCQs as having **no
+options** and never sees a single short answer. Easy and Medium translations are
+live behind that script, so it is left frozen and copied rather than
+parameterised, the rule already written at the head of `parse-aiko-medium.mjs`
+and `parse-aiko-hard.mjs`.
+
+**One check the Easy importer does not have.** The translated key's letter must
+equal the bank's own `correct_option`, not merely name an option that exists in
+the translation. The weaker check passes a re-ordered export, which is exactly
+the failure `import-translation.mjs`'s own header box records: the first
+translation export agreed with English on 267/1000, which is chance. Both 17 Aug
+exports score 1000/1000, and a tampered copy is refused by id.
+
+**Why nothing was written.** Residual English — the share of strings still
+containing a Latin word of three or more letters:
+
+|            | stems           | options          |
+| ---------- | --------------- | ---------------- |
+| Easy, live | 152/1023 · 15%  | 12/3972 · 0.3%   |
+| Medium, live | 348/1030 · 34% | 407/4000 · 10%   |
+| Hard, held | **931/1030 · 90%** | **1154/4000 · 29%** |
+
+The residue is sentence scaffolding rather than stray proper nouns —
+`the`(453), `does`(371), `which`(338), `chef`(331), `has`(216), `fails`(183) —
+so a stem reads as English grammar carrying Gujarati nouns. Hindi is degraded
+with the identical counts, which is what identifies the generator rather than
+the language as the cause.
+
+Everything else about those files checks out: 1,030 blocks parsed as 1000 MCQ +
+30 short answer, no blank options, every string inside 0054's CHECK constraints.
+They are perfectly importable and were held anyway, pending a re-export at
+Easy-level quality. The script reports the measurement beside the live Easy and
+Medium figures on every run, so the next export can be judged before it is
+written, and it carries every prior locale, so a better file imports straight
+over the top.
+
+Until then `check:hard` keeps reporting what a chef would otherwise discover by
+printing: `"gu" not required — 0/1030 translated · a hard paper in this language
+prints blank`.
 
 ### Shipped — the question bank as the screen the bank is actually run from
 

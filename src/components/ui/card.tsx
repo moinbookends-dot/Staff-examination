@@ -2,6 +2,25 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * Level 1 in the elevation scale.
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ `surface-1`, NOT `ring-1 ring-foreground/10`.                            │
+ * │                                                                           │
+ * │ A Tailwind ring IS a box-shadow. So the previous treatment — a ring and   │
+ * │ no shadow — gave the card no elevation at all in light mode, and gave it  │
+ * │ nothing whatsoever on a printed page, where box-shadows do not render.    │
+ * │ Papers and answer keys from this app get printed and taped up in a        │
+ * │ kitchen, so a card that vanishes when printed loses its edge entirely.    │
+ * │                                                                           │
+ * │ `surface-1` is the design system's answer: a REAL 1px border plus the     │
+ * │ ambient --shadow-surface. The border does the work in dark mode and in    │
+ * │ print; the shadow does it in light mode, where a bare border reads as a   │
+ * │ wireframe. It also carries the radius and --card background, so the       │
+ * │ rounded-xl and bg-card this replaced are not lost.                        │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ */
 function Card({
   className,
   size = "default",
@@ -12,7 +31,7 @@ function Card({
       data-slot="card"
       data-size={size}
       className={cn(
-        "group/card flex flex-col gap-(--card-spacing) overflow-hidden rounded-xl bg-card py-(--card-spacing) text-sm text-card-foreground ring-1 ring-foreground/10 [--card-spacing:--spacing(4)] has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(3)] data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl",
+        "group/card surface-1 flex flex-col gap-(--card-spacing) overflow-hidden py-(--card-spacing) text-sm text-card-foreground [--card-spacing:--spacing(4)] has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(3)] data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl",
         className
       )}
       {...props}

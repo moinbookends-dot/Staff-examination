@@ -33,9 +33,10 @@ export function StatTile({
     <Card className={cn('relative', className)}>
       <CardContent className="pt-6">
         <div className="flex items-start justify-between gap-2">
-          <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            {label}
-          </p>
+          {/* text-label-caps is this exact treatment plus the mono face — the
+              design system's one typeface change, for metadata and labels. It
+              was already being approximated here by hand, minus the font. */}
+          <p className="text-label-caps text-muted-foreground">{label}</p>
           {Icon && <Icon aria-hidden className="size-4 shrink-0 text-muted-foreground/50" />}
         </div>
         <p className="mt-2 font-heading text-2xl font-semibold tabular-nums">{value}</p>

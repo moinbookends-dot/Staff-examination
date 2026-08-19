@@ -15,6 +15,17 @@
  *   bank_draw_question_ids per type → sha256 of the SORTED ids → save_exam_paper
  *
  *   node scripts/generate-first-paper.mjs --apply
+ *   node scripts/generate-first-paper.mjs --difficulty hard --apply
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ --difficulty DEFAULTS TO 'easy', WHICH IS WHAT IT WAS HARD-CODED TO.     │
+ * │                                                                           │
+ * │ The three checks named above claim whichever free paper they find, so a   │
+ * │ flag that changed the default would quietly re-point their fixture at a   │
+ * │ different bank. Defaulting keeps every existing invocation — and every    │
+ * │ paper they have ever produced — identical, and lets Hard be exercised     │
+ * │ through the same code path rather than a second copy of it.               │
+ * └───────────────────────────────────────────────────────────────────────────┘
  */
 
 import { createHash } from 'node:crypto'
@@ -23,6 +34,15 @@ import { resolve } from 'node:path'
 import pg from 'pg'
 
 const APPLY = process.argv.includes('--apply')
+
+const DIFFICULTY = process.argv.includes('--difficulty')
+  ? process.argv[process.argv.indexOf('--difficulty') + 1]
+  : 'easy'
+
+if (!['easy', 'medium', 'hard'].includes(DIFFICULTY)) {
+  console.error(`\n  --difficulty must be easy, medium or hard — got "${DIFFICULTY}"\n`)
+  process.exit(1)
+}
 
 const env = {}
 for (const line of readFileSync(resolve('.env.local'), 'utf-8').split(/\r?\n/)) {
@@ -70,7 +90,7 @@ try {
   const draw = async (qtype, count) => {
     const r = await rpc(token, 'bank_draw_question_ids', {
       p_brand_id: brand.id,
-      p_difficulty: 'easy',
+      p_difficulty: DIFFICULTY,
       p_qtype: qtype,
       p_count: count,
     })
@@ -82,6 +102,7 @@ try {
   const shortIds = await draw('short_answer', 4)
 
   console.log(`\n  brand        ${brand.name}`)
+  console.log(`  difficulty   ${DIFFICULTY}`)
   console.log(`  drew         ${mcqIds.length} mcq + ${shortIds.length} short`)
 
   if (mcqIds.length !== 16 || shortIds.length !== 4) {
@@ -112,7 +133,7 @@ try {
 
   const saved = await rpc(token, 'save_exam_paper', {
     p_brand_id: brand.id,
-    p_difficulty: 'easy',
+    p_difficulty: DIFFICULTY,
     p_marks: 20,
     p_mcq_n: 16,
     p_short_n: 4,

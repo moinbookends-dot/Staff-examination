@@ -22,7 +22,31 @@
  * │ everything. The trade is that a mid-run failure leaves earlier batches    │
  * │ committed — which is why the verification at the end counts what is       │
  * │ actually in the database rather than trusting the tally.                  │
+ * │                                                                           │
+ * │ That trade is only acceptable because the ORDER is settled before the     │
+ * │ first batch goes out — see the box below. A run that would collide is     │
+ * │ refused while nothing has been written.                                   │
  * └───────────────────────────────────────────────────────────────────────────┘
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║ THE ROWS ARE RE-ORDERED AGAINST THE LIVE BANK BEFORE ANYTHING IS SENT.   ║
+ * ║                                                                           ║
+ * ║ A revision that moves existing English onto a different externalId cannot ║
+ * ║ be applied in file order: 0054's dedupe index is partial, therefore not   ║
+ * ║ deferrable, therefore checked after every statement, so the moment where  ║
+ * ║ both the old owner and the new claimant hold the same sentence is a       ║
+ * ║ moment the database sees and refuses. That is what broke the 18 Aug 2026  ║
+ * ║ Hard re-import at row 412, after four batches had committed.              ║
+ * ║                                                                           ║
+ * ║ scripts/lib/import-order.mjs works out a safe order from the bank as it   ║
+ * ║ IS, right now. The order is never cached and never written into the file: ║
+ * ║ it is a fact about the current database, and a partially-applied import   ║
+ * ║ changes it. Recomputing per run is what makes a re-run safe.              ║
+ * ║                                                                           ║
+ * ║ The keys it compares are computed BY POSTGRES with the index's own        ║
+ * ║ expression, on both sides, so "the same text" means the same thing here   ║
+ * ║ as it does to the constraint.                                             ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
  *
  *   node scripts/import-aiko.mjs                 # dry run
  *   node scripts/import-aiko.mjs --apply
@@ -31,6 +55,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import pg from 'pg'
+import { applyOrder, planImportOrder } from './lib/import-order.mjs'
 
 const APPLY = process.argv.includes('--apply')
 const FILE = process.argv.includes('--file')
@@ -79,6 +104,25 @@ const TOPICS = [
   ['Holding & Storage', 'holding-storage'],
   ['Garnish', 'garnish'],
   ['Serving Notes', 'serving-notes'],
+  /*
+   * Hard. Five slugs, and two of them deliberately sit BESIDE a Medium slug
+   * they resemble rather than reusing it:
+   *
+   *   'quality-checks'   (Medium) — which QC points does this dish have?
+   *   'qc-reasoning'     (Hard)   — a QC point FAILED; what does that imply?
+   *
+   *   'method-steps'     (Medium) — what is step 4?
+   *   'method-reasoning' (Hard)   — WHY is step 4 done that way?
+   *
+   * Reusing the Medium slug would have been one line shorter and would have
+   * merged recall with reasoning under one heading. The counts would still
+   * have added up, which is precisely why it would not have been noticed.
+   */
+  ['Faults & Fixes', 'faults-fixes'],
+  ['QC Reasoning', 'qc-reasoning'],
+  ['Cross-Comparison', 'cross-comparison'],
+  ['Method Reasoning', 'method-reasoning'],
+  ['Troubleshooting', 'troubleshooting'],
 ]
 
 const db = new pg.Client({
@@ -158,6 +202,100 @@ try {
   for (const r of rows) byType[r.qtype] = (byType[r.qtype] ?? 0) + 1
   for (const [t, n] of Object.entries(byType)) console.log(`    ${t.padEnd(14)}${n}`)
 
+  // ── The order the bank will actually accept ──────────────────────────────
+  const englishOf = (row) => row.texts.find((t) => t.locale === 'en')
+  const missingEnglish = rows.filter((r) => englishOf(r) === undefined)
+  if (missingEnglish.length > 0) {
+    throw new Error(
+      `${missingEnglish.length} row(s) carry no English text, starting at ` +
+        `${missingEnglish[0].externalId}. English is what 0054 dedupes on; a row without it ` +
+        `cannot be ordered or imported.`,
+    )
+  }
+
+  const difficulties = [...new Set(rows.map((r) => r.difficulty))]
+
+  /*
+   * NOT filtered by deleted_at, and that is deliberate: 0054's dedupe index is
+   * scoped to `locale = 'en'` and to nothing else, so a soft-deleted question
+   * still occupies its sentence. Leaving those out would produce an order that
+   * looks safe and collides with a row in the recycle bin.
+   *
+   * Keyed on t.brand_id / t.difficulty rather than the parent's, because those
+   * are the columns the index is built on.
+   */
+  const owners = (
+    await db.query(
+      `select q.external_id, t.difficulty::text difficulty, lower(btrim(t.question)) key
+         from public.bank_question_texts t
+         join public.bank_questions q on q.id = t.question_id
+        where t.locale = 'en'
+          and t.brand_id = $1
+          and t.difficulty::text = any($2::text[])
+          and q.external_id is not null`,
+      [brand.id, difficulties],
+    )
+  ).rows
+
+  /*
+   * The incoming text is normalised by the SAME expression, in the same
+   * database, rather than by lower()/trim() here — btrim() strips spaces where
+   * JavaScript's trim() also strips tabs and newlines, and one character of
+   * disagreement would produce an order this step calls safe and the index
+   * then rejects.
+   */
+  const incoming = (
+    await db.query(
+      `select i.external_id, lower(btrim(i.question)) key
+         from unnest($1::text[], $2::text[]) as i(external_id, question)`,
+      [rows.map((r) => r.externalId), rows.map((r) => englishOf(r).question)],
+    )
+  ).rows
+
+  const scoped = (difficulty, key) => `${difficulty} ${key}`
+
+  const ownership = new Map()
+  for (const o of owners) ownership.set(scoped(o.difficulty, o.key), o.external_id)
+
+  const difficultyOf = new Map(rows.map((r) => [r.externalId, r.difficulty]))
+  const items = incoming.map((i) => ({
+    externalId: i.external_id,
+    key: scoped(difficultyOf.get(i.external_id), i.key),
+  }))
+
+  const plan = planImportOrder(items, ownership)
+
+  console.log('\n  Order')
+  console.log(`    live english texts   ${ownership.size}`)
+  console.log(`    dependency edges     ${plan.edges.length}`)
+  console.log(`    rows reordered       ${plan.reordered}`)
+  console.log(`    cycles               ${plan.cycles.length}`)
+
+  if (plan.reordered > 0) {
+    for (const m of plan.moved.slice(0, 5)) {
+      console.log(`      ${m.externalId}  row ${m.from + 1} → ${m.to + 1}`)
+    }
+    if (plan.moved.length > 5) console.log(`      …and ${plan.moved.length - 5} more`)
+  }
+
+  /*
+   * Refused here, with nothing written. The alternative — discovering it in
+   * batch five — is what this whole step exists to prevent, and the previous
+   * failure proved the batches do not roll each other back.
+   */
+  if (!plan.ok) {
+    console.log(`\n  ${plan.problems.length} PROBLEM(S):\n`)
+    for (const p of plan.problems.slice(0, 20)) console.log(`    ✗ ${p}`)
+    if (plan.problems.length > 20) {
+      console.log(`    …and ${plan.problems.length - 20} more`)
+    }
+    console.log('\n  Nothing written.\n')
+    await db.end()
+    process.exit(1)
+  }
+
+  const ordered = applyOrder(rows, plan.order)
+
   if (!APPLY) {
     console.log('\n  Nothing written. Re-run with --apply\n')
     await db.end()
@@ -209,8 +347,8 @@ try {
 
   let inserted = 0
   let updated = 0
-  for (let i = 0; i < rows.length; i += BATCH) {
-    const slice = rows.slice(i, i + BATCH)
+  for (let i = 0; i < ordered.length; i += BATCH) {
+    const slice = ordered.slice(i, i + BATCH)
     const res = await commit(token, brand.id, slice)
     if (res.status !== 200) {
       throw new Error(
@@ -219,7 +357,7 @@ try {
     }
     inserted += res.body?.inserted ?? 0
     updated += res.body?.updated ?? 0
-    console.log(`    ${String(i + slice.length).padStart(5)} / ${rows.length}`)
+    console.log(`    ${String(i + slice.length).padStart(5)} / ${ordered.length}`)
   }
 
   console.log(`\n  Reported: ${inserted} inserted, ${updated} updated`)

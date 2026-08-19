@@ -220,6 +220,47 @@ export interface BankImportOptions {
 }
 
 /**
+ * What the PAPER tab needs before a file is chosen.
+ *
+ * Separate from BankImportOptions and deliberately not folded into it. The two
+ * tabs need different things and one of them is expensive: the JSON tab needs
+ * every externalId already in the bank so its pure dry run can split new from
+ * updated, while the paper tab looks its ids up on demand through
+ * resolvePaperTargets() — because a paper names a thousand ids and the answer
+ * has to include the bank's own answer letter for each, which no list of ids
+ * can carry.
+ *
+ * Topics arrive as RECORDS rather than slugs, because the topic mapper shows a
+ * person the topic's NAME and stores its slug.
+ */
+export interface PaperImportOptions {
+  brands: BankBrand[]
+  topics: { name: string; slug: string }[]
+  requiredLocales: BankLocale[]
+  difficultyLabels: Record<Difficulty, string>
+}
+
+/** One recorded import, for the history panel. */
+export interface BankImportRun {
+  id: string
+  occurredAt: string
+  kind: 'json' | 'paper'
+  locale: BankLocale | null
+  filename: string
+  answerKeyFilename: string | null
+  brandName: string
+  actorName: string
+  detected: number
+  created: number
+  updated: number
+  skipped: number
+  rejected: number
+  warnings: number
+  status: 'completed' | 'partial' | 'failed'
+  message: string | null
+}
+
+/**
  * The result shape every bank mutation returns.
  *
  * ┌───────────────────────────────────────────────────────────────────────────┐

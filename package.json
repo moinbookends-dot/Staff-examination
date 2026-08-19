@@ -32,6 +32,7 @@
     "test:rls:down": "node scripts/rls-test-db.mjs down",
     "check:bootstrap": "node scripts/check-bootstrap-coverage.mjs",
     "check:auth": "node scripts/check-auth.mjs",
+    "check:hard": "node scripts/check-hard-paper.mjs",
     "check:touch": "node scripts/check-touch.mjs"
   },
   "dependencies": {

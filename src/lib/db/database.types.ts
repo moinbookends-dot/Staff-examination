@@ -265,6 +265,66 @@ export type Database = {
         }
         Relationships: []
       }
+      "bank_import_runs": {
+        Row: {
+          "id": string
+          "company_id": string
+          "brand_id": string
+          "actor_id": string | null
+          "occurred_at": string
+          "kind": string
+          "locale": string | null
+          "filename": string
+          "answer_key_filename": string | null
+          "detected": number
+          "created": number
+          "updated": number
+          "skipped": number
+          "rejected": number
+          "warnings": number
+          "status": string
+          "message": string | null
+        }
+        Insert: {
+          "id"?: string
+          "company_id": string
+          "brand_id": string
+          "actor_id"?: string | null
+          "occurred_at"?: string
+          "kind": string
+          "locale"?: string | null
+          "filename": string
+          "answer_key_filename"?: string | null
+          "detected"?: number
+          "created"?: number
+          "updated"?: number
+          "skipped"?: number
+          "rejected"?: number
+          "warnings"?: number
+          "status": string
+          "message"?: string | null
+        }
+        Update: {
+          "id"?: string
+          "company_id"?: string
+          "brand_id"?: string
+          "actor_id"?: string | null
+          "occurred_at"?: string
+          "kind"?: string
+          "locale"?: string | null
+          "filename"?: string
+          "answer_key_filename"?: string | null
+          "detected"?: number
+          "created"?: number
+          "updated"?: number
+          "skipped"?: number
+          "rejected"?: number
+          "warnings"?: number
+          "status"?: string
+          "message"?: string | null
+        }
+        Relationships: []
+      }
       "bank_question_texts": {
         Row: {
           "question_id": string
@@ -2008,7 +2068,15 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "notify_exam_audience": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "observed_difficulty_band": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "on_exam_assignment_added": {
         Args: Record<string, unknown>
         Returns: unknown
       }
