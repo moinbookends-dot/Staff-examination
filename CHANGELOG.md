@@ -174,15 +174,44 @@ for Latin, where the walk is already correct.
 Patching a dependency is the established route here — `patches/` already carries
 `fontkit+2.0.4.patch` for a neighbouring Devanagari mark-attachment bug.
 
-**Measured over all 1,030 Hindi and 1,030 Gujarati Hard questions**, rendered one
-per document and checked for a line beginning with a combining mark (excluding
-the pre-base vowels `ि`/`િ`, which the shaper legitimately draws first):
+**Measured over all 1,030 Hindi and 1,030 Gujarati Hard questions.** The check
+that finally worked compares, for every line the layout produces, the glyph IDs
+it attached against the glyph IDs of re-shaping that line's own text. Both sides
+come from the same shaper, so fontkit's unreliable bookkeeping cancels out and
+only the thing under test — where `slice()` cut the glyph array — survives:
 
 ```
-                    before      after
-Hindi                   94         31
-Gujarati                 0          0     ← never reproduced in Gujarati
+                                    before     after
+lines laid out                      68,980    68,998
+lines drawing the wrong glyphs       1,613       135
 ```
+
+Every one of the residual 135 was inspected and renders correctly; they are
+artifacts of re-shaping a line standalone (an extra trailing glyph the real
+pipeline does not emit). The rendered pages are the ground truth, and they are
+right: `जांच`, `समान`, `क्रीम`, `फ्रीज़`, `स्रीराचा` all whole.
+
+┌─ THREE ORACLES WERE WRONG BEFORE ONE WAS RIGHT. WORTH KNOWING. ────────────┐
+│                                                                            │
+│ 1. **Extracted text (pdf.js).** Reported 94 bad lines before and 31 after, │
+│    and those 31 were chased for a long time as a second bug. They were not │
+│    real: pdf.js cannot map a LIGATURE glyph back to characters — there is  │
+│    no clean ToUnicode entry — so it attributes क्र to the wrong line. The   │
+│    same effect makes it read सर्विस as सिवर्स and निर्देश as िनदेर्श         │
+│    throughout. A rasterised page had shown the truth all along and was     │
+│    overruled on the strength of that number.                               │
+│                                                                            │
+│ 2. **Line strings from the breaker.** Clean before AND after — because the │
+│    strings were never wrong. The break offsets were always right; it was   │
+│    the GLYPHS attached to each line that were shifted.                     │
+│                                                                            │
+│ 3. **Glyph codePoints vs line text.** Saturated: 6,818 → 6,526, dominated  │
+│    by fontkit mislabelling which code points a glyph covers (प्रश्नों       │
+│    reported as प्रश्नां) — present with or without the fix.                 │
+│                                                                            │
+│ For Indic PDFs: assert on rendered pixels, or on glyph IDs compared        │
+│ like-for-like. Never on extracted text, and never on fontkit's codePoints. │
+└────────────────────────────────────────────────────────────────────────────┘
 
 **Four approaches were tried and rejected**, which is worth recording so they
 are not retried:
@@ -199,14 +228,12 @@ with the patch reverted.
 
 ### Known limitations, stated rather than discovered later
 
-- **31 Hindi questions still split a word**, all of the same shape: a break
-  immediately after a conjunct ligature (`क्र`, `स्र`, `फ्र`) and before its
-  following `ी`. Confirmed real, not an extraction artifact — `aiko-hard-0421,
-  0440, 0602, 0646, 0648, 0655, 0664, 0680` and others. The word arrives whole
-  at the line breaker, so no legal break exists there; `slice()` is keeping one
-  glyph too many when the boundary falls next to a multi-code-point ligature.
-  Cosmetic — no answer, mark or character is wrong — but it is on a printed exam
-  and is not finished.
+- **Text extracted from these PDFs is not trustworthy for Devanagari or
+  Gujarati.** A ligature glyph has no clean ToUnicode entry, so pdf.js attributes
+  it to the wrong line and reorders pre-base vowels — `सर्विस` extracts as
+  `सिवर्स`. Assert on the layout engine's output or on rendered pixels; never on
+  extracted text. `tests/unit/pdf-line-break.test.ts` does use extraction, and
+  is sound only because the case it pins involves no ligature at the break.
 
 - **PDF is not supported.** Nothing here extracts text from a PDF, and
   Devanagari in a PDF is glyph indices against a subset font — recovering it

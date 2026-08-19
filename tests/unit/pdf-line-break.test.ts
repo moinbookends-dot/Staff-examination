@@ -32,6 +32,20 @@ import type { PaperDocumentInput } from '@/lib/pdf/types'
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  *
  * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ THIS TEST READS TEXT BACK OUT OF A PDF, WHICH IS ONLY SOUND HERE.         │
+ * │                                                                           │
+ * │ pdf.js cannot map a LIGATURE glyph back to characters — there is no clean │
+ * │ ToUnicode entry for one — so it attributes conjuncts such as क्र to the    │
+ * │ wrong line and reports pre-base vowels first: सर्विस extracts as सिवर्स.   │
+ * │ A whole-bank sweep built on extraction reported 31 split words that did   │
+ * │ not exist, and they were chased for a long time as a second bug.          │
+ * │                                                                           │
+ * │ It is trustworthy for THIS case because the break in it falls between     │
+ * │ गुणवत्ता and जांच, with no ligature at the boundary. Do not generalise the  │
+ * │ approach: to check the whole bank, read the line breaker's own output.    │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
  * │ WHY A COMBINING MARK AT THE START OF A LINE IS THE ASSERTION.             │
  * │                                                                           │
  * │ It is the one signature that cannot be produced by a legitimate break.    │
