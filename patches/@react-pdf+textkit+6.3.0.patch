@@ -1,0 +1,86 @@
+diff --git a/node_modules/@react-pdf/textkit/lib/textkit.js b/node_modules/@react-pdf/textkit/lib/textkit.js
+index 0b8b6fa..75ad33e 100644
+--- a/node_modules/@react-pdf/textkit/lib/textkit.js
++++ b/node_modules/@react-pdf/textkit/lib/textkit.js
+@@ -1072,12 +1072,31 @@ const bidiReordering = () => {
+  * @param glyphs - Array of glyphs (may contain undefined for missing glyphs)
+  * @returns Glyph indices array
+  */
+-const resolve$1 = (glyphs = []) => {
++const resolve$1 = (glyphs = [], str = null) => {
+     const result = [];
+     let currentIndex = 0;
++    let spaceCursor = 0;
+     for (let i = 0; i < glyphs.length; i += 1) {
+         const glyph = glyphs[i];
+         const codePointCount = glyph?.codePoints?.length || 0;
++        // Re-anchor on every space, for the same reason as resolve() below.
++        //
++        // This array is indexed BY CHARACTER, so a shaper that reports 153 code
++        // points for a 152-character string leaves it one entry too long from
++        // that point on. offset() reads it to work out how far into a ligature
++        // a break falls, so the drift makes slice() keep one glyph too many —
++        // which is how a conjunct such as क्र ended up stranded at the end of
++        // the previous line, with ीम starting the next.
++        if (str && codePointCount === 1 && glyph.codePoints[0] === 32) {
++            const at = str.indexOf(' ', spaceCursor);
++            if (at !== -1) {
++                while (result.length > at)
++                    result.pop();
++                while (result.length < at)
++                    result.push(currentIndex);
++                spaceCursor = at + 1;
++            }
++        }
+         for (let j = 0; j < codePointCount; j += 1) {
+             result.push(currentIndex);
+         }
+@@ -1094,12 +1113,36 @@ const resolve$1 = (glyphs = []) => {
+  * @param glyphs - Array of glyphs (may contain undefined for missing glyphs)
+  * @returns Array of character indices, one per glyph
+  */
+-const resolve = (glyphs = []) => {
++const resolve = (glyphs = [], str = null) => {
+     const result = [];
+     let currentIndex = 0;
++    let spaceCursor = 0;
+     for (let i = 0; i < glyphs.length; i += 1) {
+         const glyph = glyphs[i];
+         const length = glyph?.codePoints?.length || 0;
++        // Re-anchor on every space.
++        //
++        // This walk assumes the shaper returns glyphs in LOGICAL order and that
++        // each glyph's codePoints partition the string. Neither holds for Indic
++        // scripts: fontkit emits Devanagari in VISUAL order (a pre-base vowel
++        // sign is emitted before the consonant it belongs to) and its per-glyph
++        // codePoints do not add up exactly — 153 reported for a 152-character
++        // Hindi stem. The index therefore drifts, and every line is then cut
++        // one character past the space the line breaker actually chose,
++        // splitting a word between its consonant and its own vowel sign.
++        //
++        // A space is never reordered, never ligated and never part of a
++        // cluster, so its true offset is knowable and resynchronises the walk.
++        // Breaks only ever land on spaces, so anchoring there is enough to make
++        // every cut exact without pretending to reconstruct cluster order.
++        const isSpace = length === 1 && glyph.codePoints[0] === 32;
++        if (str && isSpace) {
++            const at = str.indexOf(' ', spaceCursor);
++            if (at !== -1) {
++                currentIndex = at;
++                spaceCursor = at + 1;
++            }
++        }
+         const value = length === 0 ? result[i - 1] : currentIndex;
+         result.push(value);
+         currentIndex += length;
+@@ -1158,8 +1201,8 @@ const layoutRun = (string) => {
+         // passing LTR To force fontkit to not reverse the string
+         const glyphRun = font[0].layout(runString, undefined, undefined, undefined, 'ltr');
+         const positions = scalePositions(run, glyphRun.positions);
+-        const stringIndices = resolve$1(glyphRun.glyphs);
+-        const glyphIndices = resolve(glyphRun.glyphs);
++        const stringIndices = resolve$1(glyphRun.glyphs, runString);
++        const glyphIndices = resolve(glyphRun.glyphs, runString);
+         const result = {
+             ...run,
+             positions,
