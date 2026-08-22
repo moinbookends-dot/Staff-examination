@@ -69,3 +69,11 @@ scripts/.spike/
 assets/*.pdf
 assets/*.docx
 assets/*.xlsx
+
+# The same rule, one step downstream. scripts/parse-aiko*.mjs turn a supplied
+# question set into these intermediates — 2,053 questions with their answer
+# keys, roughly 1 MB — and scripts/import-aiko.mjs loads them into the bank.
+# They are derived from proprietary material and the answer keys are the whole
+# product, so a public repository is the last place they belong. Regenerate
+# them from the source document when an import needs re-running.
+_aiko*.json

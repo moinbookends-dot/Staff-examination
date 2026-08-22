@@ -1,0 +1,10 @@
+{
+  "note": "DEVELOPMENT SAMPLE ACCOUNTS. Created by npm run db:sample, removed by --clean. The login page renders these ONLY when NODE_ENV is not production. Never add a real account here. The `can` strings are shown on the dev login screen — keep them TRUE, or they teach the wrong permission model to whoever reads them next.",
+  "password": "Sample-2026!",
+  "accounts": [
+    { "role": "super_admin", "email": "sample-superadmin@example.com", "label": "Super Admin", "can": "Everything, including the Question Bank and Settings" },
+    { "role": "admin", "email": "sample-chef@example.com", "label": "Administrator", "can": "Question Bank, papers, exams, marking, results, approvals, settings" },
+    { "role": "hr", "email": "sample-hr@example.com", "label": "HR", "can": "Reports and directory, read-only" },
+    { "role": "employee", "email": "sample-employee@example.com", "label": "Employee", "can": "Own exams and results only" }
+  ]
+}
