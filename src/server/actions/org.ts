@@ -1,26 +1,35 @@
 'use server'
 
-import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
 
 /**
  * Organisation lookups for the registration form.
  *
  * ┌───────────────────────────────────────────────────────────────────────────┐
- * │ THE ONLY UNAUTHENTICATED USE OF THE ADMIN CLIENT IN THE CODEBASE.         │
+ * │ THIS USED TO BE THE ONLY UNAUTHENTICATED USE OF THE ADMIN CLIENT.         │
  * │                                                                           │
- * │ The registration form needs outlet and department dropdowns before any    │
- * │ session exists. The alternative — an anon SELECT policy on the org tree — │
- * │ would be a permanent public read grant to serve two dropdowns.            │
+ * │ It was a considered choice — the note that stood here weighed it against  │
+ * │ "a permanent public read grant on the org tree to serve two dropdowns"    │
+ * │ and narrowed the queries carefully to compensate.                         │
  * │                                                                           │
- * │ The trade is acceptable ONLY because these functions are hard-narrowed:   │
- * │   · explicit column lists, never select('*')                              │
- * │   · no parameters, so nothing a caller sends can widen the query          │
- * │   · rows are remapped to {id, name} before returning, so a column added   │
- * │     to the table later cannot silently start leaking                      │
+ * │ It failed in production anyway, and not through anything the narrowing    │
+ * │ could have caught: getSecretKey() THROWS when SUPABASE_SECRET_KEY is      │
+ * │ absent, so one unset environment variable on the host turned the public   │
+ * │ sign-up page into a 500 while every other auth page served normally.      │
  * │                                                                           │
- * │ Do not add a filter argument to either of these. If a caller needs to     │
- * │ narrow the list, do it after authentication.                              │
+ * │ Migration 0081 answers the original objection instead of ignoring it.     │
+ * │ anon is granted `id` and `name` — the columns these dropdowns render —    │
+ * │ and nothing else: not address, city, code, company_id or brand_id. The    │
+ * │ deleted/inactive filter lives in the RLS policy rather than in the query  │
+ * │ below, so it holds however the request is written.                        │
+ * │                                                                           │
+ * │ The ordinary server client is therefore enough, and a public page no      │
+ * │ longer depends on the one credential that can read every row.             │
  * └───────────────────────────────────────────────────────────────────────────┘
+ *
+ * Both functions stay parameterless. If a caller needs a narrower list, do it
+ * after authentication — a filter argument here is a filter an anonymous
+ * caller controls.
  */
 
 export interface OrgOption {
@@ -29,14 +38,14 @@ export interface OrgOption {
 }
 
 export async function listOutletsForRegistration(): Promise<OrgOption[]> {
-  const supabase = createAdminClient()
+  const supabase = await createClient()
 
-  const { data, error } = await supabase
-    .from('outlets')
-    .select('id, name')
-    .is('deleted_at', null)
-    .eq('is_active', true)
-    .order('name')
+  /*
+   * No deleted_at / is_active filter here, deliberately: 0081's policy applies
+   * both. Repeating them would also require granting anon SELECT on those two
+   * columns — a WHERE clause needs column privileges, a policy does not.
+   */
+  const { data, error } = await supabase.from('outlets').select('id, name').order('name')
 
   if (error) return []
 
@@ -46,12 +55,13 @@ export async function listOutletsForRegistration(): Promise<OrgOption[]> {
 }
 
 export async function listDepartmentsForRegistration(): Promise<OrgOption[]> {
-  const supabase = createAdminClient()
+  const supabase = await createClient()
 
+  // sort_order is granted to anon for exactly this: the curated order is the
+  // one an Editor set, and alphabetising it would quietly discard that.
   const { data, error } = await supabase
     .from('departments')
     .select('id, name')
-    .is('deleted_at', null)
     .order('sort_order')
 
   if (error) return []
