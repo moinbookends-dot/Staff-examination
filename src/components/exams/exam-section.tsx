@@ -91,7 +91,9 @@ export async function ExamSection({
               href={tab.href}
               aria-current={active ? 'page' : undefined}
               className={cn(
-                '-mb-px border-b-2 px-3 py-2 text-body-sm transition-colors',
+                // Same 44px floor as SectionTabs — these are the only route
+                // between Live, Upcoming and Closed on a phone.
+                '-mb-px flex min-h-11 items-center border-b-2 px-3 py-2 text-body-sm transition-colors md:min-h-0',
                 active
                   ? 'border-primary font-medium text-foreground'
                   : 'border-transparent text-muted-foreground hover:text-foreground',

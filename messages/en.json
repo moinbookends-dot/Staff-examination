@@ -635,7 +635,8 @@
     "import": "Import",
     "liveExams": "Live exams",
     "papers": "Papers",
-    "users": "User Management"
+    "users": "User Management",
+    "bankShort": "Questions"
   },
   "errors": {
     "notFound": "That page doesn’t exist.",
@@ -678,7 +679,7 @@
     "unanswered": "{count} unanswered",
     "saving": "Saving…",
     "saved": "Saved",
-    "saveFailed": "Not saved — retrying",
+    "saveFailed": "Not saved yet — retrying",
     "timeLeft": "Time left",
     "timeUp": "Time is up",
     "timeUpBody": "Your exam was submitted automatically when the time ran out.",
@@ -700,7 +701,13 @@
     "timeAnnounceSeconds": "{seconds, plural, one {# second remaining} other {# seconds remaining}}",
     "noBacktrack": "This exam does not allow going back.",
     "marksLabel": "Marks",
-    "saveStatus": "Save status"
+    "saveStatus": "Save status",
+    "savedOnDevice": "Saved on this device",
+    "offlineBanner": "No connection. Your answers are on this device and will be sent when it returns.",
+    "leaveTitle": "Leave exam?",
+    "leaveBody": "Your exam is still in progress. Your answers are kept, but the timer keeps running.",
+    "leaveStay": "Stay in exam",
+    "leaveConfirm": "Leave exam"
   },
   "evaluation": {
     "title": "Evaluate",
@@ -1303,7 +1310,11 @@
     "configRequested": "Questions requested",
     "configUntagged": "Questions with no recipe",
     "configUntaggedIncluded": "Included",
-    "configUntaggedExcluded": "Excluded"
+    "configUntaggedExcluded": "Excluded",
+    "itemsSelectAll": "Use all shown",
+    "itemsDeselectAll": "Stop using all shown",
+    "itemsInUse": "In use",
+    "poolRequested": "Requested"
   },
   "import": {
     "title": "Import questions",

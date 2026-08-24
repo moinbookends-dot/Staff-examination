@@ -81,7 +81,7 @@ export default async function AppLayout({
   }
 
   return (
-    <div className="flex min-h-svh">
+    <div data-app-surface className="flex min-h-svh">
       {/* ── Sidebar ──────────────────────────────────────────────────────
           320px, matching the Stitch proportion (20% of a 1600px canvas).
           `sticky` with its own height so the nav stays put while a long
@@ -122,10 +122,10 @@ export default async function AppLayout({
 
       {/* ── Main column ──────────────────────────────────────────────── */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="glass sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b px-4 lg:px-10">
+        <header className="glass pt-safe px-safe sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b px-4 lg:px-10">
           {/* The brand repeats here below `md` only — the sidebar that
               normally carries it is not rendered at that width. */}
-          <span className="flex items-center gap-2 md:hidden">
+          <span className="flex min-w-0 items-center gap-2 md:hidden">
             <span
               aria-hidden
               className="grid size-8 place-items-center rounded-md bg-primary text-primary-foreground"
@@ -153,15 +153,24 @@ export default async function AppLayout({
             />
           </div>
 
-          <div className="ml-auto flex items-center gap-1 md:ml-0">
+          <div className="ml-auto flex shrink-0 items-center gap-1 md:ml-0">
             <NotificationBell items={notifications} unread={unread} />
-            <Button variant="ghost" size="icon" aria-label={ts('help')} disabled>
+            {/* Hidden below md: it is presentational and disabled, and a
+                control that does nothing is not worth a thumb-sized slot on a
+                320px header. */}
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={ts('help')}
+              disabled
+              className="hidden md:inline-flex"
+            >
               <CircleHelpIcon />
             </Button>
             <ThemeToggle />
             <LocaleSwitcher />
             <form action={signOut}>
-              <SignOutButton label={tc('signOut')} pendingLabel={tc('loading')} />
+              <SignOutButton label={tc('signOut')} pendingLabel={tc('loading')} iconOnBelowMd />
             </form>
           </div>
         </header>
@@ -169,14 +178,27 @@ export default async function AppLayout({
         {/* pb-24 below md leaves room for the fixed tab bar, which would
             otherwise sit on top of the last row of every list.
             px-4 / lg:px-10 is DESIGN.md's 16px mobile, 40px desktop margin. */}
-        <main className="min-w-0 flex-1 px-4 py-6 pb-24 md:pb-6 lg:px-10">{children}</main>
+        {/*
+          pb-24 clears the fixed tab bar; pb-nav adds the home-indicator inset
+          on top of it, so the last card on a long page is scrollable into
+          view rather than permanently half-hidden behind the bar.
+        */}
+        <main className="px-safe pb-nav min-w-0 flex-1 px-4 py-6 pb-24 md:pb-6 lg:px-10">
+          {children}
+        </main>
       </div>
 
       {/* ── Mobile tab bar ───────────────────────────────────────────────
           Restaurant staff are overwhelmingly on phones, so this is the primary
           path rather than a fallback. Fixed rather than in flow: on a long list
           the nav used to be reachable only by scrolling to the bottom. */}
-      <div className="glass fixed inset-x-0 bottom-0 z-30 border-t md:hidden">
+      {/*
+        pb-safe: installed on an iPhone the app now draws edge to edge, and
+        the home indicator sits exactly where this bar is. Without the inset
+        the last row of tabs is under the user’s thumb-bar and unreliable to
+        press — the classic symptom of viewport-fit=cover added without it.
+      */}
+      <div className="glass pb-safe fixed inset-x-0 bottom-0 z-30 border-t md:hidden">
         <MobileTabBar items={tabs} />
       </div>
     </div>

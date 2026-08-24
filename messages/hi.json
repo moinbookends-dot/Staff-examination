@@ -23,7 +23,8 @@
     "import": "आयात",
     "liveExams": "चालू परीक्षाएँ",
     "papers": "पेपर",
-    "users": "उपयोगकर्ता प्रबंधन"
+    "users": "उपयोगकर्ता प्रबंधन",
+    "bankShort": "प्रश्न"
   },
   "common": {
     "loading": "लोड हो रहा है…",
@@ -126,7 +127,7 @@
     "unanswered": "{count} अनुत्तरित",
     "saving": "सहेजा जा रहा है…",
     "saved": "सहेजा गया",
-    "saveFailed": "सहेजा नहीं गया — पुनः प्रयास",
+    "saveFailed": "अभी सहेजा नहीं गया — पुनः प्रयास जारी",
     "timeLeft": "शेष समय",
     "timeUp": "समय समाप्त",
     "timeUpBody": "समय समाप्त होने पर आपकी परीक्षा स्वतः जमा कर दी गई।",
@@ -148,7 +149,13 @@
     "timeAnnounceSeconds": "{seconds, plural, one {# सेकंड शेष} other {# सेकंड शेष}}",
     "noBacktrack": "इस परीक्षा में पीछे जाने की अनुमति नहीं है।",
     "marksLabel": "अंक",
-    "saveStatus": "सहेजने की स्थिति"
+    "saveStatus": "सहेजने की स्थिति",
+    "savedOnDevice": "इस डिवाइस पर सहेजा गया",
+    "offlineBanner": "कनेक्शन नहीं है। आपके उत्तर इस डिवाइस पर हैं और कनेक्शन लौटते ही भेज दिए जाएँगे।",
+    "leaveTitle": "परीक्षा छोड़ें?",
+    "leaveBody": "आपकी परीक्षा अभी चल रही है। उत्तर सुरक्षित रहेंगे, लेकिन समय चलता रहेगा।",
+    "leaveStay": "परीक्षा में रहें",
+    "leaveConfirm": "परीक्षा छोड़ें"
   },
   "auth": {
     "login": {
@@ -829,7 +836,11 @@
     "configRequested": "माँगे गए प्रश्न",
     "configUntagged": "बिना रेसिपी वाले प्रश्न",
     "configUntaggedIncluded": "शामिल",
-    "configUntaggedExcluded": "बाहर"
+    "configUntaggedExcluded": "बाहर",
+    "itemsSelectAll": "दिख रहे सभी चालू करें",
+    "itemsDeselectAll": "दिख रहे सभी बंद करें",
+    "itemsInUse": "उपयोग में",
+    "poolRequested": "माँगे गए"
   },
   "import": {
     "title": "प्रश्न आयात करें",

@@ -92,7 +92,10 @@ describe('serialisability across the Server → Client boundary', () => {
      * │ must survive a JSON round trip. A future `guard` fails on both counts. │
      * └───────────────────────────────────────────────────────────────────────┘
      */
-    const ALLOWED = ['href', 'labelKey', 'icon', 'activeFor']
+    // shortLabelKey joined the list deliberately: a plain string, the mobile
+    // tab bar's shorter label. Added here rather than loosened away, because
+    // the point of the list is that a NEW key is a decision, not an accident.
+    const ALLOWED = ['href', 'labelKey', 'shortLabelKey', 'icon', 'activeFor']
 
     for (const item of everything) {
       for (const key of Object.keys(item)) {

@@ -23,7 +23,8 @@
     "import": "આયાત",
     "liveExams": "ચાલુ પરીક્ષાઓ",
     "papers": "પેપર",
-    "users": "વપરાશકર્તા સંચાલન"
+    "users": "વપરાશકર્તા સંચાલન",
+    "bankShort": "પ્રશ્નો"
   },
   "common": {
     "loading": "લોડ થાય છે…",
@@ -126,7 +127,7 @@
     "unanswered": "{count} જવાબ વગરના",
     "saving": "સાચવાય છે…",
     "saved": "સાચવ્યું",
-    "saveFailed": "સાચવ્યું નથી — ફરી પ્રયાસ",
+    "saveFailed": "હજી સાચવ્યું નથી — ફરી પ્રયાસ ચાલુ",
     "timeLeft": "બાકી સમય",
     "timeUp": "સમય પૂરો",
     "timeUpBody": "સમય પૂરો થતાં તમારી પરીક્ષા આપોઆપ જમા થઈ ગઈ.",
@@ -148,7 +149,13 @@
     "timeAnnounceSeconds": "{seconds, plural, one {# સેકન્ડ બાકી} other {# સેકન્ડ બાકી}}",
     "noBacktrack": "આ પરીક્ષામાં પાછળ જવાની પરવાનગી નથી.",
     "marksLabel": "ગુણ",
-    "saveStatus": "સાચવવાની સ્થિતિ"
+    "saveStatus": "સાચવવાની સ્થિતિ",
+    "savedOnDevice": "આ ડિવાઇસ પર સાચવ્યું",
+    "offlineBanner": "કનેક્શન નથી. તમારા જવાબો આ ડિવાઇસ પર છે અને કનેક્શન પાછું આવતાં મોકલાશે.",
+    "leaveTitle": "પરીક્ષા છોડવી?",
+    "leaveBody": "તમારી પરીક્ષા હજી ચાલુ છે. જવાબો સચવાશે, પણ સમય ચાલતો રહેશે.",
+    "leaveStay": "પરીક્ષામાં રહો",
+    "leaveConfirm": "પરીક્ષા છોડો"
   },
   "auth": {
     "login": {
@@ -829,7 +836,11 @@
     "configRequested": "માંગેલા પ્રશ્નો",
     "configUntagged": "રેસિપી વગરના પ્રશ્નો",
     "configUntaggedIncluded": "સામેલ",
-    "configUntaggedExcluded": "બહાર"
+    "configUntaggedExcluded": "બહાર",
+    "itemsSelectAll": "દેખાતા બધા ચાલુ કરો",
+    "itemsDeselectAll": "દેખાતા બધા બંધ કરો",
+    "itemsInUse": "વપરાશમાં",
+    "poolRequested": "માંગેલા"
   },
   "import": {
     "title": "પ્રશ્નો આયાત કરો",

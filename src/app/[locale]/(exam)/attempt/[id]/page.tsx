@@ -87,7 +87,16 @@ export default async function AttemptPage({
   const questions = await getAttemptPaper(id)
 
   return (
-    <div className="mx-auto max-w-2xl">
+    /*
+     * px-4 lg:px-6 is load-bearing, not decoration.
+     *
+     * The runner's header bleeds edge to edge with `-mx-4 lg:-mx-6`, which
+     * cancelled exactly against the (app) layout's `<main class="px-4">`.
+     * Exam Mode is its own route group now and supplies no such padding, so
+     * the negative margin had nothing to cancel and pushed the header 16px
+     * past the viewport on every phone — measured at 360, 390 and 412.
+     */
+    <div className="mx-auto max-w-2xl px-4 lg:px-6">
       <AttemptRunner attempt={attempt} questions={questions} />
     </div>
   )

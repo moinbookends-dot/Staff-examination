@@ -223,6 +223,15 @@ export function GeneratePanel({
 
   const notInUse = itemPool.filter((i) => !i.inUse)
 
+  /*
+   * Two groups rather than one list with strikethrough. A withdrawn dish is
+   * a decision somebody made and may need to undo, and hunting for it among
+   * forty-nine that are fine is the hard part — putting them together makes
+   * "what have I taken off the menu" answerable at a glance.
+   */
+  const shownInUse = shownItems.filter((i) => i.inUse)
+  const shownNotInUse = shownItems.filter((i) => !i.inUse)
+
   // Steps are numbered by what is actually on screen: a brand with no topics
   // and no items must not show a gap where steps 3 and 4 would have been.
   const summaryStep =
@@ -230,6 +239,33 @@ export function GeneratePanel({
     (difficulty && topicPool.length > 0 ? 1 : 0) +
     (difficulty && itemPool.length > 0 ? 1 : 0) +
     1
+
+  /**
+   * Put every item CURRENTLY SHOWN into one state.
+   *
+   * Bounded by the search, deliberately: "Deselect all" over 49 dishes is a
+   * destructive-feeling action, and scoping it to what is on screen means
+   * searching "pizza" and pressing it does the obvious, narrow thing rather
+   * than quietly withdrawing the rest of the menu too.
+   *
+   * Only the items that would actually change are written — pressing
+   * "Select all" when nine of ten are already in use is one write, not ten.
+   */
+  const setAllShown = (inUse: boolean) => {
+    if (!onSetItemUsage) return
+
+    const changing = shownItems.filter((i) => i.id !== null && i.inUse !== inUse)
+    if (changing.length === 0) return
+
+    setOutcome(null)
+    startTransition(async () => {
+      const results = await Promise.all(
+        changing.map((i) => onSetItemUsage({ itemId: i.id as string, inUse })),
+      )
+      const failed = results.find((r) => !r.ok)
+      setItemError(failed ? (failed.message ?? null) : null)
+    })
+  }
 
   const toggleItem = (item: ItemPoolEntry, inUse: boolean) => {
     if (!onSetItemUsage || item.id === null) return
@@ -453,36 +489,6 @@ export function GeneratePanel({
               })}
             </ul>
 
-            {/*
-              The arithmetic, spelled out. "Eligible" is the number the draw
-              will actually see, so a person can tell before generating that
-              their exclusions have left too little — rather than after.
-            */}
-            <dl className="grid grid-cols-3 gap-4 border-t pt-3">
-              <PoolFigure label={t('poolTotal')} value={levelTotal} />
-              <PoolFigure label={t('poolExcluded')} value={excludedTotal} />
-              <PoolFigure label={t('poolEligible')} value={eligibleTotal} />
-            </dl>
-
-            {marks && (
-              <p
-                role="status"
-                className={cn(
-                  'text-body-sm',
-                  enough ? 'text-muted-foreground' : 'text-destructive',
-                )}
-              >
-                {enough
-                  ? t('poolEnough', { requested: marks })
-                  : t('poolShort', {
-                      requested: marks,
-                      mcqNeeded: needMcq,
-                      mcqAvailable: eligible.mcq,
-                      shortNeeded: needShort,
-                      shortAvailable: eligible.shortAnswer,
-                    })}
-              </p>
-            )}
           </div>
         </Step>
       )}
@@ -516,6 +522,31 @@ export function GeneratePanel({
                   total: itemPool.length,
                 })}
               </span>
+
+              {/* Both act on what the SEARCH is showing, which is why they
+                  sit beside it rather than above the list. */}
+              {onSetItemUsage && (
+                <span className="ml-auto flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={pending || shownNotInUse.length === 0}
+                    onClick={() => setAllShown(true)}
+                  >
+                    {t('itemsSelectAll')}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={pending || shownInUse.length === 0}
+                    onClick={() => setAllShown(false)}
+                  >
+                    {t('itemsDeselectAll')}
+                  </Button>
+                </span>
+              )}
             </div>
 
             {shownItems.length === 0 ? (
@@ -523,48 +554,66 @@ export function GeneratePanel({
                 {t('itemsNoMatch', { search: itemSearch })}
               </p>
             ) : (
-              <ul className="grid gap-1 sm:grid-cols-2">
-                {shownItems.map((item) => (
-                  <li key={item.id ?? NO_ITEM_KEY}>
-                    <label
-                      className={cn(
-                        'flex items-center gap-2 rounded-md px-2 py-1.5 text-body-sm',
-                        item.id !== null && onSetItemUsage && 'hover:bg-accent/40',
-                        !item.inUse && 'text-muted-foreground',
-                      )}
-                    >
-                      <Checkbox
-                        checked={item.inUse}
-                        /* The no-item bucket is a residue, not a dish: there is
-                           nothing to take off a menu, so it is shown for its
-                           count and cannot be toggled here. */
-                        disabled={pending || !onSetItemUsage || item.id === null}
-                        onCheckedChange={(next) => toggleItem(item, Boolean(next))}
-                        aria-label={item.name}
-                      />
-                      <span className={cn('min-w-0 flex-1 truncate', !item.inUse && 'line-through')}>
-                        {item.name}
-                      </span>
-                      <span className="text-label-caps text-muted-foreground tabular-nums">
-                        {item.questionCount}
-                      </span>
-                    </label>
-                  </li>
-                ))}
-              </ul>
+              <div className="space-y-4">
+                <ItemGroup
+                  title={t('itemsInUse')}
+                  items={shownInUse}
+                  editable={Boolean(onSetItemUsage)}
+                  pending={pending}
+                  onToggle={toggleItem}
+                />
+                {/* Rendered only when there is something in it. An empty
+                    "Not in use" heading reads as a section that failed to load
+                    rather than as a menu with nothing withdrawn. */}
+                {shownNotInUse.length > 0 && (
+                  <ItemGroup
+                    title={t('itemsNotInUse')}
+                    items={shownNotInUse}
+                    editable={Boolean(onSetItemUsage)}
+                    pending={pending}
+                    onToggle={toggleItem}
+                  />
+                )}
+              </div>
             )}
 
-            {notInUse.length > 0 && (
-              <div className="border-t pt-3">
-                <h3 className="text-label-caps text-muted-foreground">{t('itemsNotInUse')}</h3>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {notInUse.map((item) => (
-                    <Badge key={item.id ?? NO_ITEM_KEY} variant="outline">
-                      {item.name}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
+            {/*
+              ── Question availability ────────────────────────────────────
+              One block, not one per filter. Somebody about to press Generate
+              is asking a single question — "will this work?" — and answering
+              it in two places, each describing a different subset, is how a
+              screen ends up contradicting itself.
+
+              Every figure comes from the database. `eligible` is counted by
+              bank_eligible_counts with the same predicates the draw uses, so
+              subtraction never has to be trusted: a question naming two
+              withdrawn dishes is removed once, not twice.
+            */}
+            <dl className="grid grid-cols-2 gap-4 border-t pt-3 sm:grid-cols-4">
+              <PoolFigure label={t('poolTotal')} value={levelTotal} />
+              <PoolFigure label={t('poolExcluded')} value={excludedTotal} />
+              <PoolFigure label={t('poolEligible')} value={eligibleTotal} />
+              {marks && <PoolFigure label={t('poolRequested')} value={marks} />}
+            </dl>
+
+            {marks && (
+              <p
+                role="status"
+                className={cn(
+                  'text-body-sm',
+                  enough ? 'text-muted-foreground' : 'text-destructive',
+                )}
+              >
+                {enough
+                  ? t('poolEnough', { requested: marks })
+                  : t('poolShort', {
+                      requested: marks,
+                      mcqNeeded: needMcq,
+                      mcqAvailable: eligible.mcq,
+                      shortNeeded: needShort,
+                      shortAvailable: eligible.shortAnswer,
+                    })}
+              </p>
             )}
           </div>
         </Step>
@@ -655,6 +704,63 @@ function Step({
 
 /** One figure in the pool arithmetic. A <dl> pair, not a Metric: these are
  *  three related numbers of one calculation rather than headline stats. */
+/**
+ * One headed list of recipes, either in use or withdrawn.
+ *
+ * The two groups are the same control drawn twice rather than one list
+ * sorted by state: the question a person brings to this screen is "what have
+ * I taken off the menu", and an answer they have to assemble by scanning for
+ * struck-through rows is not an answer.
+ */
+function ItemGroup({
+  title,
+  items,
+  editable,
+  pending,
+  onToggle,
+}: {
+  title: string
+  items: ItemPoolEntry[]
+  editable: boolean
+  pending: boolean
+  onToggle: (item: ItemPoolEntry, inUse: boolean) => void
+}) {
+  return (
+    <section>
+      <h3 className="text-label-caps text-muted-foreground">
+        {title} <span className="tabular-nums">({items.length})</span>
+      </h3>
+      <ul className="mt-2 grid gap-1 sm:grid-cols-2">
+        {items.map((item) => (
+          <li key={item.id ?? NO_ITEM_KEY}>
+            <label
+              className={cn(
+                'flex items-center gap-2 rounded-md px-2 py-1.5 text-body-sm',
+                item.id !== null && editable && 'hover:bg-accent/40',
+                !item.inUse && 'text-muted-foreground',
+              )}
+            >
+              <Checkbox
+                checked={item.inUse}
+                /* The no-item bucket is a residue, not a dish: there is
+                   nothing to take off a menu, so it is shown for its count
+                   and cannot be toggled here. */
+                disabled={pending || !editable || item.id === null}
+                onCheckedChange={(next) => onToggle(item, Boolean(next))}
+                aria-label={item.name}
+              />
+              <span className="min-w-0 flex-1 truncate">{item.name}</span>
+              <span className="text-label-caps text-muted-foreground tabular-nums">
+                {item.questionCount}
+              </span>
+            </label>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
 function PoolFigure({ label, value }: { label: string; value: number }) {
   return (
     <div className="min-w-0">

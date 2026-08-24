@@ -179,7 +179,10 @@ export function MobileTabBar({ items }: { items: NavItem[] }) {
                 active ? 'font-medium text-foreground' : 'text-muted-foreground',
               )}
             >
-              {t(item.labelKey)}
+              {/* The short label where there is one: five tabs across a phone
+                  give each about 78px, and a label that wraps sits lower than
+                  its neighbours and makes the whole bar look misaligned. */}
+              {t(item.shortLabelKey ?? item.labelKey)}
             </span>
           </Link>
         )

@@ -1,11 +1,12 @@
 import Script from 'next/script'
 import { THEME_SCRIPT } from '@/lib/theme'
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Hanken_Grotesk, JetBrains_Mono, Noto_Sans_Devanagari, Noto_Sans_Gujarati } from 'next/font/google'
 import { NextIntlClientProvider, hasLocale } from 'next-intl'
 import { notFound } from 'next/navigation'
 import { routing } from '@/lib/i18n/routing'
 import { Toaster } from '@/components/ui/sonner'
+import { ServiceWorker } from '@/components/pwa/service-worker'
 import '../globals.css'
 
 /**
@@ -63,9 +64,61 @@ const gujarati = Noto_Sans_Gujarati({
   display: 'swap',
 })
 
+/**
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ THE METADATA THAT MAKES THIS INSTALLABLE.                                 │
+ * │                                                                           │
+ * │ `manifest` is what a browser reads to offer "Add to Home Screen"; the      │
+ * │ appleWebApp block is the same conversation with iOS, which ignores the     │
+ * │ manifest almost entirely and reads its own meta tags instead. Both are     │
+ * │ needed — supporting only one leaves half the staff without an icon.        │
+ * │                                                                           │
+ * │ `statusBarStyle: 'default'` rather than the translucent option, because    │
+ * │ translucent lets content slide under the clock and this app is used at     │
+ * │ arm's length in a kitchen.                                                 │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ */
 export const metadata: Metadata = {
   title: 'Bookends Learning',
   description: 'Training and assessment for Aiko and Capiche',
+  applicationName: 'Bookends Learning',
+  manifest: '/manifest.webmanifest',
+  appleWebApp: {
+    capable: true,
+    title: 'Bookends',
+    statusBarStyle: 'default',
+  },
+  icons: {
+    icon: [
+      { url: '/icons/icon.svg', type: 'image/svg+xml' },
+      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+    ],
+    apple: [{ url: '/icons/apple-touch-icon.png', sizes: '180x180' }],
+  },
+  // A phone installing this is not a search result; it is a tool somebody
+  // was given. Nothing here should be indexed.
+  formatDetection: { telephone: false },
+}
+
+/**
+ * Viewport, and the two settings that matter on a phone.
+ *
+ * `viewportFit: 'cover'` lets the layout reach into the notch and home-
+ * indicator areas, which is only safe because the shell pads itself with
+ * env(safe-area-inset-*) — see globals.css.
+ *
+ * `userScalable` is left ALONE. Disabling zoom is the standard way to make
+ * an app feel native and it takes pinch-to-zoom away from anybody who needs
+ * it to read a question. The trade is not close.
+ */
+export const viewport: Viewport = {
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)', color: '#0a0a0b' },
+  ],
+  viewportFit: 'cover',
+  width: 'device-width',
+  initialScale: 1,
 }
 
 /** Pre-render all three locales at build time. */
@@ -123,6 +176,7 @@ export default async function LocaleLayout({
           {/* Seven files called toast.success() into a void: sonner needs a
               mounted <Toaster /> and there was never one. */}
           <Toaster position="top-right" richColors closeButton />
+          <ServiceWorker />
         </NextIntlClientProvider>
       </body>
     </html>

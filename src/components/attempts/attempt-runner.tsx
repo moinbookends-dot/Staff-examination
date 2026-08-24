@@ -8,6 +8,14 @@ import { FormatRenderer } from '@/components/questions/registry'
 import type { AnswerPayload, QuestionContent, ResponseFormat } from '@/lib/questions/schemas'
 import type { AttemptQuestion, AttemptState } from '@/server/actions/attempts'
 import { saveAnswer, submitAttempt } from '@/server/actions/attempts'
+import {
+  acknowledgeAnswer,
+  clearOutbox,
+  pendingAnswers,
+  queueAnswer,
+  readOutbox,
+} from '@/lib/attempts/outbox'
+import { useExamChrome, useExitGuard, useOnline } from './use-exam-mode'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
@@ -22,7 +30,14 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { cn } from '@/lib/utils'
-import { ClockIcon, CheckIcon, LoaderIcon, AlertTriangleIcon, LockIcon } from 'lucide-react'
+import {
+  ClockIcon,
+  CheckIcon,
+  LoaderIcon,
+  AlertTriangleIcon,
+  CloudOffIcon,
+  LockIcon,
+} from 'lucide-react'
 
 /**
  * Sitting an exam.
@@ -74,10 +89,20 @@ import { ClockIcon, CheckIcon, LoaderIcon, AlertTriangleIcon, LockIcon } from 'l
  * └───────────────────────────────────────────────────────────────────────────┘
  */
 
-type SaveState = 'idle' | 'saving' | 'saved' | 'failed'
+/**
+ * `pending` is the state the old vocabulary was missing, and its absence is
+ * what made the indicator dishonest: an answer that had not reached the
+ * server could only be shown as "saved" or as "failed", and it was neither.
+ * It is on this device, and it is queued.
+ */
+type SaveState = 'idle' | 'saving' | 'saved' | 'pending' | 'failed'
 
 /** How long after the last keystroke to autosave. */
 const SAVE_DEBOUNCE_MS = 800
+
+/** First retry after a failed save. Doubles, capped — see scheduleRetry. */
+const RETRY_BASE_MS = 2_000
+const RETRY_MAX_MS = 30_000
 
 /**
  * Seconds remaining at which the time is spoken.
@@ -121,6 +146,9 @@ export function AttemptRunner({
    */
   const [announceSeconds, setAnnounceSeconds] = useState<number | null>(null)
 
+  /** Raised when back is pressed, so leaving is a decision rather than a swipe. */
+  const [exitOpen, setExitOpen] = useState(false)
+
   const current = questions[index]
   const answered = useMemo(
     () => Object.values(answers).filter((a) => a !== null && a !== undefined).length,
@@ -133,25 +161,98 @@ export function AttemptRunner({
   /** Guards against a late response from an earlier save clobbering the state. */
   const submitted = useRef(false)
 
+  /**
+   * Bumped whenever a save fails, to ask for another attempt.
+   *
+   * A counter rather than a boolean, and state rather than a ref, because the
+   * retry is owned by an EFFECT below. That inverts the obvious design — a
+   * failure handler that schedules its own timer — and it is worth it: the
+   * handler would have to reach forward to a drain that does not exist yet,
+   * and the timer would have to read it through a ref written during render.
+   * Both are the shapes React now rejects outright.
+   */
+  const [retryRequest, setRetryRequest] = useState(0)
+  const backoff = useRef(RETRY_BASE_MS)
+
+  /**
+   * Send one answer, and keep it queued until the server says it has it.
+   *
+   * The outbox write happens in onAnswerChange BEFORE this is ever called, so
+   * an answer is durable from the keystroke onward rather than from the
+   * response onward. This only ever REMOVES from the queue.
+   */
   const flush = useCallback(
     async (questionId: string, answer: AnswerPayload) => {
       setSaveState('saving')
       const result = await saveAnswer({ attemptId: attempt.attempt_id, questionId, answer })
 
       if (result.ok) {
-        setSaveState('saved')
+        acknowledgeAnswer(attempt.attempt_id, questionId, answer)
+        backoff.current = RETRY_BASE_MS
+
+        // Anything still queued keeps the honest state: some of this
+        // candidate's work is on this device and nowhere else.
+        const stillQueued = pendingAnswers(attempt.attempt_id).length > 0
+        setSaveState(stillQueued ? 'pending' : 'saved')
+
         // Re-anchor the countdown on the server's answer, every time.
         setExpiresAt(new Date(result.data.expiresAt).getTime())
-      } else {
-        setSaveState('failed')
+        return true
       }
+
+      /*
+       * Left in the outbox deliberately. The retry effect is what makes the
+       * "retrying" wording true — the copy used to say it and nothing did it.
+       */
+      setSaveState('failed')
+      setRetryRequest((n) => n + 1)
+      return false
     },
     [attempt.attempt_id],
   )
 
+  /**
+   * Push everything the server has not acknowledged, oldest first.
+   *
+   * Stops at the first failure rather than marching through the queue: if one
+   * request could not reach the server, the next twenty will not either, and
+   * hammering a dead connection is how a flaky network becomes a flat battery.
+   */
+  const drain = useCallback(async () => {
+    if (submitted.current) return
+
+    for (const [questionId, answer] of pendingAnswers(attempt.attempt_id)) {
+      if (submitted.current) return
+      const ok = await flush(questionId, answer)
+      if (!ok) return
+    }
+  }, [attempt.attempt_id, flush])
+
+  /*
+   * The retry, owned here so nothing has to reach forward to it.
+   *
+   * Exponential and capped: a candidate on a dead connection for ten minutes
+   * should not have sent three hundred requests by the time it returns.
+   */
+  useEffect(() => {
+    if (retryRequest === 0) return
+
+    const wait = backoff.current
+    backoff.current = Math.min(backoff.current * 2, RETRY_MAX_MS)
+
+    const id = setTimeout(() => void drain(), wait)
+    return () => clearTimeout(id)
+  }, [retryRequest, drain])
   const onAnswerChange = useCallback(
     (questionId: string, answer: AnswerPayload) => {
       setAnswers((prev) => ({ ...prev, [questionId]: answer }))
+
+      /*
+       * Durable BEFORE the network is involved. Synchronous, so it has
+       * already happened if the tab is closed on the next line.
+       */
+      queueAnswer(attempt.attempt_id, questionId, answer)
+      setSaveState('pending')
 
       // Debounced PER QUESTION, not globally: typing into question 3 must not
       // postpone the save of the choice just made on question 2.
@@ -165,11 +266,22 @@ export function AttemptRunner({
         }, SAVE_DEBOUNCE_MS),
       )
     },
-    [flush],
+    [attempt.attempt_id, flush],
   )
 
-  // Any pending debounce is flushed on unmount, so navigating away mid-keystroke
-  // does not silently drop the last thing they typed.
+  /*
+   * ┌───────────────────────────────────────────────────────────────────────┐
+   * │ THIS COMMENT USED TO BE FALSE.                                        │
+   * │                                                                       │
+   * │ It said the pending debounce was flushed on unmount; the code cleared │
+   * │ the timers instead. Leaving the screen within 800ms of a keystroke    │
+   * │ therefore dropped that answer without a trace.                        │
+   * │                                                                       │
+   * │ The timers are still cleared — they are about to fire into a dead     │
+   * │ component — but what they were going to send is now in the outbox,    │
+   * │ so it is picked up on the next mount rather than lost.                │
+   * └───────────────────────────────────────────────────────────────────────┘
+   */
   useEffect(() => {
     const pending = timers.current
     return () => {
@@ -177,12 +289,62 @@ export function AttemptRunner({
     }
   }, [])
 
+  /*
+   * Anything this device knows and the server does not — from a previous
+   * visit, a reload, or a crash — is adopted on mount and pushed.
+   *
+   * The queued copy WINS over the server’s: it is strictly newer, because it
+   * only exists at all while the server has not acknowledged it.
+   */
+  const adopted = useRef(false)
+  useEffect(() => {
+    if (adopted.current) return
+    adopted.current = true
+
+    /*
+     * Async so the state write is not synchronous inside the effect body —
+     * and honest about ordering: the queued copy is adopted BEFORE the drain
+     * is attempted, so the candidate sees their own answer immediately even
+     * if the network is still down.
+     */
+    void (async () => {
+      const queued = readOutbox(attempt.attempt_id)
+      if (Object.keys(queued).length > 0) {
+        setAnswers((prev) => ({ ...prev, ...queued }))
+        setSaveState('pending')
+      }
+      await drain()
+    })()
+  }, [attempt.attempt_id, drain])
+
+  /*
+   * Both signals, because neither is sufficient. `online` fires when the
+   * browser regains an interface, which is not the same as the server being
+   * reachable; `visibilitychange` catches the phone that was asleep through
+   * the whole outage and woke up with a working connection and a full queue.
+   */
+  useEffect(() => {
+    const retry = () => void drain()
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') retry()
+    }
+
+    window.addEventListener('online', retry)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.removeEventListener('online', retry)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [drain])
+
   // ── The clock ──────────────────────────────────────────────────────────────
 
   const doSubmit = useCallback(
     async (reason: 'user' | 'timer') => {
       if (submitted.current) return
       submitted.current = true
+      // The attempt is closed; the server will refuse these from here on.
+      clearOutbox(attempt.attempt_id)
       setSubmitting(true)
 
       // Flush anything still waiting on its debounce before closing the paper.
@@ -281,6 +443,25 @@ export function AttemptRunner({
     headingRef.current?.focus()
   }, [index])
 
+  // ── Exam Mode ──────────────────────────────────────────────────────────────
+
+  /*
+   * Above the early return, because hooks cannot be conditional — an attempt
+   * with no questions must run exactly the same hooks as one with fifty.
+   *
+   * `submitting` and `timedOut` rather than the `submitted` ref: a ref may not
+   * be read during render, and these two are the same fact in state form. Once
+   * either is true the attempt is over, so every guard lifts together and the
+   * candidate is not trapped on a results card with the screen forced awake.
+   */
+  const examLive = !timedOut && !submitting
+
+  useExamChrome(examLive)
+  const online = useOnline()
+
+  const onAttemptedExit = useCallback(() => setExitOpen(true), [])
+  useExitGuard(examLive, onAttemptedExit)
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   if (!current) {
@@ -293,7 +474,25 @@ export function AttemptRunner({
   const locked = timedOut || submitting
 
   return (
-    <div className="space-y-4 pb-4">
+    <div className="pb-safe space-y-4 pb-4">
+      {/*
+        ── Connection ───────────────────────────────────────────────────────
+        Shown only while the browser believes it is offline, and worded around
+        what is actually true: the answers are on this device. It deliberately
+        does NOT say they are saved — the outbox knows the difference between
+        "written here" and "the server has it", and so should the candidate.
+
+        role="status", not "alert": losing Wi-Fi mid-question is not an error
+        the candidate caused and cannot be one they must dismiss.
+      */}
+      {!online && (
+        <p
+          role="status"
+          className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm"
+        >
+          {t('offlineBanner')}
+        </p>
+      )}
       {/* Spoken, never seen. Separate from the ticking display, which stays
           silent — see the header. */}
       <p aria-live="polite" aria-atomic="true" className="sr-only">
@@ -306,7 +505,20 @@ export function AttemptRunner({
 
       {/* ── The bar that must always be visible ──────────────────────────────
           Solid, not glass. `top-14` clears the app header, which is sticky. */}
-      <div className="sticky top-14 z-20 -mx-4 border-b bg-background px-4 py-3 lg:-mx-6 lg:px-6">
+      {/*
+        top-0, not top-14.
+
+        The 14 was hand-tuned to clear the app shell's 56px header — which this
+        screen no longer renders inside, now that Exam Mode is its own route
+        group. Left alone it would pin the exam header 56px down the page with
+        nothing above it.
+
+        pt-safe because the exam now draws edge to edge and the bar has to
+        clear the notch itself. Still no `glass`: this screen uses no
+        translucency anywhere, deliberately — a timed assessment should not
+        trade contrast for decoration.
+      */}
+      <div className="pt-safe px-safe sticky top-0 z-20 -mx-4 border-b bg-background px-4 py-3 lg:-mx-6 lg:px-6">
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <div className="min-w-0">
             <h1 className="truncate font-heading text-lg font-semibold tracking-tight">
@@ -320,7 +532,7 @@ export function AttemptRunner({
           </div>
 
           <div className="flex shrink-0 items-center gap-3">
-            <SaveIndicator state={saveState} />
+            <SaveIndicator state={saveState} online={online} />
             <Countdown remaining={remaining} />
           </div>
         </div>
@@ -465,6 +677,19 @@ export function AttemptRunner({
             <AlertDialogDescription>
               {t('confirmSubmitBody', { answered, total: questions.length })}
             </AlertDialogDescription>
+            {/*
+              The unanswered count, stated rather than left to be worked out.
+
+              "Answered 37 of 50" is the same arithmetic, but this is the last
+              moment before an irreversible action and the number that matters
+              is the one being given up. Rendered only when there is one, so a
+              complete paper is not congratulated on having nothing missing.
+            */}
+            {answered < questions.length && (
+              <p className="mt-2 text-sm font-medium text-warning">
+                {t('unanswered', { count: questions.length - answered })}
+              </p>
+            )}
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
@@ -481,6 +706,40 @@ export function AttemptRunner({
           </AlertDialogHeader>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/*
+        ── Leaving ──────────────────────────────────────────────────────────
+        Raised by the back button, never by the timer.
+
+        It does NOT submit. Leaving is not finishing: the attempt stays open,
+        the deadline keeps running on the server, and the answers are already
+        durable. Submitting on somebody's behalf because they mis-swiped would
+        be a worse outcome than the accident it prevents.
+
+        The wording says the timer keeps running, because that is the part a
+        candidate cannot see and would otherwise assume is paused.
+      */}
+      <AlertDialog open={exitOpen} onOpenChange={setExitOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('leaveTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('leaveBody')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('leaveStay')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                // The guard pushed a sentinel entry to catch this press; going
+                // back twice steps over it and off the exam.
+                setExitOpen(false)
+                window.history.go(-2)
+              }}
+            >
+              {t('leaveConfirm')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
@@ -494,16 +753,42 @@ export function AttemptRunner({
  * text arrives. The old version returned null when idle, which is exactly that
  * mistake.
  */
-function SaveIndicator({ state }: { state: SaveState }) {
+function SaveIndicator({ state, online }: { state: SaveState; online: boolean }) {
   const t = useTranslations('sitting')
 
+  /*
+   * `pending` is the state that makes the rest of this honest.
+   *
+   * "Saved" now means the server has it. Anything still on this device says
+   * so, in those words — a candidate who loses their phone should not have
+   * been told their work was safe when it was sitting in localStorage.
+   */
   const map = {
     saving: { icon: LoaderIcon, label: t('saving'), className: 'animate-spin' },
     saved: { icon: CheckIcon, label: t('saved'), className: '' },
+    pending: { icon: CloudOffIcon, label: t('savedOnDevice'), className: '' },
     failed: { icon: AlertTriangleIcon, label: t('saveFailed'), className: '' },
   } as const
 
-  const entry = state === 'idle' ? null : map[state]
+  /*
+   * ┌───────────────────────────────────────────────────────────────────────┐
+   * │ "SAVING…" IS A LIE WHILE THE DEVICE IS OFFLINE.                       │
+   * │                                                                       │
+   * │ A request made with no network does not fail quickly — it hangs until │
+   * │ the browser gives up, which can be tens of seconds. The state machine │
+   * │ is therefore genuinely in `saving` that whole time, and the candidate │
+   * │ watches a spinner that claims their answer is on its way to a server  │
+   * │ it cannot reach. Measured: still "Saving…" two seconds after the      │
+   * │ network was cut.                                                      │
+   * │                                                                       │
+   * │ What is TRUE in that moment is what `pending` says: the answer is on  │
+   * │ this device. So while the browser reports no connection, an in-flight │
+   * │ save reads as pending rather than as progress.                        │
+   * └───────────────────────────────────────────────────────────────────────┘
+   */
+  const effective: SaveState = !online && state === 'saving' ? 'pending' : state
+
+  const entry = effective === 'idle' ? null : map[effective]
   const Icon = entry?.icon
 
   return (
@@ -515,7 +800,9 @@ function SaveIndicator({ state }: { state: SaveState }) {
       // live region that never announces what changed is worse than none.
       className={cn(
         'flex items-center gap-1.5 text-xs',
-        state === 'failed' ? 'text-destructive' : 'text-muted-foreground',
+        // `effective`, not `state`: offline reads as pending, and pending is
+        // a normal condition rather than an error.
+        effective === 'failed' ? 'text-destructive' : 'text-muted-foreground',
       )}
     >
       {Icon && <Icon aria-hidden className={cn('size-3.5', entry.className)} />}

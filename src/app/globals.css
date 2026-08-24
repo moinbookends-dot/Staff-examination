@@ -267,6 +267,55 @@
 
 /* Frosted chrome. Deliberately NOT applied to /attempt/[id]: translucency
    costs contrast, and that page is a timed assessment. */
+/*
+ * ═════════════════════════════════════════════════════════════════════════════
+ * Safe areas — the price of drawing edge to edge.
+ *
+ * The app declares viewport-fit=cover so that, installed on a phone, the
+ * background reaches into the notch and the home-indicator strip instead of
+ * leaving letterbox bars. That is the whole visual difference between a web
+ * page and an app on iOS — and it is only safe if the CHROME then pads itself
+ * back out of those areas, which is what these do.
+ *
+ * env() resolves to 0px on every device without an inset, so these cost
+ * nothing on a desktop or an older phone and need no media query.
+ * ═════════════════════════════════════════════════════════════════════════════
+ */
+
+/** Clears the notch / status bar. For anything pinned to the top. */
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+/** Clears the home indicator. For anything pinned to the bottom. */
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/*
+ * Clears the notch in LANDSCAPE, where it moves to the side. Added to elements
+ * that already carry horizontal padding, so it widens rather than replaces —
+ * a phone held sideways to read a long question is a real posture here.
+ */
+@utility px-safe {
+  padding-left: max(env(safe-area-inset-left), 0px);
+  padding-right: max(env(safe-area-inset-right), 0px);
+}
+
+/*
+ * Bottom room for the fixed tab bar AND the indicator beneath it. Applied to
+ * <main> so the end of a long page can actually be scrolled into view.
+ */
+@utility pb-nav {
+  padding-bottom: calc(6rem + env(safe-area-inset-bottom));
+}
+
+@media (min-width: 768px) {
+  .pb-nav {
+    padding-bottom: 1.5rem;
+  }
+}
+
 @utility glass {
   background-color: color-mix(in oklab, var(--card) 72%, transparent);
   -webkit-backdrop-filter: blur(16px) saturate(140%);
@@ -434,6 +483,58 @@
   align-items: center;
   justify-content: center;
   min-height: 2.75rem;
+}
+
+/* ═════════════════════════════════════════════════════════════════════════════
+   THE SAME 44px FLOOR AS THE AUTH SCREENS, FOR THE APP, ON PHONES ONLY.
+
+   The auth rule above is not width-scoped, and says why: a 44px target is not
+   worse with a mouse. That reasoning does not carry over here. The app's 32px
+   inputs and 36px buttons are a deliberate DENSITY choice for managers working
+   through hundreds of questions at a desk, and inflating every control on a
+   1440px screen would rebuild a product decision as a side effect of a mobile
+   fix.
+
+   So this is the same floor applied only where the finger is: below the md
+   breakpoint, which is also exactly where the sidebar gives way to the tab bar
+   and the app becomes a phone app. Above it, nothing changes.
+
+   Scoped to [data-app-surface] rather than body so it cannot reach the auth
+   screens, which have their own rule and their own reasons.
+   ═════════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 767px) {
+  [data-app-surface] :is(input:not([type='hidden']), select, textarea) {
+    min-height: 2.75rem;
+  }
+
+  /* A radio or a checkbox is 16px wide whatever its height, so the rule
+     above leaves a 16x44 sliver — taller, and no easier to hit. The answer
+     options on the question editor are exactly this control. */
+  [data-app-surface] :is(input[type='radio'], input[type='checkbox']) {
+    min-width: 1.5rem;
+    min-height: 1.5rem;
+  }
+
+  /* Its LABEL is the real target: 44px of row, with the control inside it.
+     Enlarging the dot itself past 24px looks broken; enlarging what you can
+     press does not. */
+  [data-app-surface] label:has(> :is(input[type='radio'], input[type='checkbox'])) {
+    min-height: 2.75rem;
+    display: flex;
+    align-items: center;
+  }
+
+  /* A select narrower than the floor is as hard to hit as a short one. */
+  [data-app-surface] select {
+    min-width: 2.75rem;
+  }
+
+  /* Width as well as height: an icon button is square, so min-height alone
+     leaves a 44x32 target that is still too narrow to hit reliably. */
+  [data-app-surface] button {
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+  }
 }
 
 /* Respect the user's own setting. Motion is decoration here; nothing in the

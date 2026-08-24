@@ -75,6 +75,15 @@ export interface NavItem {
   href: string
   /** Key under the `nav` namespace in messages/*.json. */
   labelKey: string
+  /**
+   * A shorter label, for the mobile tab bar only.
+   *
+   * Five tabs across a 390px phone give each one about 78px. "Question
+   * Bank" does not fit and wraps to two lines, which drops its label below
+   * every other tab and makes the bar look broken. Only the items that
+   * need one set this; the sidebar always uses the full label.
+   */
+  shortLabelKey?: string
   icon: NavIcon
   /**
    * Extra path prefixes that should keep this item lit.
@@ -186,6 +195,7 @@ const NAV_ITEMS: NavItemConfig[] = [
   {
     href: '/questions',
     labelKey: 'bank',
+    shortLabelKey: 'bankShort',
     icon: 'bank',
     permissions: ['bank.read'],
     // The Super Admin lockout was removed on 10 Aug 2026; the guard stays
@@ -345,6 +355,7 @@ function toClientItem(item: NavItemConfig, claims: AppClaims): NavItem {
      */
     href: item.hrefFor?.(claims) ?? item.href,
     labelKey: item.labelKey,
+    shortLabelKey: item.shortLabelKey,
     icon: item.icon,
     /*
      * activeFor is forwarded UNCHANGED, whatever the href resolved to.

@@ -54,7 +54,10 @@ export function SectionTabs({ tabs, label }: { tabs: SectionTab[]; label: string
             href={tab.href}
             aria-current={active ? 'page' : undefined}
             className={cn(
-              '-mb-px border-b-2 px-3 py-2 text-body-sm transition-colors',
+              // min-h-11 is 44px: these are the primary way between sections
+              // on a phone and measured 42px, which is under the floor by just
+              // enough to be missed by a thumb and by a reviewer.
+              '-mb-px flex min-h-11 items-center border-b-2 px-3 py-2 text-body-sm transition-colors md:min-h-0',
               active
                 ? 'border-primary font-medium text-foreground'
                 : 'border-transparent text-muted-foreground hover:text-foreground',

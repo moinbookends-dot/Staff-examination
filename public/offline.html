@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>No connection · Bookends Learning</title>
+    <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
+
+    <!--
+      Entirely self-contained. This page is shown precisely when the network is
+      gone, so a stylesheet, a font or a script fetched from anywhere would be
+      the one thing that cannot load. Everything is inline, and the type falls
+      back to whatever the device already has.
+    -->
+    <style>
+      :root {
+        color-scheme: light dark;
+        --ground: #ffffff;
+        --ink: #0a0a0a;
+        --ink-soft: #5c5c66;
+        --line: #e4e4e7;
+        --brand: #2563eb;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --ground: #0a0a0b;
+          --ink: #f4f4f5;
+          --ink-soft: #a1a1aa;
+          --line: #27272a;
+          --brand: #5b93ff;
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100svh;
+        display: grid;
+        place-items: center;
+        padding: 1.5rem calc(1.25rem + env(safe-area-inset-left)) calc(1.5rem + env(safe-area-inset-bottom));
+        background: var(--ground);
+        color: var(--ink);
+        font-family:
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          'Noto Sans',
+          sans-serif;
+        line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      main {
+        width: 100%;
+        max-width: 26rem;
+        text-align: center;
+      }
+
+      .mark {
+        width: 64px;
+        height: 64px;
+        margin: 0 auto 1.5rem;
+        display: block;
+      }
+
+      h1 {
+        margin: 0 0 0.5rem;
+        font-size: 1.375rem;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+      }
+
+      p {
+        margin: 0;
+        color: var(--ink-soft);
+        font-size: 0.9375rem;
+      }
+
+      .langs {
+        margin-top: 1.75rem;
+        padding-top: 1.25rem;
+        border-top: 1px solid var(--line);
+        display: grid;
+        gap: 0.5rem;
+      }
+
+      .langs p {
+        font-size: 0.875rem;
+      }
+
+      button {
+        margin-top: 1.75rem;
+        width: 100%;
+        /* 44px, the floor Apple and Google both publish — and this button is
+           pressed one-handed, in a kitchen, by somebody already frustrated. */
+        min-height: 44px;
+        padding: 0.75rem 1.25rem;
+        border: 0;
+        border-radius: 8px;
+        background: var(--brand);
+        color: #ffffff;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      button:focus-visible {
+        outline: 2px solid var(--brand);
+        outline-offset: 2px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <main>
+      <svg class="mark" viewBox="0 0 512 512" aria-hidden="true">
+        <rect width="512" height="512" rx="92" fill="#2563eb" />
+        <g fill="#ffffff">
+          <rect x="97" y="132" width="47" height="247" rx="13" />
+          <rect x="368" y="132" width="47" height="247" rx="13" />
+          <g transform="rotate(-8 256 256)">
+            <rect x="203" y="163" width="106" height="186" rx="11" opacity="0.92" />
+          </g>
+        </g>
+      </svg>
+
+      <h1>No connection</h1>
+      <p>Bookends needs the internet to load your exams and results. Reconnect and try again.</p>
+
+      <div class="langs">
+        <p lang="hi">इंटरनेट कनेक्शन नहीं है। दोबारा कनेक्ट करके फिर कोशिश करें।</p>
+        <p lang="gu">ઇન્ટરનેટ કનેક્શન નથી. ફરી કનેક્ટ કરીને પ્રયાસ કરો.</p>
+      </div>
+
+      <button type="button" onclick="location.reload()">Try again</button>
+    </main>
+  </body>
+</html>

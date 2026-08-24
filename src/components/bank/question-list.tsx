@@ -113,7 +113,12 @@ export function QuestionList({ rows, difficultyLabels, typeLabels, labels }: Que
       <ul className="space-y-3 md:hidden">
         {rows.map((row) => (
           <li key={row.rowKey} className="rounded-xl border bg-card p-4">
-            <Link href={`/questions/${row.rowKey}`} className="block">
+            {/* min-h-11 below md: this link IS the row on a phone, and it
+                measured 24px — a line of text, not a target. */}
+            <Link
+              href={`/questions/${row.rowKey}`}
+              className="flex min-h-11 items-center max-md:py-1"
+            >
               <span className="line-clamp-3 text-body-md">{row.question || labels.untitled}</span>
             </Link>
             <div className="mt-3 flex flex-wrap items-center gap-2">

@@ -474,19 +474,29 @@ export function QuestionForm({ question, options, onSubmit }: QuestionFormProps)
                                 is one correct answer for the question, not one
                                 per language.
                               */}
-                              <input
-                                type="radio"
-                                name="correct-option"
-                                value={key}
-                                checked={correctOption === key}
-                                onChange={() => setCorrectOption(key)}
-                                disabled={pending}
-                                aria-label={`${t('formCorrect')} ${key}`}
-                                className="size-4 shrink-0 accent-emerald-600"
-                              />
-                              <span className="w-4 shrink-0 text-sm text-muted-foreground">
-                                {key}
-                              </span>
+                              {/*
+                                The radio and its letter are ONE label, and that
+                                is a touch fix rather than a tidy-up: a 16px dot
+                                is a quarter of the 44px minimum, and on a phone
+                                it is genuinely hard to hit. Wrapping them makes
+                                the letter part of the target too, which is the
+                                area a thumb actually goes for.
+                              */}
+                              <label className="flex min-h-11 shrink-0 cursor-pointer items-center gap-2 md:min-h-0">
+                                <input
+                                  type="radio"
+                                  name="correct-option"
+                                  value={key}
+                                  checked={correctOption === key}
+                                  onChange={() => setCorrectOption(key)}
+                                  disabled={pending}
+                                  aria-label={`${t('formCorrect')} ${key}`}
+                                  className="size-4 shrink-0 accent-emerald-600"
+                                />
+                                <span className="w-4 shrink-0 text-sm text-muted-foreground">
+                                  {key}
+                                </span>
+                              </label>
                               <Input
                                 value={(texts[locale][field] as string) ?? ''}
                                 onChange={(e) => setText(locale, field, e.target.value)}

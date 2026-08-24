@@ -47,7 +47,20 @@ export function PageHeader({
           </p>
         )}
       </div>
-      {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+      {/*
+          shrink-0 keeps the buttons from being squashed beside a long title —
+          correct at desktop width, and the reason a 320px header overflowed by
+          69px: a flex item that cannot shrink sizes to the whole row of
+          buttons laid end to end, so its own flex-wrap never engages.
+
+          Below md it takes the full width instead, drops under the title, and
+          wraps its buttons the way it was always meant to.
+      */}
+      {actions && (
+        <div className="flex shrink-0 flex-wrap items-center gap-2 max-md:w-full max-md:shrink">
+          {actions}
+        </div>
+      )}
     </div>
   )
 }

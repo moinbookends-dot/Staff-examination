@@ -54,7 +54,10 @@ export function LiveExamCard({
       <CardHeader className="gap-2">
         <div className="flex items-start justify-between gap-2">
           <CardTitle className="text-base">
-            <Link href={`/exams/${exam.id}`} className="hover:underline">
+            <Link
+              href={`/exams/${exam.id}`}
+              className="inline-flex min-h-11 min-w-11 items-center hover:underline md:min-h-0 md:min-w-0"
+            >
               {exam.title}
             </Link>
           </CardTitle>

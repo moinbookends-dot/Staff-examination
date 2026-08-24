@@ -151,7 +151,7 @@ export default async function DashboardPage() {
             <h2 className="text-title-md">{te('dashLiveTitle')}</h2>
             <Link
               href="/exams/live"
-              className="text-body-sm font-medium text-primary hover:underline"
+              className="inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline md:min-h-0"
             >
               {te('dashLiveAll')}
             </Link>
@@ -325,7 +325,10 @@ async function RecentPapers({
     <section className="rounded-xl border bg-card p-5">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-title-md">{t('recentPapers')}</h2>
-        <Link href="/history" className="text-body-sm text-primary hover:underline">
+        <Link
+          href="/history"
+          className="inline-flex min-h-11 items-center text-body-sm text-primary hover:underline md:min-h-0"
+        >
           {t('viewAll')}
         </Link>
       </div>
@@ -338,7 +341,10 @@ async function RecentPapers({
         <ul className="mt-4 divide-y">
           {rows.map((row) => (
             <li key={row.id} className="py-3 first:pt-0 last:pb-0">
-              <Link href={`/history/${row.id}`} className="text-body-sm hover:underline">
+              <Link
+                href={`/history/${row.id}`}
+                className="inline-flex min-h-11 items-center text-body-sm hover:underline md:min-h-0"
+              >
                 {t('paperNo', { paperNo: row.paperNo })}
               </Link>
             </li>
