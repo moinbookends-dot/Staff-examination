@@ -3,7 +3,19 @@
 import { createClient } from '@/lib/supabase/server'
 
 /**
- * Organisation lookups for the registration form.
+ * Organisation lookups for the outlet and department dropdowns.
+ *
+ * TWO CALLERS, AND THE NAMES UNDERSELL IT — read this before changing a filter.
+ * The `…ForRegistration` suffix describes where these started, not where they
+ * are used now:
+ *
+ *   /register   — anonymous, runs under the anon policies added in 0081.
+ *   /approvals  — signed in, runs under `outlets_read` / `departments_read`,
+ *                 which are company-scoped and enforce different conditions.
+ *
+ * A row filter therefore has to be reasoned about against BOTH policies. 0081
+ * moved is_active into the anon policy alone and silently un-filtered the
+ * approvals dropdown; 0082 and the query below put that right.
  *
  * ┌───────────────────────────────────────────────────────────────────────────┐
  * │ THIS USED TO BE THE ONLY UNAUTHENTICATED USE OF THE ADMIN CLIENT.         │
@@ -41,11 +53,27 @@ export async function listOutletsForRegistration(): Promise<OrgOption[]> {
   const supabase = await createClient()
 
   /*
-   * No deleted_at / is_active filter here, deliberately: 0081's policy applies
-   * both. Repeating them would also require granting anon SELECT on those two
-   * columns — a WHERE clause needs column privileges, a policy does not.
+   * is_active IS filtered here and deleted_at is NOT, which looks inconsistent
+   * until you count the callers. Both anon (registration) and authenticated
+   * (/approvals, below) reach this function:
+   *
+   *   deleted_at — both policies already exclude soft-deleted rows, so a query
+   *                filter would be dead weight.
+   *   is_active  — only the ANON policy checks it. outlets_read, the
+   *                authenticated policy, deliberately does not, because org
+   *                management must be able to see a deactivated outlet in
+   *                order to reactivate it. So the filter has to live here, or
+   *                /approvals would offer closed outlets to assign staff to.
+   *
+   * 0082 grants anon SELECT on is_active purely so this clause is expressible;
+   * a WHERE clause needs the column privilege even when a policy already
+   * constrains the value.
    */
-  const { data, error } = await supabase.from('outlets').select('id, name').order('name')
+  const { data, error } = await supabase
+    .from('outlets')
+    .select('id, name')
+    .eq('is_active', true)
+    .order('name')
 
   if (error) return []
 

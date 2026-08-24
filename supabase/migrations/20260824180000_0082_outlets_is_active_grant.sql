@@ -1,0 +1,41 @@
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 0082 — Let the outlet query filter is_active again, for BOTH its callers.
+--
+-- ╔═══════════════════════════════════════════════════════════════════════════╗
+-- ║ FIXING A REGRESSION 0081 INTRODUCED. Recording it plainly.                ║
+-- ║                                                                           ║
+-- ║ listOutletsForRegistration() used to filter `.eq('is_active', true)` in   ║
+-- ║ the query. 0081 moved that filter into the anon policy — correct for the  ║
+-- ║ sign-up form, and wrong for the OTHER caller.                             ║
+-- ║                                                                           ║
+-- ║ /approvals reads the same function while signed in, so it runs under the  ║
+-- ║ authenticated policy `outlets_read`, which checks deleted_at, is_approved ║
+-- ║ and company — but NOT is_active. Between 0081 and this migration a        ║
+-- ║ deactivated outlet would therefore reappear in the approvals dropdown,    ║
+-- ║ and a chef could assign new staff to a closed outlet.                     ║
+-- ║                                                                           ║
+-- ║ Nothing broke in practice: every outlet in this database is currently     ║
+-- ║ active, so the count of affected rows today is zero. It was latent, not   ║
+-- ║ live — which is exactly why it is worth closing now rather than after     ║
+-- ║ somebody deactivates an outlet.                                           ║
+-- ╚═══════════════════════════════════════════════════════════════════════════╝
+--
+-- WHY NOT ADD is_active TO THE AUTHENTICATED POLICY INSTEAD: because listing
+-- deactivated outlets is a legitimate thing for org management to do — you
+-- cannot reactivate an outlet you cannot see. The filter belongs to this one
+-- query, not to every authenticated read of the table.
+--
+-- WHY THIS GRANT LEAKS NOTHING: a WHERE clause needs a column privilege even
+-- when a policy already constrains the value. anon may only see rows where
+-- outlets_read_for_registration holds, and that policy requires is_active, so
+-- for every row anon can read the column is true by construction. The grant
+-- conveys no information anon does not already have — it only makes the
+-- filter expressible.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+grant select (is_active) on public.outlets to anon;
+
+-- The policy keeps its own is_active check deliberately. It is now redundant
+-- with the query filter, and that redundancy is the point: if the filter is
+-- ever dropped from the query again, anon still cannot see a deactivated
+-- outlet. Defence in depth costs nothing here.
