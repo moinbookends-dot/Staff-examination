@@ -247,17 +247,19 @@ for (const [id, q] of paper) {
     if (!k.answerText) fail(`${id}: short answer with no model answer`)
   }
 
+  // Absent fields are OMITTED, never null — the import contract now reads
+  // null as absent, but omitting is what parse-aiko.mjs (easy) always did and
+  // it keeps the emitted files canonical.
   questions.push({
     externalId: id,
     difficulty: 'hard',
     type: q.options ? 'mcq' : 'short_answer',
     topic: q.topic,
-    correctOption: q.options ? k.letter : null,
+    ...(q.options ? { correctOption: k.letter } : {}),
     en: {
       question: q.question,
-      options: q.options,
-      answer: q.options ? null : k.answerText,
-      explanation: k.explanation || null,
+      ...(q.options ? { options: q.options } : { answer: k.answerText }),
+      ...(k.explanation ? { explanation: k.explanation } : {}),
     },
   })
 }

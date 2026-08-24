@@ -3,7 +3,13 @@ import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { getAppClaims } from '@/lib/auth/claims'
 import { canSeeQuestionUuid } from '@/lib/auth/bank-access'
-import { BANK_LOCALES, type BankLocale, type Difficulty } from '@/lib/bank/vocabulary'
+import {
+  BANK_LOCALES,
+  type BankLocale,
+  type Difficulty,
+  type QuestionType,
+} from '@/lib/bank/vocabulary'
+import { questionKey } from '@/lib/bank/import/format'
 import type {
   BankFormOptions,
   BankImportOptions,
@@ -202,7 +208,7 @@ export async function loadFormOptions(): Promise<BankFormOptions> {
    * left to populate a picker with.
    */
   const [brands, topics, settings] = await Promise.all([
-    supabase.from('brands').select('id, name').is('deleted_at', null).order('name'),
+    supabase.from('brands').select('id, name, slug').is('deleted_at', null).order('name'),
     loadTopics(),
     supabase.from('exam_settings').select('required_locales, label_easy, label_medium, label_hard').maybeSingle(),
   ])
@@ -219,7 +225,7 @@ export async function loadFormOptions(): Promise<BankFormOptions> {
   }
 
   return {
-    brands: (brands.data ?? []).map((b) => ({ id: b.id, name: b.name })),
+    brands: (brands.data ?? []).map((b) => ({ id: b.id, name: b.name, slug: b.slug })),
     topics,
     // Server-decided. The id is absent from the payload for anybody else, and
     // a field the server never sent cannot be recovered in the browser.
@@ -246,23 +252,96 @@ export async function loadFormOptions(): Promise<BankFormOptions> {
  * │ already contain, and only an Editor can reach this screen at all.         │
  * └───────────────────────────────────────────────────────────────────────────┘
  */
-export async function loadImportOptions(): Promise<BankImportOptions> {
+/**
+ * @param brandId The brand the import is going into.
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ BRAND-SCOPED, WHICH IT WAS NOT.                                          │
+ * │                                                                           │
+ * │ externalIds were read across every brand, so an id belonging to Aiko made │
+ * │ a Capiche row read as an update when the commit would in fact insert it.  │
+ * │ The two banks are separate — bank_questions_external_id_uq is per brand,   │
+ * │ and so is the English-text index — so the answer to "is this already      │
+ * │ here" is only meaningful within one of them.                              │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ */
+export async function loadImportOptions(brandId?: string): Promise<BankImportOptions> {
   const supabase = await createClient()
   const form = await loadFormOptions()
 
-  const { data } = await supabase
-    .from('bank_questions')
-    .select('external_id')
-    .not('external_id', 'is', null)
+  // Without a brand there is nothing meaningful to compare against, and
+  // guessing one would be worse than reporting everything as new.
+  if (!brandId) {
+    return {
+      brands: form.brands,
+      topicSlugs: form.topics.map((t) => t.slug),
+      requiredLocales: form.requiredLocales,
+      difficultyLabels: form.difficultyLabels,
+      existingExternalIds: [],
+      existingQuestions: [],
+    }
+  }
+
+  /*
+   * Paged, because PostgREST caps a response at 1,000 rows and the bank is
+   * already past that. An un-paged read would silently describe the first
+   * thousand questions as the whole bank, and every question after them
+   * would import as new — the exact bug this function exists to fix, in a
+   * shape nobody would spot.
+   */
+  const rows: { question: string; difficulty: Difficulty; qtype: QuestionType }[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from('bank_question_texts')
+      .select('question, difficulty, qtype, bank_questions!inner(deleted_at)')
+      .eq('brand_id', brandId)
+      .eq('locale', 'en')
+      .range(from, from + PAGE - 1)
+
+    if (error) throw new Error(`Could not read the bank to compare against: ${error.message}`)
+    if (!data || data.length === 0) break
+
+    for (const row of data) {
+      /*
+       * Soft-deleted questions are KEPT. bank_question_texts_dedupe_uq does
+       * not exclude them either, so their English text still occupies the
+       * slot — reporting such a row as new would promise an insert the
+       * database refuses. 0080 matches and restores it instead.
+       */
+      rows.push({
+        question: row.question,
+        difficulty: row.difficulty as Difficulty,
+        qtype: row.qtype as QuestionType,
+      })
+    }
+
+    if (data.length < PAGE) break
+  }
+
+  const ids: string[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data } = await supabase
+      .from('bank_questions')
+      .select('external_id')
+      .eq('brand_id', brandId)
+      .not('external_id', 'is', null)
+      .range(from, from + PAGE - 1)
+
+    if (!data || data.length === 0) break
+    for (const row of data) if (typeof row.external_id === 'string') ids.push(row.external_id)
+    if (data.length < PAGE) break
+  }
 
   return {
     brands: form.brands,
     topicSlugs: form.topics.map((t) => t.slug),
     requiredLocales: form.requiredLocales,
     difficultyLabels: form.difficultyLabels,
-    existingExternalIds: (data ?? [])
-      .map((row) => row.external_id)
-      .filter((id): id is string => typeof id === 'string'),
+    existingExternalIds: ids,
+    existingQuestions: rows.map((r) => ({
+      key: questionKey(r.difficulty, r.question),
+      qtype: r.qtype,
+    })),
   }
 }
 
@@ -287,6 +366,8 @@ export async function loadImportOptions(): Promise<BankImportOptions> {
 export async function loadQuestionPage(options: {
   page?: number
   pageSize?: number
+  /** Show one brand's bank only. A brand-pinned Editor's pin wins over this. */
+  brandId?: string | null
 } = {}): Promise<BankQuestionPage> {
   const supabase = await createClient()
   const claims = await getAppClaims()
@@ -295,12 +376,20 @@ export async function loadQuestionPage(options: {
   const page = Math.max(options.page ?? 1, 1)
   const from = (page - 1) * pageSize
 
-  const { data, count } = await supabase
+  // The pin is not a default, it is a ceiling: whatever the query string says,
+  // a pinned Editor reads their own brand. RLS agrees, but the page count
+  // should too — a filter the database silently empties reads as a bug.
+  const brandId = claims.brand_id ?? options.brandId ?? null
+
+  let query = supabase
     .from('bank_questions')
     .select('id, brand_id, difficulty, qtype, status, topic_id, correct_option, created_at', {
       count: 'exact',
     })
     .is('deleted_at', null)
+  if (brandId) query = query.eq('brand_id', brandId)
+
+  const { data, count } = await query
     .order('created_at', { ascending: false })
     .range(from, from + pageSize - 1)
 
@@ -480,7 +569,13 @@ export async function loadQuestionsForExport(brandId: string): Promise<ExportRow
     }
   }
 
-  const { data: topicRows } = await supabase.from('question_topics').select('id, slug')
+  // Live topics only: a soft-deleted topic's slug would export looking valid
+  // and then be refused on re-import as unknown-topic. Filtering it here means
+  // the question exports with no topic instead, which round-trips cleanly.
+  const { data: topicRows } = await supabase
+    .from('question_topics')
+    .select('id, slug')
+    .is('deleted_at', null)
   const topicSlug = new Map((topicRows ?? []).map((t) => [t.id, t.slug]))
 
   /*

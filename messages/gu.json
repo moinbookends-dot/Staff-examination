@@ -1,7 +1,7 @@
 {
   "app": {
     "name": "Bookends",
-    "tagline": "Aiko, Capiche અને Prep માટે તાલીમ અને મૂલ્યાંકન",
+    "tagline": "Aiko અને Capiche માટે તાલીમ અને મૂલ્યાંકન",
     "subtitle": "સ્ટાફ પરીક્ષા"
   },
   "nav": {
@@ -497,6 +497,8 @@
     "colReference": "સંદર્ભ",
     "colPage": "પેજ",
     "colBrand": "બ્રાન્ડ",
+    "brandAll": "બધી બ્રાન્ડ",
+    "brandFilterLabel": "બ્રાન્ડ પ્રમાણે ગાળો",
     "colCreatedBy": "બનાવ્યું",
     "colUpdated": "અપડેટ",
     "colActions": "ક્રિયા",
@@ -800,7 +802,34 @@
     "reviewNoText": "(અંગ્રેજી લખાણ નથી)",
     "reviewEmpty": "પેપર {paperNo} માં કોઈ પ્રશ્ન બાકી નથી.",
     "reviewFrozenTitle": "આ પેપર હવે બદલી શકાતું નથી",
-    "reviewFrozenBody": "તે પરીક્ષા તરીકે પ્રકાશિત થઈ ચૂક્યું છે. દરેક ઉમેદવારને શરૂ કરતી વખતે પેપર મળે છે, તેથી હવે બદલવાથી પછીનાને અલગ પેપર મળશે. નવું પેપર બનાવો."
+    "reviewFrozenBody": "તે પરીક્ષા તરીકે પ્રકાશિત થઈ ચૂક્યું છે. દરેક ઉમેદવારને શરૂ કરતી વખતે પેપર મળે છે, તેથી હવે બદલવાથી પછીનાને અલગ પેપર મળશે. નવું પેપર બનાવો.",
+    "stepPool": "પ્રશ્ન પૂલ",
+    "poolHint": "બધા વિષયો સામેલ છે. કોઈને દૂર કરો જેથી તેના પ્રશ્નો આ પેપરમાં ન આવે — પાત્ર સંખ્યા સાથે સાથે બદલાશે.",
+    "poolTotal": "કુલ પ્રશ્નો",
+    "poolExcluded": "વિષય દ્વારા બહાર",
+    "poolEligible": "પાત્ર પ્રશ્નો",
+    "poolEnough": "{requested} ગુણના પેપર માટે પૂરતા પ્રશ્નો છે.",
+    "poolShort": "{requested} ગુણના પેપર માટે પૂરતા પાત્ર પ્રશ્નો નથી: તેને {mcqNeeded} બહુવિકલ્પ અને {shortNeeded} ટૂંકા જવાબ જોઈએ, જ્યારે {mcqAvailable} અને {shortAvailable} પાત્ર છે. વધુ વિષયો સામેલ કરો, અથવા નાનું પેપર પસંદ કરો.",
+    "topicNone": "કોઈ વિષય નથી",
+    "levelEmpty": "આ સ્તરે કોઈ પ્રશ્નો નથી",
+    "distributionHint": "બધી બ્રાન્ડના સક્રિય પ્રશ્નો.",
+    "stepItems": "રેસિપી / આઇટમ વપરાશ",
+    "itemsHint": "બધી રેસિપી વપરાશમાં છે. કોઈને દૂર કરો જેથી તે મેન્યૂમાંથી નીકળી જાય — તેના પ્રશ્નો નવા પેપરમાં નહીં આવે. કંઈ કાઢી નાખવામાં આવતું નથી.",
+    "itemsSearch": "રેસિપી/આઇટમ શોધો…",
+    "itemsInUseCount": "{total} માંથી {inUse} વપરાશમાં",
+    "itemsNoMatch": "“{search}” સાથે કોઈ રેસિપી કે આઇટમ મેળ ખાતું નથી.",
+    "itemsNotInUse": "વપરાશમાં નથી",
+    "itemNone": "કોઈ રેસિપી કે આઇટમ નથી",
+    "configTitle": "જનરેશન સેટિંગ્સ",
+    "configAbsent": "આ પેપર સેટિંગ્સ નોંધાય તે પહેલાં બન્યું હતું, તેથી શું બહાર રખાયું હતું તે જાણમાં નથી.",
+    "configTopics": "વિષયો",
+    "configAllTopics": "બધા વિષયો",
+    "configExcluded": "બહાર રખાયેલી રેસિપી / આઇટમ",
+    "configNoneExcluded": "કોઈ નહીં",
+    "configRequested": "માંગેલા પ્રશ્નો",
+    "configUntagged": "રેસિપી વગરના પ્રશ્નો",
+    "configUntaggedIncluded": "સામેલ",
+    "configUntaggedExcluded": "બહાર"
   },
   "import": {
     "title": "પ્રશ્નો આયાત કરો",
@@ -808,6 +837,10 @@
     "chooseFile": "ફાઇલ પસંદ કરો",
     "fileHint": "JSON — પ્રશ્નોની યાદી, \"questions\" કી ધરાવતો ઑબ્જેક્ટ, અથવા લાઇન દીઠ એક પ્રશ્ન.",
     "chooseBrand": "આ બ્રાન્ડમાં આયાત કરો",
+    "brandMismatch": "આ ફાઇલ “{declared}” માટે છે, પરંતુ ઉપર “{selected}” પસંદ કરેલ છે. આયાત કરતાં પહેલાં સાચી બ્રાન્ડ પસંદ કરો.",
+    "downloadErrors": "ભૂલ રિપોર્ટ ડાઉનલોડ કરો",
+    "mcqSummary": "MCQ: {valid} માન્ય · {invalid} અમાન્ય",
+    "shortSummary": "ટૂંકો જવાબ: {valid} માન્ય · {invalid} અમાન્ય",
     "reading": "ફાઇલ વંચાઈ રહી છે…",
     "analysing": "ફાઇલ તપાસાઈ રહી છે…",
     "clear": "ફરી શરૂ કરો",
@@ -846,7 +879,8 @@
       "invalid-option-structure": "અમાન્ય વિકલ્પો",
       "invalid-answer": "અમાન્ય જવાબ",
       "unknown-topic": "અજાણ્યો વિષય",
-      "invalid-reference": "અમાન્ય સંદર્ભ"
+      "invalid-reference": "અમાન્ય સંદર્ભ",
+      "type-conflict": "બેંકમાં પહેલેથી બીજા પ્રકારના પ્રશ્ન તરીકે હાજર"
     },
     "technicalDetails": "ટેકનિકલ વિગતો",
     "tabs": {

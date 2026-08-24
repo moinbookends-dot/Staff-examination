@@ -1,0 +1,13 @@
+Q1. [capiche-easy-0001] Which cheese is used in a classic Margherita pizza?
+A) Cheddar
+B) Mozzarella
+C) Parmesan
+D) Gorgonzola
+
+Q2. [capiche-medium-0001] At what temperature should a wood-fired pizza oven be for a Neapolitan base?
+A) 220°C
+B) 320°C
+C) 430°C
+D) 550°C
+
+Q3. [capiche-hard-0001] A risotto has turned gluey and heavy by the time it reaches the pass. Name the most likely cause and how the next batch should be corrected.

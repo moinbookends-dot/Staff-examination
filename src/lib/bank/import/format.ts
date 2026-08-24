@@ -191,6 +191,8 @@ export const REJECTION_REASONS = [
   'invalid-option-structure',
   'invalid-answer',
   'unknown-topic',
+  /* Matches a question already in the bank, but calls it the other type. */
+  'type-conflict',
   'invalid-reference',
 ] as const
 
@@ -288,6 +290,38 @@ export function classifySchemaIssue(path: readonly PropertyKey[]): RejectionReas
   return 'malformed'
 }
 
+/**
+ * Read a null-valued field as an absent field, recursively.
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ PART OF THE CONTRACT: `"answer": null` MEANS "NO ANSWER".                 │
+ * │                                                                           │
+ * │ Generators that transpose a spreadsheet or an answer-key column write     │
+ * │ null for the cells a row does not have — every MCQ arrives with           │
+ * │ `"answer": null`, every short answer with `"options": null`. Zod's        │
+ * │ .optional() accepts undefined and not null, so without this step those    │
+ * │ rows fail schema parsing with "expected string, received null" — which    │
+ * │ is how a 1,000-MCQ file imported zero rows while its 30 short answers     │
+ * │ (whose generator omitted the keys instead) sailed through.                │
+ * │                                                                           │
+ * │ Stripping nulls BEFORE the schema is a widening, not a weakening: every   │
+ * │ file that validated before validates identically, the cross-field rules   │
+ * │ in shapeIssues() still refuse an MCQ without options, and a REQUIRED      │
+ * │ field set to null is still rejected — as "missing", which is what null    │
+ * │ meant all along.                                                          │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ */
+export function pruneNulls(value: unknown): unknown {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return value
+
+  const out: Record<string, unknown> = {}
+  for (const [key, entry] of Object.entries(value)) {
+    if (entry === null) continue
+    out[key] = pruneNulls(entry)
+  }
+  return out
+}
+
 /** Normalise a topic name or slug for matching. "Food Safety" → "food-safety". */
 export function topicSlug(value: string): string {
   return value
@@ -305,5 +339,28 @@ export function topicSlug(value: string): string {
  * database for a duplicate it could have reported first.
  */
 export function dedupeKey(question: ImportQuestion): string {
-  return `${question.difficulty}::${question.en.question.trim().toLowerCase()}`
+  return questionKey(question.difficulty, question.en.question)
+}
+
+/**
+ * The key that identifies one question within a brand.
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ THE SAME EXPRESSION THE DATABASE'S UNIQUE INDEX USES.                     │
+ * │                                                                           │
+ * │ bank_question_texts_dedupe_uq is (brand_id, difficulty,                   │
+ * │ lower(btrim(question))) WHERE locale = 'en'. Anything this key treats as  │
+ * │ the same question, the index refuses as a duplicate — so matching on it   │
+ * │ means the report and the database can never reach different answers.      │
+ * │                                                                           │
+ * │ NOT the question TYPE, deliberately: the index does not include it. A key │
+ * │ that did would call a type-changed row new, and the insert that followed  │
+ * │ would hit the very constraint the match exists to avoid.                  │
+ * │                                                                           │
+ * │ NFC because two encodings of one accented word are one question to a      │
+ * │ reader. 0080 normalises the same way on the SQL side.                     │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ */
+export function questionKey(difficulty: string, english: string): string {
+  return `${difficulty}::${english.normalize('NFC').trim().toLowerCase()}`
 }

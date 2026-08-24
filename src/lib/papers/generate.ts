@@ -7,7 +7,12 @@ import {
   type PoolCounts,
 } from './combinations'
 import { combinationHash } from './paper-hash'
-import type { PaperRepository, PaperScope, PlacedQuestion } from './repository'
+import type {
+  GenerationConfig,
+  PaperRepository,
+  PaperScope,
+  PlacedQuestion,
+} from './repository'
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -56,6 +61,14 @@ export const MAX_DRAW_ATTEMPTS = 40
 export interface GenerateRequest {
   scope: PaperScope
   generatedBy: string
+  /**
+   * The filters this paper is being generated with, recorded alongside it.
+   *
+   * Passed through untouched — the generator does not interpret it. Optional
+   * because the algorithm is testable without one, and because a paper is
+   * still a valid paper when nobody chose to record why it looks as it does.
+   */
+  config?: GenerationConfig
 }
 
 export interface Shortfall {
@@ -145,7 +158,7 @@ export async function generatePaper(
 ): Promise<GenerateResult> {
   const random = options.random ?? Math.random
   const maxAttempts = options.maxAttempts ?? MAX_DRAW_ATTEMPTS
-  const { scope, generatedBy } = request
+  const { scope, generatedBy, config } = request
 
   let blueprint: PaperBlueprint
   try {
@@ -243,6 +256,7 @@ export async function generatePaper(
       combinationHash: hash,
       questions,
       generatedBy,
+      config,
     })
 
     if (outcome.status === 'saved') {

@@ -1,0 +1,102 @@
+{
+  "formatVersion": 1,
+  "brand": "capiche",
+  "questions": [
+    {
+      "externalId": "capiche-easy-0001",
+      "difficulty": "easy",
+      "type": "mcq",
+      "status": "active",
+      "topic": "key-ingredients",
+      "correctOption": "B",
+      "en": {
+        "question": "Which cheese is used in a classic Margherita pizza?",
+        "options": {
+          "A": "Cheddar",
+          "B": "Mozzarella",
+          "C": "Parmesan",
+          "D": "Gorgonzola"
+        },
+        "explanation": "A Margherita carries tomato, mozzarella and basil — the colours of the Italian flag."
+      },
+      "hi": {
+        "question": "क्लासिक मार्गेरिटा पिज़्ज़ा में कौन सा चीज़ इस्तेमाल होता है?",
+        "options": {
+          "A": "चेडर",
+          "B": "मोज़रेला",
+          "C": "पार्मेज़ान",
+          "D": "गोर्गोन्ज़ोला"
+        },
+        "explanation": "मार्गेरिटा में टमाटर, मोज़रेला और तुलसी होती है — इतालवी झंडे के रंग।"
+      },
+      "gu": {
+        "question": "ક્લાસિક માર્ગેરિટા પિઝામાં કયું ચીઝ વપરાય છે?",
+        "options": {
+          "A": "ચેડર",
+          "B": "મોઝરેલા",
+          "C": "પાર્મેઝાન",
+          "D": "ગોર્ગોન્ઝોલા"
+        },
+        "explanation": "માર્ગેરિટામાં ટમેટા, મોઝરેલા અને તુલસી હોય છે — ઇટાલિયન ધ્વજના રંગો."
+      }
+    },
+    {
+      "externalId": "capiche-medium-0001",
+      "difficulty": "medium",
+      "type": "mcq",
+      "status": "active",
+      "topic": "cooking-temperature",
+      "correctOption": "C",
+      "en": {
+        "question": "At what temperature should a wood-fired pizza oven be for a Neapolitan base?",
+        "options": {
+          "A": "220°C",
+          "B": "320°C",
+          "C": "430°C",
+          "D": "550°C"
+        },
+        "explanation": "A Neapolitan base cooks in about 90 seconds at roughly 430°C."
+      },
+      "hi": {
+        "question": "नेपोलिटन बेस के लिए वुड-फ़ायर्ड पिज़्ज़ा ओवन का तापमान कितना होना चाहिए?",
+        "options": {
+          "A": "220°C",
+          "B": "320°C",
+          "C": "430°C",
+          "D": "550°C"
+        },
+        "explanation": "नेपोलिटन बेस लगभग 430°C पर करीब 90 सेकंड में पकता है।"
+      },
+      "gu": {
+        "question": "નેપોલિટન બેઝ માટે વુડ-ફાયર્ડ પિઝા ઓવનનું તાપમાન કેટલું હોવું જોઈએ?",
+        "options": {
+          "A": "220°C",
+          "B": "320°C",
+          "C": "430°C",
+          "D": "550°C"
+        },
+        "explanation": "નેપોલિટન બેઝ આશરે 430°C પર લગભગ 90 સેકન્ડમાં પાકે છે."
+      }
+    },
+    {
+      "externalId": "capiche-hard-0001",
+      "difficulty": "hard",
+      "type": "short_answer",
+      "status": "active",
+      "topic": "faults-fixes",
+      "en": {
+        "question": "A risotto has turned gluey and heavy by the time it reaches the pass. Name the most likely cause and how the next batch should be corrected.",
+        "answer": "The rice was over-stirred or overcooked past al dente, releasing too much starch. Stir less aggressively, keep the stock additions gradual, and pull the pan while the grains still have bite.",
+        "explanation": "Marker guidance: accept any answer naming excess starch release plus a concrete correction."
+      },
+      "hi": {
+        "question": "पास तक पहुँचते-पहुँचते रिज़ोटो चिपचिपा और भारी हो गया है। सबसे संभावित कारण बताइए और अगला बैच कैसे सुधारा जाए?",
+        "answer": "चावल को ज़्यादा हिलाया गया या अल डेंटे से आगे पका दिया गया, जिससे बहुत ज़्यादा स्टार्च निकला। कम हिलाएँ, स्टॉक धीरे-धीरे डालें, और दाने में हल्का कड़ापन रहते ही पैन उतार लें।"
+      },
+      "gu": {
+        "question": "પાસ સુધી પહોંચતાં રિઝોટો ચીકણો અને ભારે થઈ ગયો છે. સૌથી સંભવિત કારણ જણાવો અને આગલી બેચ કેવી રીતે સુધારવી?",
+        "answer": "ચોખાને વધુ હલાવવામાં આવ્યા અથવા અલ ડેન્ટેથી વધુ પકાવાયા, જેથી વધુ સ્ટાર્ચ છૂટ્યો. ઓછું હલાવો, સ્ટૉક ધીમે ધીમે ઉમેરો, અને દાણામાં સહેજ કડકપણું રહે ત્યારે જ પૅન ઉતારી લો."
+      }
+    }
+  ]
+}

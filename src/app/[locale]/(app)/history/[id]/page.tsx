@@ -302,6 +302,74 @@ export default async function PaperDetailPage({
         </section>
       )}
 
+      {/*
+        ── Generation settings ───────────────────────────────────────────
+        Why this paper looks the way it does. Written at generation and never
+        recomputed: the menu changes, and a paper made when a dish was still
+        on it should not later claim the dish was excluded.
+      */}
+      <section className="rounded-xl border bg-card p-5">
+        <h2 className="text-title-md">{t('configTitle')}</h2>
+
+        {paper.generationConfig === null ? (
+          /* Not 'nothing was excluded' — that is a claim about a paper nobody
+             recorded. Papers generated before the generator kept its filters
+             genuinely cannot answer the question. */
+          <p className="mt-2 text-body-sm text-muted-foreground">{t('configAbsent')}</p>
+        ) : (
+          <dl className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div>
+              <dt className="text-label-caps text-muted-foreground">{t('configTopics')}</dt>
+              <dd className="mt-1 text-body-sm">
+                {paper.generationConfig.topics === null
+                  ? t('configAllTopics')
+                  : paper.generationConfig.topics.length > 0
+                    ? paper.generationConfig.topics.join(', ')
+                    : '—'}
+              </dd>
+            </div>
+
+            <div>
+              <dt className="text-label-caps text-muted-foreground">{t('configExcluded')}</dt>
+              <dd className="mt-1 text-body-sm">
+                {paper.generationConfig.excludedItems.length === 0 ? (
+                  t('configNoneExcluded')
+                ) : (
+                  <span className="flex flex-wrap gap-2">
+                    {paper.generationConfig.excludedItems.map((name) => (
+                      <Badge key={name} variant="outline">
+                        {name}
+                      </Badge>
+                    ))}
+                  </span>
+                )}
+              </dd>
+            </div>
+
+            {paper.generationConfig.requested && (
+              <div>
+                <dt className="text-label-caps text-muted-foreground">{t('configRequested')}</dt>
+                <dd className="mt-1 text-body-sm tabular-nums">
+                  {t('sizeBreakdown', {
+                    mcq: paper.generationConfig.requested.mcq,
+                    short: paper.generationConfig.requested.shortAnswer,
+                  })}
+                </dd>
+              </div>
+            )}
+
+            <div>
+              <dt className="text-label-caps text-muted-foreground">{t('configUntagged')}</dt>
+              <dd className="mt-1 text-body-sm">
+                {paper.generationConfig.includeNoItem
+                  ? t('configUntaggedIncluded')
+                  : t('configUntaggedExcluded')}
+              </dd>
+            </div>
+          </dl>
+        )}
+      </section>
+
       {/* ── Status ───────────────────────────────────────────────────────── */}
       <section className="rounded-xl border bg-card p-5">
         <h2 className="text-title-md">{t('statusTitle')}</h2>

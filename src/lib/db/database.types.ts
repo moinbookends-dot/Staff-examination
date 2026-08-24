@@ -325,6 +325,60 @@ export type Database = {
         }
         Relationships: []
       }
+      "bank_items": {
+        Row: {
+          "id": string
+          "company_id": string
+          "brand_id": string
+          "name": string
+          "slug": string
+          "in_use": boolean
+          "deleted_at": string | null
+          "created_at": string
+          "updated_at": string
+        }
+        Insert: {
+          "id"?: string
+          "company_id": string
+          "brand_id": string
+          "name": string
+          "slug": string
+          "in_use"?: boolean
+          "deleted_at"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+        }
+        Update: {
+          "id"?: string
+          "company_id"?: string
+          "brand_id"?: string
+          "name"?: string
+          "slug"?: string
+          "in_use"?: boolean
+          "deleted_at"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+        }
+        Relationships: []
+      }
+      "bank_question_items": {
+        Row: {
+          "question_id": string
+          "item_id": string
+          "created_at": string
+        }
+        Insert: {
+          "question_id": string
+          "item_id": string
+          "created_at"?: string
+        }
+        Update: {
+          "question_id"?: string
+          "item_id"?: string
+          "created_at"?: string
+        }
+        Relationships: []
+      }
       "bank_question_texts": {
         Row: {
           "question_id": string
@@ -757,6 +811,7 @@ export type Database = {
           "status": Database["public"]["Enums"]["paper_status"]
           "status_changed_at": string | null
           "status_changed_by": string | null
+          "generation_config": Json | null
         }
         Insert: {
           "id"?: string
@@ -774,6 +829,7 @@ export type Database = {
           "status"?: Database["public"]["Enums"]["paper_status"]
           "status_changed_at"?: string | null
           "status_changed_by"?: string | null
+          "generation_config"?: Json | null
         }
         Update: {
           "id"?: string
@@ -791,6 +847,7 @@ export type Database = {
           "status"?: Database["public"]["Enums"]["paper_status"]
           "status_changed_at"?: string | null
           "status_changed_by"?: string | null
+          "generation_config"?: Json | null
         }
         Relationships: []
       }
@@ -1804,7 +1861,15 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "bank_eligible_counts": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "bank_import_commit": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "bank_item_pool_counts": {
         Args: Record<string, unknown>
         Returns: unknown
       }
@@ -1833,6 +1898,10 @@ export type Database = {
         Returns: unknown
       }
       "bank_recommendations": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "bank_topic_pool_counts": {
         Args: Record<string, unknown>
         Returns: unknown
       }

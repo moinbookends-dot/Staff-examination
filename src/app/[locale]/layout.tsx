@@ -65,7 +65,7 @@ const gujarati = Noto_Sans_Gujarati({
 
 export const metadata: Metadata = {
   title: 'Bookends Learning',
-  description: 'Training and assessment for Aiko, Capiche and Prep',
+  description: 'Training and assessment for Aiko and Capiche',
 }
 
 /** Pre-render all three locales at build time. */

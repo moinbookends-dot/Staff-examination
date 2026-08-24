@@ -463,3 +463,138 @@ describe('extractRows', () => {
     expect('fatal' in result).toBe(true)
   })
 })
+
+describe('null is read as absent', () => {
+  /*
+   * The bug this pins: generators that transpose an answer-key column write
+   * `"answer": null` on every MCQ (and `"options": null` on every short
+   * answer). Zod's .optional() accepts undefined, not null — so a 1,000-MCQ
+   * file imported ZERO rows while its 30 short answers, whose keys were
+   * omitted instead, sailed through. pruneNulls() now strips null-valued
+   * fields before the schema runs.
+   */
+  it('imports an MCQ carrying answer: null', () => {
+    const row = { ...MCQ, correctOption: 'C', en: { ...MCQ.en, answer: null } }
+    const report = analyseImport(wrap(row))
+    expect(report.rejectedCount).toBe(0)
+    expect(report.importedCount).toBe(1)
+    expect(report.countsByType.mcq).toBe(1)
+  })
+
+  it('imports a short answer carrying options: null and correctOption: null', () => {
+    const row = { ...SHORT, correctOption: null, en: { ...SHORT.en, options: null } }
+    const report = analyseImport(wrap(row))
+    expect(report.rejectedCount).toBe(0)
+    expect(report.importedCount).toBe(1)
+    expect(report.countsByType.short_answer).toBe(1)
+  })
+
+  it('imports a row with null topic, status, externalId and locale blocks', () => {
+    const row = { ...MCQ, topic: null, status: null, externalId: null, hi: null, gu: null }
+    const report = analyseImport(wrap(row))
+    expect(report.rejectedCount).toBe(0)
+    expect(report.importedCount).toBe(1)
+  })
+
+  it('still rejects a REQUIRED field set to null, as missing', () => {
+    // en is required: null means it is absent, and absent is missing-english.
+    const noEnglish = analyseImport(wrap({ ...MCQ, en: null }))
+    expect(noEnglish.rejectionsByReason['missing-english']).toBe(1)
+
+    // The question inside a locale is required too.
+    const noQuestion = analyseImport(wrap({ ...MCQ, en: { ...MCQ.en, question: null } }))
+    expect(noQuestion.rejectedCount).toBe(1)
+  })
+
+  it('null option cells still fail the four-option rule', () => {
+    const row = { ...MCQ, en: { ...MCQ.en, options: { ...MCQ.en.options, C: null } } }
+    const report = analyseImport(wrap(row))
+    expect(report.rejectionsByReason['invalid-option-structure']).toBe(1)
+  })
+
+  it('a null-bearing mixed file imports whole', () => {
+    // The exact shape parse-aiko-medium.mjs used to emit.
+    const mcq = { ...MCQ, externalId: 'nul-0001', correctOption: 'C', en: { ...MCQ.en, answer: null } }
+    const short = { ...SHORT, externalId: 'nul-0002', correctOption: null, en: { ...SHORT.en, options: null } }
+    const report = analyseImport(wrap(mcq, short))
+    expect(report.importedCount).toBe(2)
+    expect(report.rejectedCount).toBe(0)
+  })
+})
+
+describe('rejected rows counted by type', () => {
+  it('splits rejections into mcq, short_answer and unknown', () => {
+    const badMcq = { ...MCQ, correctOption: 'E' }
+    const badShort = { ...SHORT, en: { question: 'No answer given here' } }
+    const noType = { externalId: 'x-1', difficulty: 'easy', en: { question: 'Typeless row' } }
+    const report = analyseImport(wrap(badMcq, badShort, noType))
+    expect(report.rejectedCount).toBe(3)
+    expect(report.rejectedByType).toEqual({ mcq: 1, short_answer: 1, unknown: 1 })
+  })
+
+  it('a clean file rejects nothing in any column', () => {
+    const report = analyseImport(wrap(MCQ, SHORT))
+    expect(report.rejectedByType).toEqual({ mcq: 0, short_answer: 0, unknown: 0 })
+  })
+})
+
+describe('option edge cases', () => {
+  it('rejects an invalid correctOption letter', () => {
+    for (const bad of ['E', 'a', '1']) {
+      const report = analyseImport(wrap({ ...MCQ, correctOption: bad }))
+      expect(report.rejectionsByReason['invalid-option-structure']).toBe(1)
+    }
+  })
+
+  it('rejects three options', () => {
+    const report = analyseImport(
+      wrap({ ...MCQ, en: { ...MCQ.en, options: { A: 'Alpha', B: 'Bravo', C: 'Charlie' } } }),
+    )
+    expect(report.rejectionsByReason['invalid-option-structure']).toBe(1)
+  })
+
+  it('a fifth option key is stripped, not rejected', () => {
+    // The options object is deliberately not .strict(); the contract is A-D.
+    const report = analyseImport(
+      wrap({ ...MCQ, en: { ...MCQ.en, options: { ...MCQ.en.options, E: 'Echo' } } }),
+    )
+    expect(report.importedCount).toBe(1)
+    expect(report.toImport[0].en.options).not.toHaveProperty('E')
+  })
+
+  it('rejects an empty option cell', () => {
+    const report = analyseImport(
+      wrap({ ...MCQ, en: { ...MCQ.en, options: { ...MCQ.en.options, D: '   ' } } }),
+    )
+    expect(report.rejectionsByReason['invalid-option-structure']).toBe(1)
+  })
+})
+
+describe('the declared brand', () => {
+  // The envelope's optional `brand` field, surfaced so the UI can refuse a
+  // Capiche file left pointing at the Aiko dropdown. Only the canonical
+  // envelope can carry one; the other shapes have nowhere to write it.
+  it('surfaces the envelope brand from extractRows', () => {
+    const result = extractRows('{"brand":"capiche","questions":[]}')
+    expect(result).toEqual({ rows: [], brand: 'capiche' })
+  })
+
+  it('has no brand for a bare array or JSON Lines', () => {
+    const array = extractRows(JSON.stringify([MCQ]))
+    expect('brand' in array && array.brand).toBeFalsy()
+
+    const jsonl = extractRows(JSON.stringify(MCQ))
+    expect('brand' in jsonl && jsonl.brand).toBeFalsy()
+  })
+
+  it('carries declaredBrand onto the report', () => {
+    const report = analyseImport(JSON.stringify({ brand: 'capiche', questions: [MCQ] }))
+    expect(report.declaredBrand).toBe('capiche')
+    // Advisory, not a rejection: analyse has no brand list to check against.
+    expect(report.importedCount).toBe(1)
+  })
+
+  it('leaves declaredBrand unset when the envelope does not name one', () => {
+    expect(analyseImport(wrap(MCQ)).declaredBrand).toBeUndefined()
+  })
+})

@@ -5,7 +5,12 @@ import { ImportPanel, type CommitResult } from '@/components/bank/import-panel'
 import { ImportTabs } from '@/components/bank/import-tabs'
 import { ImportHistory } from '@/components/bank/import-history'
 import { PaperImportPanel, type PaperCommitOutcome } from '@/components/bank/paper-import-panel'
-import { loadImportOptions, loadImportRuns, loadPaperImportOptions } from '@/server/papers/bank-data'
+import {
+  loadFormOptions,
+  loadImportOptions,
+  loadImportRuns,
+  loadPaperImportOptions,
+} from '@/server/papers/bank-data'
 import { commitImport } from '@/server/actions/import'
 import { commitPaperImport, recordImportRun, resolvePaperTargets } from '@/server/actions/paper-import'
 import { createTopic } from '@/server/actions/topics'
@@ -31,14 +36,36 @@ import { BuildingIcon } from 'lucide-react'
  * on externalId, both go through bank_import_commit(), and neither has its own
  * notion of what makes two questions the same.
  */
-export default async function ImportPage() {
+/**
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ THE BRAND IS RESOLVED BEFORE THE BANK IS READ, AND IT HAS TO BE.         │
+ * │                                                                           │
+ * │ The report answers "is this question already here", and "here" is one     │
+ * │ brand's bank — the uniqueness rules are per brand, so a comparison        │
+ * │ against the wrong one is worse than no comparison. This page used to load │
+ * │ the bank first and pick a brand afterwards, which left the dropdown able  │
+ * │ to change the destination without changing what it was compared against.  │
+ * │                                                                           │
+ * │ In searchParams rather than client state, so changing it re-runs the      │
+ * │ server component and re-reads the right bank. Same shape as /questions.   │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ */
+export default async function ImportPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ brand?: string }>
+}) {
   const t = await getTranslations('import')
-  const [options, paperOptions, runs, claims] = await Promise.all([
-    loadImportOptions(),
-    loadPaperImportOptions(),
-    loadImportRuns(),
+
+  const [{ brand: brandParam }, claims, form] = await Promise.all([
+    searchParams,
     getAppClaims(),
+    loadFormOptions(),
   ])
+
+  const visibleBrands = claims.brand_id
+    ? form.brands.filter((b) => b.id === claims.brand_id)
+    : form.brands
 
   /*
    * The brand a question lands in.
@@ -46,15 +73,19 @@ export default async function ImportPage() {
    * An Editor pinned to a brand imports into that brand and is not offered a
    * choice; an unscoped Editor picks. Defaulting to the first brand rather
    * than to null means the button is never enabled with nothing selected.
+   * A brand named in the URL that this caller cannot see falls back rather
+   * than resolving to nothing.
    */
   const defaultBrandId =
-    (claims.brand_id && options.brands.some((b) => b.id === claims.brand_id)
+    (claims.brand_id && visibleBrands.some((b) => b.id === claims.brand_id)
       ? claims.brand_id
-      : options.brands[0]?.id) ?? ''
+      : (visibleBrands.find((b) => b.id === brandParam)?.id ?? visibleBrands[0]?.id)) ?? ''
 
-  const visibleBrands = claims.brand_id
-    ? options.brands.filter((b) => b.id === claims.brand_id)
-    : options.brands
+  const [options, paperOptions, runs] = await Promise.all([
+    loadImportOptions(defaultBrandId || undefined),
+    loadPaperImportOptions(),
+    loadImportRuns(),
+  ])
 
   // Server Actions, which are the one kind of function that may cross into a
   // Client Component — React passes a reference, not the function itself.
@@ -117,6 +148,7 @@ export default async function ImportPage() {
               knownTopics={options.topicSlugs}
               requiredLocales={options.requiredLocales}
               existingExternalIds={options.existingExternalIds}
+              existingQuestions={options.existingQuestions}
               difficultyLabels={options.difficultyLabels}
               // Evaluated here, on the server. The predicate itself must never
               // cross the boundary — only its result.

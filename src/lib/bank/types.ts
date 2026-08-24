@@ -133,6 +133,8 @@ export interface BankTopic {
 export interface BankBrand {
   id: string
   name: string
+  /** URL-safe identifier — what an import file's `brand` field names. */
+  slug: string
 }
 
 /**
@@ -217,6 +219,14 @@ export interface BankImportOptions {
    * from updated. Not database UUIDs — see loadImportOptions.
    */
   existingExternalIds: string[]
+  /**
+   * Every question already in this brand's bank, as level + English text.
+   *
+   * What lets a translation file recognise the questions it is adding to. A
+   * bank imported without externalIds has nothing else to match on, and
+   * without this every row of a re-import reads as new.
+   */
+  existingQuestions: { key: string; qtype: QuestionType }[]
 }
 
 /**

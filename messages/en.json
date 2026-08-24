@@ -1,7 +1,7 @@
 {
   "app": {
     "name": "Bookends",
-    "tagline": "Training and assessment for Aiko, Capiche and Prep",
+    "tagline": "Training and assessment for Aiko and Capiche",
     "subtitle": "Staff Examination"
   },
   "common": {
@@ -971,6 +971,8 @@
     "colReference": "Reference",
     "colPage": "Page",
     "colBrand": "Brand",
+    "brandAll": "All brands",
+    "brandFilterLabel": "Filter by brand",
     "colCreatedBy": "Created by",
     "colUpdated": "Updated",
     "colActions": "Actions",
@@ -1274,7 +1276,34 @@
     "reviewNoText": "(no English text)",
     "reviewEmpty": "Paper {paperNo} has no questions left.",
     "reviewFrozenTitle": "This paper can no longer be changed",
-    "reviewFrozenBody": "It has been published as an exam. Each candidate is given the paper when they start, so changing it now would hand later candidates a different paper. Generate a new one instead."
+    "reviewFrozenBody": "It has been published as an exam. Each candidate is given the paper when they start, so changing it now would hand later candidates a different paper. Generate a new one instead.",
+    "stepPool": "Question pool",
+    "poolHint": "Every topic is included. Clear one to keep its questions out of this paper — the eligible count updates as you do.",
+    "poolTotal": "Total questions",
+    "poolExcluded": "Excluded by topic",
+    "poolEligible": "Eligible questions",
+    "poolEnough": "Enough questions for a {requested}-mark paper.",
+    "poolShort": "Not enough eligible questions for a {requested}-mark paper: it needs {mcqNeeded} multiple choice and {shortNeeded} short answer, and {mcqAvailable} and {shortAvailable} are eligible. Include more topics, or choose a smaller paper.",
+    "topicNone": "No topic",
+    "levelEmpty": "No questions at this level",
+    "distributionHint": "Active questions across every brand.",
+    "stepItems": "Recipe / item usage",
+    "itemsHint": "Every recipe is in use. Clear one to take it off the menu — its questions stop appearing on new papers. Nothing is deleted.",
+    "itemsSearch": "Search recipes/items…",
+    "itemsInUseCount": "{inUse} of {total} in use",
+    "itemsNoMatch": "No recipe or item matches “{search}”.",
+    "itemsNotInUse": "Not in use",
+    "itemNone": "No recipe or item",
+    "configTitle": "Generation settings",
+    "configAbsent": "This paper was generated before the settings were recorded, so what was excluded is not known.",
+    "configTopics": "Topics",
+    "configAllTopics": "All topics",
+    "configExcluded": "Excluded recipes / items",
+    "configNoneExcluded": "None",
+    "configRequested": "Questions requested",
+    "configUntagged": "Questions with no recipe",
+    "configUntaggedIncluded": "Included",
+    "configUntaggedExcluded": "Excluded"
   },
   "import": {
     "title": "Import questions",
@@ -1282,6 +1311,10 @@
     "chooseFile": "Choose a file",
     "fileHint": "JSON — an array of questions, an object with a \"questions\" array, or one question per line.",
     "chooseBrand": "Import into brand",
+    "brandMismatch": "This file says it is for “{declared}”, but “{selected}” is selected above. Choose the matching brand before importing.",
+    "downloadErrors": "Download error report",
+    "mcqSummary": "MCQ: {valid} valid · {invalid} invalid",
+    "shortSummary": "Short answer: {valid} valid · {invalid} invalid",
     "reading": "Reading the file…",
     "analysing": "Checking the file…",
     "clear": "Start over",
@@ -1320,7 +1353,8 @@
       "invalid-option-structure": "Invalid options",
       "invalid-answer": "Invalid answer",
       "unknown-topic": "Unknown topic",
-      "invalid-reference": "Invalid reference"
+      "invalid-reference": "Invalid reference",
+      "type-conflict": "Already in the bank as the other question type"
     },
     "technicalDetails": "Technical details",
     "tabs": {

@@ -9,7 +9,7 @@ import { batchRows, toCommitRow, IMPORT_BATCH_SIZE } from '@/lib/bank/import/com
  * ═══════════════════════════════════════════════════════════════════════════
  * The commit shape.
  *
- * bank_import_commit() (0058) reads exactly these key names out of JSON. SQL
+ * bank_import_commit() reads exactly these key names out of JSON. SQL
  * cannot typecheck against TypeScript, so a rename on either side fails at
  * runtime, mid-import, holding a 3,000-row file — these tests are the only
  * thing joining the two.
@@ -48,7 +48,7 @@ describe('toCommitRow — the key names bank_import_commit() reads', () => {
   it('carries every top-level field the function looks up', () => {
     const row = toCommitRow(parse(MCQ))
 
-    // Each of these is a `v_row->>'…'` in 0058. A rename here is a silent
+    // Each of these is a `v_row->>'…'` in the live RPC. A rename is a silent
     // null there.
     expect(Object.keys(row).sort()).toEqual(
       [
@@ -187,8 +187,15 @@ describe('toCommitRow — the key names bank_import_commit() reads', () => {
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
 describe('the SQL function and CommitRow agree on every key', () => {
+  /*
+   * THE LIVE DEFINITION, NOT THE FIRST ONE. 0058 created the function, 0068
+   * replaced it, and 0080 replaced it again (matching by English text so a
+   * translation finds its question). Later migrations win. This block read 0058 for a week after 0068 landed — a
+   * parity lock that was guarding a function the database no longer ran.
+   * If another migration replaces the RPC again, move this path with it.
+   */
   const sql = readFileSync(
-    resolve(__dirname, '../../supabase/migrations/20260808110000_0058_bank_import.sql'),
+    resolve(__dirname, '../../supabase/migrations/20260824140000_0080_import_match_by_text.sql'),
     'utf8',
   )
 
@@ -224,7 +231,9 @@ describe('the SQL function and CommitRow agree on every key', () => {
   it('is SECURITY INVOKER — atomicity must not come with elevation', () => {
     // 0057 is definer because it deliberately reads past RLS. This one writes,
     // and every write must stay subject to the caller's own policies.
-    const body = sql.slice(sql.indexOf('create or replace function public.bank_import_commit'))
+    const start = sql.search(/create or replace function public.bank_import_commit/i)
+    expect(start, 'the migration no longer defines bank_import_commit').toBeGreaterThan(-1)
+    const body = sql.slice(start)
     expect(body).not.toMatch(/security\s+definer/i)
   })
 })

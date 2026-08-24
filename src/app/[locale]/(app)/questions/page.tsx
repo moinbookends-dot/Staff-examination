@@ -56,7 +56,7 @@ import { cn } from '@/lib/utils'
 export default async function QuestionBankPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>
+  searchParams: Promise<{ page?: string; brand?: string }>
 }) {
   await requireApproved()
 
@@ -66,17 +66,21 @@ export default async function QuestionBankPage({
   }
 
   const t = await getTranslations('bank')
-  const { page } = await searchParams
+  const { page, brand } = await searchParams
 
   // Number('abc') is NaN and Number('') is 0, so both fall back to page 1
   // rather than reaching the loader as a nonsense range.
   const requested = Number(page)
   const current = Number.isFinite(requested) && requested >= 1 ? Math.floor(requested) : 1
 
-  const [questions, options] = await Promise.all([
-    loadQuestionPage({ page: current }),
-    loadFormOptions(),
-  ])
+  // Validated against the brands this caller can see, not trusted from the
+  // URL; an unknown id silently reads as "all brands". Resolved before the
+  // question query so both run once. The loader re-applies a pinned Editor's
+  // brand on top of whatever survives here.
+  const options = await loadFormOptions()
+  const activeBrandId = options.brands.some((b) => b.id === brand) ? brand! : null
+
+  const questions = await loadQuestionPage({ page: current, brandId: activeBrandId })
 
   const canWrite = canEditQuestions(claims)
   const canExport = can(claims, 'bank.export')
@@ -87,7 +91,12 @@ export default async function QuestionBankPage({
   const exportBrandId =
     (claims.brand_id && options.brands.some((b) => b.id === claims.brand_id)
       ? claims.brand_id
-      : options.brands[0]?.id) ?? null
+      : (activeBrandId ?? options.brands[0]?.id)) ?? null
+
+  // Filter links keep the brand in the query string so pagination, reload and
+  // a shared URL all land on the same slice of the bank.
+  const brandQuery = activeBrandId ? `&brand=${encodeURIComponent(activeBrandId)}` : ''
+  const showsBrandFilter = !claims.brand_id && options.brands.length > 1
   const lastPage = Math.max(1, Math.ceil(questions.total / questions.pageSize))
 
   return (
@@ -164,12 +173,40 @@ export default async function QuestionBankPage({
         />
       ) : (
         <>
+          {showsBrandFilter && (
+            <nav className="flex flex-wrap gap-2" aria-label={t('brandFilterLabel')}>
+              <Link
+                href="/questions"
+                className={cn(
+                  buttonVariants({ variant: activeBrandId ? 'outline' : 'default', size: 'sm' }),
+                )}
+              >
+                {t('brandAll')}
+              </Link>
+              {options.brands.map((b) => (
+                <Link
+                  key={b.id}
+                  href={`/questions?brand=${encodeURIComponent(b.id)}`}
+                  className={cn(
+                    buttonVariants({
+                      variant: activeBrandId === b.id ? 'default' : 'outline',
+                      size: 'sm',
+                    }),
+                  )}
+                >
+                  {b.name}
+                </Link>
+              ))}
+            </nav>
+          )}
+
           <QuestionList
             rows={questions.rows}
             difficultyLabels={options.difficultyLabels}
             typeLabels={{ mcq: t('type.mcq'), short_answer: t('type.short_answer') }}
             labels={{
               question: t('colQuestion'),
+              brand: t('colBrand'),
               difficulty: t('colDifficulty'),
               type: t('colType'),
               topic: t('colTopic'),
@@ -183,7 +220,7 @@ export default async function QuestionBankPage({
           {lastPage > 1 && (
             <nav className="flex items-center justify-between gap-3" aria-label="Pagination">
               <Link
-                href={`/questions?page=${current - 1}`}
+                href={`/questions?page=${current - 1}${brandQuery}`}
                 aria-disabled={current <= 1}
                 className={cn(
                   buttonVariants({ variant: 'outline', size: 'sm' }),
@@ -198,7 +235,7 @@ export default async function QuestionBankPage({
               </span>
 
               <Link
-                href={`/questions?page=${current + 1}`}
+                href={`/questions?page=${current + 1}${brandQuery}`}
                 aria-disabled={current >= lastPage}
                 className={cn(
                   buttonVariants({ variant: 'outline', size: 'sm' }),

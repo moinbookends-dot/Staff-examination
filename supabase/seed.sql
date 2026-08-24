@@ -24,15 +24,13 @@ on conflict do nothing;
 -- ── Brands ───────────────────────────────────────────────────────────────────
 insert into public.brands (id, company_id, name, slug, cuisine) values
   ('00000000-0000-0000-0000-00000000b001', '00000000-0000-0000-0000-00000000c001', 'Aiko',    'aiko',    'Japanese / Asian'),
-  ('00000000-0000-0000-0000-00000000b002', '00000000-0000-0000-0000-00000000c001', 'Capiche', 'capiche', 'Italian'),
-  ('00000000-0000-0000-0000-00000000b003', '00000000-0000-0000-0000-00000000c001', 'Prep',    'prep',    null)
+  ('00000000-0000-0000-0000-00000000b002', '00000000-0000-0000-0000-00000000c001', 'Capiche', 'capiche', 'Italian')
 on conflict do nothing;
 
 -- ── Outlets — PLACEHOLDER, confirm before onboarding ─────────────────────────
 insert into public.outlets (id, company_id, brand_id, name, code, state) values
   ('00000000-0000-0000-0000-00000000a001', '00000000-0000-0000-0000-00000000c001', '00000000-0000-0000-0000-00000000b001', 'Aiko — Outlet 1',    'AIKO-01', 'Gujarat'),
-  ('00000000-0000-0000-0000-00000000a002', '00000000-0000-0000-0000-00000000c001', '00000000-0000-0000-0000-00000000b002', 'Capiche — Outlet 1', 'CAPI-01', 'Gujarat'),
-  ('00000000-0000-0000-0000-00000000a003', '00000000-0000-0000-0000-00000000c001', '00000000-0000-0000-0000-00000000b003', 'Prep — Outlet 1',    'PREP-01', 'Gujarat')
+  ('00000000-0000-0000-0000-00000000a002', '00000000-0000-0000-0000-00000000c001', '00000000-0000-0000-0000-00000000b002', 'Capiche — Outlet 1', 'CAPI-01', 'Gujarat')
 on conflict do nothing;
 
 -- ── Departments — company-wide taxonomy (see migration 0002) ─────────────────

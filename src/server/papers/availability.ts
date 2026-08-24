@@ -8,6 +8,7 @@ import { DIFFICULTIES } from '@/lib/bank/vocabulary'
 import { blueprintFor, PAPER_SIZES, type PaperBlueprint } from '@/lib/papers/blueprint'
 import { totalPossiblePapers, type PoolCounts } from '@/lib/papers/combinations'
 import type { PaperHistoryEntry, PaperHistoryPage } from '@/lib/papers/repository'
+import { loadTopics } from '@/server/papers/bank-data'
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -44,6 +45,35 @@ export interface LevelAvailability {
   difficulty: Difficulty
   pool: PoolCounts
   combinationsBySize: Record<number, number>
+}
+
+/**
+ * One selectable topic in the pool picker, with the counts it contributes.
+ *
+ * `id` is null for the untopiced bucket, which is a real choice rather than
+ * an absence: an entire imported bank can carry no topic, and hiding that
+ * bucket would offer an empty picker for a bank that is perfectly usable.
+ */
+/**
+ * One recipe or menu item in the usage picker.
+ *
+ * `id` is null for the questions that name no known item. `questionCount`
+ * counts questions MENTIONING this item, so counts across entries overlap
+ * where a question compares two dishes — they describe each item honestly
+ * and must never be summed into a total. The eligible total comes from
+ * loadEligibleCounts, which counts questions rather than mentions.
+ */
+export interface ItemPoolEntry {
+  id: string | null
+  name: string
+  inUse: boolean
+  questionCount: number
+}
+
+export interface TopicPoolEntry {
+  id: string | null
+  name: string
+  pool: PoolCounts
 }
 
 export interface GenerateAvailability {
@@ -97,13 +127,32 @@ export interface GenerateAvailability {
  * │ rather than at the boundary where it happened.                            │
  * └───────────────────────────────────────────────────────────────────────────┘
  */
+/** bank_item_pool_counts. A null item_id is the no-item bucket. */
+const itemPoolRowSchema = z.object({
+  item_id: z.string().uuid().nullable(),
+  qtype: z.enum(['mcq', 'short_answer']),
+  n: z.number().int().nonnegative(),
+})
+
+/** bank_topic_pool_counts. A null topic_id is the untopiced bucket. */
+const topicPoolRowSchema = z.object({
+  topic_id: z.string().uuid().nullable(),
+  qtype: z.enum(['mcq', 'short_answer']),
+  n: z.number().int().nonnegative(),
+})
+
 const poolCountRowSchema = z.object({
   difficulty: z.enum(['easy', 'medium', 'hard']),
   qtype: z.enum(['mcq', 'short_answer']),
   n: z.coerce.number().int().min(0),
 })
 
-export async function loadGenerateAvailability(brandId?: string): Promise<GenerateAvailability> {
+/**
+ * @param brandId REQUIRED. Passing null to bank_pool_counts sums EVERY brand,
+ * which is how this screen once showed Aiko's 1,030 while Capiche was
+ * selected. A paper belongs to exactly one brand, so its counts must too.
+ */
+export async function loadGenerateAvailability(brandId: string): Promise<GenerateAvailability> {
   const supabase = await createClient()
   const sizes = [...PAPER_SIZES]
 
@@ -117,7 +166,7 @@ export async function loadGenerateAvailability(brandId?: string): Promise<Genera
    * could be reassembled into a question. See migration 0057.
    */
   const { data, error } = await supabase.rpc('bank_pool_counts', {
-    p_brand_id: brandId ?? null,
+    p_brand_id: brandId,
   })
 
   const parsed = z.array(poolCountRowSchema).safeParse(data ?? [])
@@ -146,6 +195,171 @@ export async function loadGenerateAvailability(brandId?: string): Promise<Genera
     // An error means the counts could not be read at all — the screen says so
     // rather than rendering zeros, which would read as "the bank is empty".
     poolCountsVisible: !error && parsed.success,
+  }
+}
+
+/**
+ * The topics that actually carry questions for one brand and level.
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ PER BRAND AND PER LEVEL, BECAUSE A TOPIC IS NOT UNIVERSAL.                │
+ * │                                                                           │
+ * │ question_topics is company-wide by design, but the questions filed under  │
+ * │ each one are not: Aiko's easy topics hold no hard questions at all, and   │
+ * │ Capiche's bank is entirely untopiced. Offering the company's whole topic  │
+ * │ list would show a picker where most rows contribute nothing, and          │
+ * │ excluding one of them would appear to do nothing at all.                  │
+ * │                                                                           │
+ * │ So the list is derived from the COUNTS, not from the vocabulary: a topic  │
+ * │ appears only if this brand and level actually hold questions under it.    │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ *
+ * Names come from question_topics, which needs bank.read. A chef holding only
+ * papers.generate gets the counts and a neutral label rather than an error —
+ * the picker still works, it just cannot name the topics.
+ */
+export async function loadTopicPool(
+  brandId: string,
+  difficulty: Difficulty,
+  noTopicLabel: string,
+): Promise<TopicPoolEntry[]> {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase.rpc('bank_topic_pool_counts', {
+    p_brand_id: brandId,
+    p_difficulty: difficulty,
+  })
+
+  const parsed = z.array(topicPoolRowSchema).safeParse(data ?? [])
+  if (error || !parsed.success) return []
+
+  const byTopic = new Map<string | null, PoolCounts>()
+  for (const row of parsed.data) {
+    const entry = byTopic.get(row.topic_id) ?? { mcq: 0, shortAnswer: 0 }
+    if (row.qtype === 'mcq') entry.mcq += row.n
+    else entry.shortAnswer += row.n
+    byTopic.set(row.topic_id, entry)
+  }
+
+  const names = await loadTopics()
+  const nameById = new Map(names.map((t) => [t.id, t.name]))
+
+  return [...byTopic.entries()]
+    .map(([id, pool]) => ({
+      id,
+      name: id === null ? noTopicLabel : (nameById.get(id) ?? noTopicLabel),
+      pool,
+    }))
+    .sort((a, b) => {
+      // The untopiced bucket last: it is a fallback, not a subject.
+      if (a.id === null) return 1
+      if (b.id === null) return -1
+      return a.name.localeCompare(b.name)
+    })
+}
+
+/**
+ * The recipes and menu items questions in this brand and level are about.
+ *
+ * Names come from bank_items, which needs bank.read; the counts come from a
+ * definer function so a chef who cannot read the bank can still see how big
+ * each item is. An item the reader may not name is skipped rather than shown
+ * with a placeholder — an unnamed row is not something anybody can decide on.
+ */
+export async function loadItemPool(
+  brandId: string,
+  difficulty: Difficulty,
+  noItemLabel: string,
+): Promise<ItemPoolEntry[]> {
+  const supabase = await createClient()
+
+  const [counts, named] = await Promise.all([
+    supabase.rpc('bank_item_pool_counts', {
+      p_brand_id: brandId,
+      p_difficulty: difficulty,
+    }),
+    supabase
+      .from('bank_items')
+      .select('id, name, in_use')
+      .eq('brand_id', brandId)
+      .is('deleted_at', null)
+      .order('name'),
+  ])
+
+  const parsed = z.array(itemPoolRowSchema).safeParse(counts.data ?? [])
+  if (counts.error || !parsed.success) return []
+
+  const byItem = new Map<string | null, number>()
+  for (const row of parsed.data) {
+    byItem.set(row.item_id, (byItem.get(row.item_id) ?? 0) + row.n)
+  }
+
+  const meta = new Map((named.data ?? []).map((i) => [i.id, i]))
+
+  const entries: ItemPoolEntry[] = []
+  for (const [id, questionCount] of byItem) {
+    if (id === null) {
+      // Only offered when it holds something. An empty bucket is a row that
+      // can only confuse — there is nothing there to include or exclude.
+      if (questionCount > 0) {
+        entries.push({ id: null, name: noItemLabel, inUse: true, questionCount })
+      }
+      continue
+    }
+
+    const item = meta.get(id)
+    if (!item) continue
+    entries.push({ id, name: item.name, inUse: item.in_use, questionCount })
+  }
+
+  return entries.sort((a, b) => {
+    // The no-item bucket last: it is a residue, not a dish.
+    if (a.id === null) return 1
+    if (b.id === null) return -1
+    return a.name.localeCompare(b.name)
+  })
+}
+
+/**
+ * The pool that survives every filter, counted by the database.
+ *
+ * The number the Generate button is enabled against. It must be what the draw
+ * would find, so it asks the same question the draw asks rather than
+ * subtracting per-item counts, which overlap wherever a question names two
+ * dishes and would report a pool that is too small.
+ */
+export async function loadEligibleCounts(
+  brandId: string,
+  difficulty: Difficulty,
+  filters: {
+    topicIds: string[] | null
+    includeNoTopic: boolean
+    excludedItemIds: string[]
+    includeNoItem: boolean
+  },
+): Promise<PoolCounts> {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase.rpc('bank_eligible_counts', {
+    p_brand_id: brandId,
+    p_difficulty: difficulty,
+    p_topic_ids: filters.topicIds,
+    p_include_no_topic: filters.includeNoTopic,
+    p_exclude_item_ids: filters.excludedItemIds,
+    p_include_no_item: filters.includeNoItem,
+  })
+
+  const parsed = z
+    .array(z.object({ qtype: z.enum(['mcq', 'short_answer']), n: z.number().int() }))
+    .safeParse(data ?? [])
+
+  // A failed count must read as an empty pool, never as an unfiltered one:
+  // the button it gates would otherwise enable on a number nobody produced.
+  if (error || !parsed.success) return { mcq: 0, shortAnswer: 0 }
+
+  return {
+    mcq: parsed.data.find((r) => r.qtype === 'mcq')?.n ?? 0,
+    shortAnswer: parsed.data.find((r) => r.qtype === 'short_answer')?.n ?? 0,
   }
 }
 
@@ -216,9 +430,18 @@ export async function loadBankStatistics(): Promise<BankStatistics> {
       countOf((q) => q.eq('status', 'active')),
       countOf((q) => q.eq('status', 'draft')),
       countOf((q) => q.eq('status', 'archived')),
-      countOf((q) => q.eq('difficulty', 'easy')),
-      countOf((q) => q.eq('difficulty', 'medium')),
-      countOf((q) => q.eq('difficulty', 'hard')),
+      /*
+       * ACTIVE ONLY, and that is a correction rather than a refinement.
+       *
+       * These three were counted across every status while the tile beside
+       * them counted only active ones, so the level bars quietly included
+       * drafts and archived questions and summed to more than the bank a
+       * paper can actually be drawn from. A dashboard whose halves disagree
+       * teaches people not to trust either.
+       */
+      countOf((q) => q.eq('difficulty', 'easy').eq('status', 'active')),
+      countOf((q) => q.eq('difficulty', 'medium').eq('status', 'active')),
+      countOf((q) => q.eq('difficulty', 'hard').eq('status', 'active')),
       supabase.from('exam_papers').select('id', { count: 'exact', head: true }),
       supabase
         .from('user_roles')
@@ -393,8 +616,30 @@ export async function loadPaperHistory(page = 1, pageSize = 25): Promise<PaperHi
  * │ by reaching around RLS with a service-role client.                        │
  * └───────────────────────────────────────────────────────────────────────────┘
  */
+/**
+ * The filters a paper was generated with, resolved into names.
+ *
+ * Ids are useless to a person asking why a dish is missing, and the vocabulary
+ * moves — an item can be renamed after the paper was made. The names are
+ * resolved at read time so the screen shows what those ids mean TODAY, while
+ * the stored ids stay the durable record.
+ */
+export interface PaperGenerationConfig {
+  topics: string[] | null
+  includeNoTopic: boolean
+  excludedItems: string[]
+  includeNoItem: boolean
+  requested: { mcq: number; shortAnswer: number } | null
+}
+
 export interface PaperDetail extends PaperHistoryEntry {
   blueprint: PaperBlueprint
+  /**
+   * NULL for a paper generated before the generator recorded its filters.
+   * The screen says so rather than showing an empty list, which would read
+   * as 'nothing was excluded' — a claim nobody can support.
+   */
+  generationConfig: PaperGenerationConfig | null
   /** questionNo → section, in printed order. */
   composition: { questionNo: number; section: 'mcq' | 'short_answer' }[]
   mcqCount: number
@@ -436,12 +681,68 @@ export interface PaperDetail extends PaperHistoryEntry {
   } | null
 }
 
+/** The shape stored by save_exam_paper. Everything optional: it is read back
+ *  from a jsonb column that older rows do not have and newer code may grow. */
+const storedConfigSchema = z.object({
+  topicIds: z.array(z.string().uuid()).nullable().optional(),
+  includeNoTopic: z.boolean().optional(),
+  excludedItemIds: z.array(z.string().uuid()).optional(),
+  includeNoItem: z.boolean().optional(),
+  requested: z.object({ mcq: z.number().int(), shortAnswer: z.number().int() }).optional(),
+})
+
+/**
+ * Turn the stored ids into the names a person can act on.
+ *
+ * An id whose row has since been deleted resolves to nothing and is dropped
+ * rather than shown as a bare uuid — the audit answer is 'these dishes were
+ * excluded', and a uuid answers nobody's question. The stored ids remain the
+ * durable record either way.
+ */
+async function resolveGenerationConfig(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  raw: unknown,
+): Promise<PaperGenerationConfig | null> {
+  if (raw == null) return null
+
+  const parsed = storedConfigSchema.safeParse(raw)
+  if (!parsed.success) return null
+
+  const config = parsed.data
+  const topicIds = config.topicIds ?? null
+  const itemIds = config.excludedItemIds ?? []
+
+  const [topicRows, itemRows] = await Promise.all([
+    topicIds && topicIds.length > 0
+      ? supabase.from('question_topics').select('id, name').in('id', topicIds)
+      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    itemIds.length > 0
+      ? supabase.from('bank_items').select('id, name').in('id', itemIds)
+      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+  ])
+
+  const nameOf = (rows: { id: string; name: string }[] | null, ids: string[]) => {
+    const byId = new Map((rows ?? []).map((r) => [r.id, r.name]))
+    return ids.map((id) => byId.get(id)).filter((n): n is string => Boolean(n)).sort()
+  }
+
+  return {
+    topics: topicIds === null ? null : nameOf(topicRows.data, topicIds),
+    includeNoTopic: config.includeNoTopic ?? true,
+    excludedItems: nameOf(itemRows.data, itemIds),
+    includeNoItem: config.includeNoItem ?? true,
+    requested: config.requested ?? null,
+  }
+}
+
 export async function loadPaperDetail(paperId: string): Promise<PaperDetail | null> {
   const supabase = await createClient()
 
   const { data, error } = await supabase
     .from('exam_papers')
-    .select('id, paper_no, brand_id, difficulty, marks, mcq_n, short_n, generated_at, generated_by, status, status_changed_at')
+    .select(
+      'id, paper_no, brand_id, difficulty, marks, mcq_n, short_n, generated_at, generated_by, status, status_changed_at, generation_config',
+    )
     .eq('id', paperId)
     .maybeSingle()
 
@@ -549,6 +850,7 @@ export async function loadPaperDetail(paperId: string): Promise<PaperDetail | nu
     // Recorded ON the paper, not re-derived: paper_settings is editable, and a
     // paper generated under 16+4 must still report 16+4 afterwards.
     blueprint: { marks: data.marks, mcqCount: data.mcq_n, shortAnswerCount: data.short_n },
+    generationConfig: await resolveGenerationConfig(supabase, data.generation_config),
     composition,
     mcqCount: composition.filter((q) => q.section === 'mcq').length,
     shortAnswerCount: composition.filter((q) => q.section === 'short_answer').length,

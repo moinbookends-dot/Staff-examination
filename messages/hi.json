@@ -1,7 +1,7 @@
 {
   "app": {
     "name": "Bookends",
-    "tagline": "Aiko, Capiche और Prep के लिए प्रशिक्षण और मूल्यांकन",
+    "tagline": "Aiko और Capiche के लिए प्रशिक्षण और मूल्यांकन",
     "subtitle": "स्टाफ़ परीक्षा"
   },
   "nav": {
@@ -497,6 +497,8 @@
     "colReference": "संदर्भ",
     "colPage": "पेज",
     "colBrand": "ब्रांड",
+    "brandAll": "सभी ब्रांड",
+    "brandFilterLabel": "ब्रांड के अनुसार छाँटें",
     "colCreatedBy": "बनाया",
     "colUpdated": "अपडेट",
     "colActions": "कार्रवाई",
@@ -800,7 +802,34 @@
     "reviewNoText": "(अंग्रेज़ी पाठ नहीं)",
     "reviewEmpty": "पेपर {paperNo} में कोई प्रश्न नहीं बचा।",
     "reviewFrozenTitle": "यह पेपर अब बदला नहीं जा सकता",
-    "reviewFrozenBody": "यह परीक्षा के रूप में प्रकाशित हो चुका है। हर उम्मीदवार को शुरू करते समय पेपर मिलता है, इसलिए अब बदलने पर बाद वालों को अलग पेपर मिलेगा। नया पेपर बनाएँ।"
+    "reviewFrozenBody": "यह परीक्षा के रूप में प्रकाशित हो चुका है। हर उम्मीदवार को शुरू करते समय पेपर मिलता है, इसलिए अब बदलने पर बाद वालों को अलग पेपर मिलेगा। नया पेपर बनाएँ।",
+    "stepPool": "प्रश्न पूल",
+    "poolHint": "सभी विषय शामिल हैं। किसी को हटाएँ ताकि उसके प्रश्न इस पेपर में न आएँ — पात्र संख्या साथ-साथ बदलती रहेगी।",
+    "poolTotal": "कुल प्रश्न",
+    "poolExcluded": "विषय द्वारा बाहर",
+    "poolEligible": "पात्र प्रश्न",
+    "poolEnough": "{requested} अंकों के पेपर के लिए पर्याप्त प्रश्न हैं।",
+    "poolShort": "{requested} अंकों के पेपर के लिए पर्याप्त पात्र प्रश्न नहीं हैं: इसमें {mcqNeeded} बहुविकल्पीय और {shortNeeded} लघु उत्तर चाहिए, जबकि {mcqAvailable} और {shortAvailable} पात्र हैं। और विषय शामिल करें, या छोटा पेपर चुनें।",
+    "topicNone": "कोई विषय नहीं",
+    "levelEmpty": "इस स्तर पर कोई प्रश्न नहीं",
+    "distributionHint": "सभी ब्रांड के सक्रिय प्रश्न।",
+    "stepItems": "रेसिपी / आइटम उपयोग",
+    "itemsHint": "सभी रेसिपी उपयोग में हैं। किसी को हटाएँ ताकि वह मेन्यू से बाहर हो जाए — उसके प्रश्न नए पेपर में नहीं आएँगे। कुछ भी हटाया नहीं जाता।",
+    "itemsSearch": "रेसिपी/आइटम खोजें…",
+    "itemsInUseCount": "{total} में से {inUse} उपयोग में",
+    "itemsNoMatch": "“{search}” से कोई रेसिपी या आइटम मेल नहीं खाता।",
+    "itemsNotInUse": "उपयोग में नहीं",
+    "itemNone": "कोई रेसिपी या आइटम नहीं",
+    "configTitle": "जनरेशन सेटिंग्स",
+    "configAbsent": "यह पेपर सेटिंग्स दर्ज होने से पहले बना था, इसलिए क्या बाहर रखा गया था यह ज्ञात नहीं है।",
+    "configTopics": "विषय",
+    "configAllTopics": "सभी विषय",
+    "configExcluded": "बाहर रखी रेसिपी / आइटम",
+    "configNoneExcluded": "कोई नहीं",
+    "configRequested": "माँगे गए प्रश्न",
+    "configUntagged": "बिना रेसिपी वाले प्रश्न",
+    "configUntaggedIncluded": "शामिल",
+    "configUntaggedExcluded": "बाहर"
   },
   "import": {
     "title": "प्रश्न आयात करें",
@@ -808,6 +837,10 @@
     "chooseFile": "फ़ाइल चुनें",
     "fileHint": "JSON — प्रश्नों की सूची, \"questions\" कुंजी वाला ऑब्जेक्ट, या प्रति पंक्ति एक प्रश्न।",
     "chooseBrand": "इस ब्रांड में आयात करें",
+    "brandMismatch": "यह फ़ाइल “{declared}” के लिए है, लेकिन ऊपर “{selected}” चुना गया है। आयात से पहले सही ब्रांड चुनें।",
+    "downloadErrors": "त्रुटि रिपोर्ट डाउनलोड करें",
+    "mcqSummary": "MCQ: {valid} सही · {invalid} अमान्य",
+    "shortSummary": "लघु उत्तर: {valid} सही · {invalid} अमान्य",
     "reading": "फ़ाइल पढ़ी जा रही है…",
     "analysing": "फ़ाइल जाँची जा रही है…",
     "clear": "फिर से शुरू करें",
@@ -846,7 +879,8 @@
       "invalid-option-structure": "अमान्य विकल्प",
       "invalid-answer": "अमान्य उत्तर",
       "unknown-topic": "अज्ञात विषय",
-      "invalid-reference": "अमान्य संदर्भ"
+      "invalid-reference": "अमान्य संदर्भ",
+      "type-conflict": "बैंक में पहले से दूसरे प्रकार के प्रश्न के रूप में मौजूद"
     },
     "technicalDetails": "तकनीकी विवरण",
     "tabs": {

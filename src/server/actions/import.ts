@@ -148,8 +148,19 @@ function explain(error: { code?: string; message?: string }): string {
         ? 'This batch names a topic that does not exist. Add it in Topic Management first.'
         : 'This batch refers to something that does not exist in this company.'
     case '23514':
-      // The completeness trigger, or one of 0054's shape CHECKs.
-      return 'A question in this batch could not be made active — usually a required translation is missing. Nothing was written.'
+      /*
+       * The completeness trigger, or one of 0054's shape CHECKs — and those
+       * are DIFFERENT problems: bank_q_correct_option_matches_type is an MCQ
+       * without a correct option, bank_question_texts_shape is a missing or
+       * blank option, the completeness guard is a missing translation. The
+       * constraint name in error.message is the only thing that tells them
+       * apart, so it is appended rather than discarded — this exact branch
+       * once reduced every MCQ shape failure to a sentence about
+       * translations, which sent people hunting in the wrong place.
+       */
+      return `A question in this batch broke a bank rule and nothing was written. ${
+        error.message ?? 'The database did not name the constraint.'
+      }`
     case '42501':
       return DENIED
     default:

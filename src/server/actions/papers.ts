@@ -7,10 +7,11 @@ import { loadEligibleQuestions, type EligibleQuestion } from '@/server/papers/pa
 import { canGeneratePapers } from '@/lib/auth/bank-access'
 import { createClient } from '@/lib/supabase/server'
 import { dbId } from '@/lib/db/id'
-import { DIFFICULTIES } from '@/lib/bank/vocabulary'
+import { DIFFICULTIES, type Difficulty } from '@/lib/bank/vocabulary'
 import { PAPER_SIZES } from '@/lib/papers/blueprint'
 import { generatePaper as runGenerator } from '@/lib/papers/generate'
 import { createPaperRepository } from '@/server/papers/repository'
+import { ALL_TOPICS, type ItemFilter, type TopicFilter } from '@/lib/papers/repository'
 // The audience is chosen while publishing now; reuse the exam layer's own
 // schema and writer rather than restating the target-shape CHECK here.
 import { setAssignments } from '@/server/actions/exams'
@@ -60,10 +61,124 @@ const generateInput = z.object({
     { message: 'That paper size is not offered.' },
   ),
   brandId: dbId().optional(),
+
+  /*
+   * ┌───────────────────────────────────────────────────────────────────────┐
+   * │ THE TOPIC FILTER NARROWS THE POOL AND MAY NEVER WIDEN IT.             │
+   * │                                                                       │
+   * │ Accepted from the client because the client is where the choice is    │
+   * │ made, but re-decided below against the topics that actually carry     │
+   * │ questions for this brand and level. An id that is not in that set is  │
+   * │ dropped rather than refused: it can only ever have admitted nothing,  │
+   * │ and failing a whole generation over a stale checkbox helps nobody.    │
+   * │                                                                       │
+   * │ Absent means every topic, which is what generation did before topics  │
+   * │ were selectable — so an old client keeps working unchanged.           │
+   * └───────────────────────────────────────────────────────────────────────┘
+   */
+  topicIds: z.array(dbId()).max(200).optional(),
+  includeNoTopic: z.boolean().optional(),
+
+  /*
+   * ┌───────────────────────────────────────────────────────────────────────┐
+   * │ THE CLIENT SENDS WHAT IT WANTS EXCLUDED. THE SERVER DECIDES THE REST. │
+   * │                                                                       │
+   * │ An item marked Not in Use is excluded whether or not the request       │
+   * │ mentions it — see resolveItemFilter. A request arriving with           │
+   * │ `excludedItemIds: []` therefore cannot put a withdrawn dish back on a  │
+   * │ paper; the stored in_use flag is the authority and the request can     │
+   * │ only ever add to what it excludes.                                     │
+   * └───────────────────────────────────────────────────────────────────────┘
+   */
+  excludedItemIds: z.array(dbId()).max(1000).optional(),
+  includeNoItem: z.boolean().optional(),
 })
 
 const DENIED = 'You are not permitted to generate papers.'
 
+/**
+ * Intersect what the client asked for with what the bank actually holds.
+ *
+ * Returns a filter that can only be narrower than the level's whole pool.
+ * An empty result is legal and means "nothing is eligible" — the generator
+ * then reports a shortfall rather than quietly drawing from everything,
+ * which is the failure mode this function exists to prevent.
+ */
+async function resolveTopicFilter(
+  brandId: string,
+  difficulty: Difficulty,
+  requested: string[],
+  includeNoTopic: boolean,
+): Promise<TopicFilter> {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase.rpc('bank_topic_pool_counts', {
+    p_brand_id: brandId,
+    p_difficulty: difficulty,
+  })
+
+  // A failed count must not silently become an unfiltered draw.
+  if (error) throw new Error(`Could not read the topic pool: ${error.message}`)
+
+  const rows = z
+    .array(z.object({ topic_id: z.string().uuid().nullable() }))
+    .parse(data ?? [])
+
+  const real = new Set(
+    rows.map((r) => r.topic_id).filter((id): id is string => id !== null),
+  )
+
+  return {
+    topicIds: requested.filter((id) => real.has(id)),
+    includeNoTopic,
+  }
+}
+/**
+ * Everything that must not appear on this paper.
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ THE UNION OF WHAT WAS ASKED FOR AND WHAT THE BANK ALREADY FORBIDS.        │
+ * │                                                                           │
+ * │ bank_items.in_use is the standing decision — a dish taken off the menu     │
+ * │ stays off every paper until somebody puts it back. The request can add to  │
+ * │ that for a single paper, but never subtract from it, so a hand-made call   │
+ * │ carrying an empty exclusion list generates exactly the same paper as the   │
+ * │ screen would. That is the §13 requirement, and it is why this reads the    │
+ * │ flag rather than trusting the payload.                                     │
+ * │                                                                           │
+ * │ Ids naming another brand's item are dropped: they can only ever have       │
+ * │ excluded nothing, and failing a generation over one helps nobody.          │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ */
+async function resolveItemFilter(
+  brandId: string,
+  requested: string[],
+  includeNoItem: boolean,
+): Promise<ItemFilter> {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('bank_items')
+    .select('id, in_use')
+    .eq('brand_id', brandId)
+    .is('deleted_at', null)
+
+  /*
+   * A reader without bank.read sees no rows through RLS, which is not an
+   * error — it means this caller cannot narrow by item, and the standing
+   * exclusions are enforced by the draw's own predicates either way. An
+   * actual failure is different and must not silently widen the pool.
+   */
+  if (error) throw new Error(`Could not read the item list: ${error.message}`)
+
+  const rows = data ?? []
+  const known = new Set(rows.map((r) => r.id))
+
+  const excluded = new Set(rows.filter((r) => !r.in_use).map((r) => r.id))
+  for (const id of requested) if (known.has(id)) excluded.add(id)
+
+  return { excludedItemIds: [...excluded], includeNoItem }
+}
 export async function generatePaper(raw: unknown): Promise<GenerateOutcome> {
   const claims = await getAppClaims()
 
@@ -107,17 +222,55 @@ export async function generatePaper(raw: unknown): Promise<GenerateOutcome> {
 
   if (!brand) return { status: 'failed', message: DENIED }
 
+  /*
+   * The filter, re-decided server-side. bank_topic_pool_counts is the same
+   * function the screen counted with, so what is admitted here is exactly
+   * what the user was shown — and a posted id that names no question of
+   * this brand and level is discarded before it reaches the draw.
+   */
+  const topics =
+    input.topicIds === undefined
+      ? ALL_TOPICS
+      : await resolveTopicFilter(brandId, input.difficulty, input.topicIds, input.includeNoTopic ?? true)
+
+  // Always resolved, even when the request names nothing: an item withdrawn
+  // in the bank is withdrawn regardless of what the client asked for.
+  const items = await resolveItemFilter(
+    brandId,
+    input.excludedItemIds ?? [],
+    input.includeNoItem ?? true,
+  )
+
   const scope = {
     companyId: claims.company_id,
     brandId,
     difficulty: input.difficulty,
     marks: input.marks,
+    topics,
+    items,
+  }
+
+  /*
+   * Stored with the paper so 'why is there no Hulk question on this' has an
+   * answer later. It is the RESOLVED filter, not the request: the request
+   * may have named nothing while the bank had three dishes withdrawn, and
+   * the paper should record what actually shaped it.
+   */
+  const config = {
+    topicIds: topics.topicIds,
+    includeNoTopic: topics.includeNoTopic,
+    excludedItemIds: items.excludedItemIds,
+    includeNoItem: items.includeNoItem,
+    requested: {
+      mcq: (input.marks * 4) / 5,
+      shortAnswer: input.marks / 5,
+    },
   }
 
   let result
   try {
     result = await runGenerator(
-      { scope, generatedBy: claims.userId },
+      { scope, generatedBy: claims.userId, config },
       createPaperRepository(scope),
     )
   } catch (err) {

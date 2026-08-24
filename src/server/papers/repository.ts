@@ -1,6 +1,7 @@
 import 'server-only'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
+import { ALL_ITEMS, ALL_TOPICS } from '@/lib/papers/repository'
 import type {
   PaperRepository,
   PaperScope,
@@ -48,6 +49,12 @@ const poolRowSchema = z.object({
 
 const drawRowSchema = z.object({ id: z.string().uuid() })
 
+/** bank_eligible_counts — the pool that survives every filter. */
+const eligibleRowSchema = z.object({
+  qtype: z.enum(['mcq', 'short_answer']),
+  n: z.number().int().nonnegative(),
+})
+
 const stateRowSchema = z.object({
   epoch: z.number().int(),
   generated: z.number().int(),
@@ -77,6 +84,37 @@ const saveResultSchema = z.union([
  * │ arguments still win wherever they are supplied.                           │
  * └───────────────────────────────────────────────────────────────────────────┘
  */
+/**
+ * The whole level's pool, unfiltered by topic.
+ *
+ * Kept on bank_pool_counts so this and the dashboard still share one
+ * definition of "available" — the two must never disagree.
+ */
+async function unfilteredPool(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  scope: PaperScope,
+): Promise<PoolCounts> {
+  const { data, error } = await supabase.rpc('bank_pool_counts', {
+    p_brand_id: scope.brandId,
+  })
+
+  if (error) throw new Error(`Could not read the question pool: ${error.message}`)
+
+  const rows = z.array(poolRowSchema).parse(data ?? [])
+
+  /*
+   * bank_pool_counts returns every difficulty and type for the brand; the
+   * scope wants one difficulty. Filtered here rather than in SQL so that
+   * function stays the single read the dashboard and this both use — the
+   * two must never disagree about what "available" means.
+   */
+  const forLevel = rows.filter((row) => row.difficulty === scope.difficulty)
+
+  return {
+    mcq: forLevel.find((r) => r.qtype === 'mcq')?.n ?? 0,
+    shortAnswer: forLevel.find((r) => r.qtype === 'short_answer')?.n ?? 0,
+  }
+}
 export function createPaperRepository(requestScope: PaperScope): PaperRepository {
   async function generationState(scope: PaperScope) {
     const supabase = await createClient()
@@ -98,26 +136,54 @@ export function createPaperRepository(requestScope: PaperScope): PaperRepository
   return {
     async countPool(scope: PaperScope): Promise<PoolCounts> {
       const supabase = await createClient()
+      const topics = scope.topics ?? ALL_TOPICS
 
-      const { data, error } = await supabase.rpc('bank_pool_counts', {
+      /*
+       * ┌─────────────────────────────────────────────────────────────────────┐
+       * │ THE COUNT MUST BE THE POOL THE DRAW WILL SEE.                       │
+       * │                                                                     │
+       * │ An unfiltered scope keeps using bank_pool_counts, so the dashboard  │
+       * │ and this still share one definition of "available". A FILTERED      │
+       * │ scope has to ask the topic-aware function instead: counting a whole │
+       * │ level and then drawing from a subset of it is how a generator       │
+       * │ promises 1,030 questions and produces a paper it cannot fill.       │
+       * └─────────────────────────────────────────────────────────────────────┘
+       */
+      const items = scope.items ?? ALL_ITEMS
+
+      const unfiltered =
+        topics.topicIds === null &&
+        topics.includeNoTopic &&
+        items.excludedItemIds.length === 0 &&
+        items.includeNoItem
+
+      if (unfiltered) return unfilteredPool(supabase, scope)
+
+      /*
+       * COUNTED BY THE DATABASE, NOT BY SUBTRACTION.
+       *
+       * A question can name two items, so it appears under both in the
+       * per-item figures — subtracting those from the level total would
+       * remove such a question twice and report a pool smaller than the one
+       * the draw finds. bank_eligible_counts applies the same predicates as
+       * the draw and counts questions, so the two cannot disagree.
+       */
+      const { data, error } = await supabase.rpc('bank_eligible_counts', {
         p_brand_id: scope.brandId,
+        p_difficulty: scope.difficulty,
+        p_topic_ids: topics.topicIds,
+        p_include_no_topic: topics.includeNoTopic,
+        p_exclude_item_ids: items.excludedItemIds,
+        p_include_no_item: items.includeNoItem,
       })
 
       if (error) throw new Error(`Could not read the question pool: ${error.message}`)
 
-      const rows = z.array(poolRowSchema).parse(data ?? [])
-
-      /*
-       * bank_pool_counts returns every difficulty and type for the brand; the
-       * scope wants one difficulty. Filtered here rather than in SQL so that
-       * function stays the single read the dashboard and this both use — the
-       * two must never disagree about what "available" means.
-       */
-      const forLevel = rows.filter((row) => row.difficulty === scope.difficulty)
+      const rows = z.array(eligibleRowSchema).parse(data ?? [])
 
       return {
-        mcq: forLevel.find((r) => r.qtype === 'mcq')?.n ?? 0,
-        shortAnswer: forLevel.find((r) => r.qtype === 'short_answer')?.n ?? 0,
+        mcq: rows.find((r) => r.qtype === 'mcq')?.n ?? 0,
+        shortAnswer: rows.find((r) => r.qtype === 'short_answer')?.n ?? 0,
       }
     },
 
@@ -128,11 +194,20 @@ export function createPaperRepository(requestScope: PaperScope): PaperRepository
     ): Promise<string[]> {
       const supabase = await createClient()
 
+      const topics = scope.topics ?? ALL_TOPICS
+      const items = scope.items ?? ALL_ITEMS
+
       const { data, error } = await supabase.rpc('bank_draw_question_ids', {
         p_brand_id: scope.brandId,
         p_difficulty: scope.difficulty,
         p_qtype: qtype,
         p_count: count,
+        p_exclude_item_ids: items.excludedItemIds,
+        p_include_no_item: items.includeNoItem,
+        // Filtered inside the draw, before the random sample is taken —
+        // see 0078. Excluding after the sample would return a short paper.
+        p_topic_ids: topics.topicIds,
+        p_include_no_topic: topics.includeNoTopic,
       })
 
       if (error) throw new Error(`Could not draw questions: ${error.message}`)
@@ -167,6 +242,7 @@ export function createPaperRepository(requestScope: PaperScope): PaperRepository
         // PostgREST is hex with a leading \x — NOT base64, which is what the
         // node pg driver would have wanted and is the easy thing to get wrong.
         p_combination_hash: `\\x${input.combinationHash}`,
+        p_config: input.config ?? null,
         p_questions: input.questions.map((q) => ({
           questionId: q.id,
           questionNo: q.questionNo,

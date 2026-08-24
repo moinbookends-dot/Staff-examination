@@ -1,9 +1,16 @@
-import { BANK_LOCALES, DIFFICULTIES, type BankLocale, type Difficulty } from '../vocabulary'
+import {
+  BANK_LOCALES,
+  DIFFICULTIES,
+  type BankLocale,
+  type Difficulty,
+  type QuestionType,
+} from '../vocabulary'
 import {
   classifySchemaIssue,
   dedupeKey,
   importEnvelopeSchema,
   importQuestionSchema,
+  pruneNulls,
   REJECTION_REASONS,
   shapeIssues,
   topicSlug,
@@ -83,9 +90,23 @@ export interface ImportReport {
 
   countsByDifficulty: Record<Difficulty, number>
   countsByType: { mcq: number; short_answer: number }
+  /**
+   * Rejected rows split the same way, read from the raw row's `type` so a
+   * schema-failing row still lands in the right column. A row whose type is
+   * itself unreadable counts as `unknown`.
+   */
+  rejectedByType: { mcq: number; short_answer: number; unknown: number }
   countsByStatus: { draft: number; active: number; archived: number }
   localeCoverage: Record<BankLocale, number>
   topics: string[]
+
+  /**
+   * The brand slug the file's envelope names, verbatim. Only the canonical
+   * envelope shape can carry one; a bare array or JSON Lines never sets it.
+   * The UI compares it against the brand selected for the import — analyse
+   * itself has no idea which brands exist.
+   */
+  declaredBrand?: string
 
   /** Set when the file itself could not be read at all. */
   fatal?: string
@@ -116,6 +137,27 @@ export interface AnalyseOptions {
    * downgraded to draft rather than rejected.
    */
   requiredLocales?: readonly BankLocale[]
+
+  /**
+   * The questions already in THIS BRAND's bank, by level and English text.
+   *
+   * ┌─────────────────────────────────────────────────────────────────────┐
+   * │ WITHOUT THIS, A TRANSLATION CANNOT FIND ITS QUESTION.               │
+   * │                                                                     │
+   * │ externalId was the only thing that made a row read as an update,    │
+   * │ so a bank imported without ids could never be added to: every row   │
+   * │ of a re-import counted as new, and the commit then collided with    │
+   * │ the English-text unique index and rolled the batch back.            │
+   * │                                                                     │
+   * │ Keyed by questionKey() — the index's own expression — and carrying  │
+   * │ the stored qtype, because a match that disagrees about the type is  │
+   * │ the one case an update cannot resolve.                              │
+   * │                                                                     │
+   * │ Empty means everything reads as new, which is correct for a first   │
+   * │ import and is what every caller did before this existed.            │
+   * └─────────────────────────────────────────────────────────────────────┘
+   */
+  existingQuestions?: readonly { key: string; qtype: QuestionType }[]
 }
 
 function emptyReport(): ImportReport {
@@ -138,6 +180,7 @@ function emptyReport(): ImportReport {
     unknownTopics: [],
     countsByDifficulty: { easy: 0, medium: 0, hard: 0 },
     countsByType: { mcq: 0, short_answer: 0 },
+    rejectedByType: { mcq: 0, short_answer: 0, unknown: 0 },
     countsByStatus: { draft: 0, active: 0, archived: 0 },
     localeCoverage: { en: 0, hi: 0, gu: 0 },
     topics: [],
@@ -152,7 +195,9 @@ function emptyReport(): ImportReport {
  * error naming what was expected — "Unexpected token" from JSON.parse tells
  * somebody holding a 3,000-row file nothing useful.
  */
-export function extractRows(raw: string): { rows: unknown[] } | { fatal: string } {
+export function extractRows(
+  raw: string,
+): { rows: unknown[]; brand?: string } | { fatal: string } {
   const text = raw.trim()
   if (!text) return { fatal: 'The file is empty.' }
 
@@ -162,7 +207,7 @@ export function extractRows(raw: string): { rows: unknown[] } | { fatal: string 
     if (Array.isArray(parsed)) return { rows: parsed }
 
     const envelope = importEnvelopeSchema.safeParse(parsed)
-    if (envelope.success) return { rows: envelope.data.questions }
+    if (envelope.success) return { rows: envelope.data.questions, brand: envelope.data.brand }
 
     return {
       fatal:
@@ -190,6 +235,9 @@ export function extractRows(raw: string): { rows: unknown[] } | { fatal: string 
 export function analyseImport(raw: string, options: AnalyseOptions = {}): ImportReport {
   const known = new Set((options.knownTopics ?? []).map(topicSlug))
   const existing = new Set(options.existingExternalIds ?? [])
+  const inBank = new Map(
+    (options.existingQuestions ?? []).map((q) => [q.key, q.qtype] as const),
+  )
   const required = options.requiredLocales ?? ['en']
 
   const report = emptyReport()
@@ -199,6 +247,7 @@ export function analyseImport(raw: string, options: AnalyseOptions = {}): Import
     report.fatal = extracted.fatal
     return report
   }
+  report.declaredBrand = extracted.brand
 
   const seen = new Map<string, number>()
   /*
@@ -226,8 +275,11 @@ export function analyseImport(raw: string, options: AnalyseOptions = {}): Import
 
   report.totalRows = extracted.rows.length
 
-  extracted.rows.forEach((rawRow, index) => {
+  extracted.rows.forEach((originalRow, index) => {
     const row = index + 1
+    // `"answer": null` means "no answer" — see pruneNulls. Required fields set
+    // to null still fail below, now as "missing" rather than a type error.
+    const rawRow = pruneNulls(originalRow)
     const parsed = importQuestionSchema.safeParse(rawRow)
 
     if (!parsed.success) {
@@ -243,6 +295,7 @@ export function analyseImport(raw: string, options: AnalyseOptions = {}): Import
         ),
       })
       report.rejectionsByReason[reason] += 1
+      report.rejectedByType[readQuestionType(rawRow)] += 1
       return
     }
 
@@ -270,6 +323,7 @@ export function analyseImport(raw: string, options: AnalyseOptions = {}): Import
         issues: issues.map((i) => i.message),
       })
       report.rejectionsByReason[reason] += 1
+      report.rejectedByType[question.type] += 1
       return
     }
 
@@ -332,10 +386,42 @@ export function analyseImport(raw: string, options: AnalyseOptions = {}): Import
       })
     }
 
-    // New or an overwrite? Only answerable when the caller supplied the ids
-    // already in the bank; without them everything reads as new, which is
-    // correct for a first import.
-    const isUpdate = Boolean(effective.externalId && existing.has(effective.externalId))
+    /*
+     * New, or an addition to a question already here?
+     *
+     * By id first — exact, and what a generated corpus supplies. Then by the
+     * English text at this level, which is how a translation file finds the
+     * question it belongs to: the same 1,000 questions arriving with a Hindi
+     * block are the same 1,000 questions, not 1,000 new ones.
+     *
+     * Both are checked against THIS brand only. The two banks are separate,
+     * and the same English sentence may legitimately exist in each.
+     */
+    const byId = Boolean(effective.externalId && existing.has(effective.externalId))
+    const storedType = inBank.get(dedupeKey(effective))
+
+    /*
+     * The one match an update cannot resolve. Changing a question's type
+     * rewrites its answer shape — four options become a model answer — and
+     * the database refuses the half-changed state that would pass through.
+     * Refused by name here so the row is named in the report rather than
+     * arriving as a constraint violation mid-commit.
+     */
+    if (!byId && storedType !== undefined && storedType !== effective.type) {
+      report.rejected.push({
+        row,
+        externalId: effective.externalId,
+        reason: 'type-conflict',
+        issues: [
+          `This question is already in the bank at this level as a ${storedType === 'mcq' ? 'multiple choice' : 'short answer'} question, and this file calls it ${effective.type === 'mcq' ? 'multiple choice' : 'short answer'}. Change it in the editor, or correct the file.`,
+        ],
+      })
+      report.rejectionsByReason['type-conflict'] += 1
+      report.rejectedByType[effective.type] += 1
+      return
+    }
+
+    const isUpdate = byId || storedType !== undefined
     if (isUpdate) report.toUpdate.push(effective)
     else report.toImport.push(effective)
 
@@ -358,6 +444,14 @@ export function analyseImport(raw: string, options: AnalyseOptions = {}): Import
 }
 
 /** Best-effort id for an unparseable row, so the error can still name it. */
+function readQuestionType(row: unknown): 'mcq' | 'short_answer' | 'unknown' {
+  if (row && typeof row === 'object' && 'type' in row) {
+    const value = (row as { type: unknown }).type
+    if (value === 'mcq' || value === 'short_answer') return value
+  }
+  return 'unknown'
+}
+
 function readExternalId(row: unknown): string | undefined {
   if (row && typeof row === 'object' && 'externalId' in row) {
     const value = (row as { externalId: unknown }).externalId

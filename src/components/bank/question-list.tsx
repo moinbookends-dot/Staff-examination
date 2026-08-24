@@ -34,6 +34,7 @@ export interface QuestionListProps {
   difficultyLabels: Record<Difficulty, string>
   labels: {
     question: string
+    brand: string
     difficulty: string
     type: string
     topic: string
@@ -54,7 +55,7 @@ export function QuestionList({ rows, difficultyLabels, typeLabels, labels }: Que
         <table className="w-full text-left">
           <thead>
             <tr className="border-b">
-              {[labels.question, labels.difficulty, labels.type, labels.topic, labels.status, labels.languages]
+              {[labels.question, labels.brand, labels.difficulty, labels.type, labels.topic, labels.status, labels.languages]
                 .map((h) => (
                   <th key={h} className="px-4 py-3 text-label-caps text-muted-foreground">
                     {h}
@@ -79,6 +80,11 @@ export function QuestionList({ rows, difficultyLabels, typeLabels, labels }: Que
                       {labels.uuid}: {row.id}
                     </span>
                   )}
+                </td>
+                {/* Which restaurant's bank the row lives in — the axis papers
+                    are drawn along, so it is visible, not inferred. */}
+                <td className="px-4 py-3">
+                  <Badge variant="outline">{row.brandName || '—'}</Badge>
                 </td>
                 <td className="px-4 py-3">
                   <Badge variant="outline" className={cn(DIFFICULTY_TONE[row.difficulty])}>
@@ -111,6 +117,7 @@ export function QuestionList({ rows, difficultyLabels, typeLabels, labels }: Que
               <span className="line-clamp-3 text-body-md">{row.question || labels.untitled}</span>
             </Link>
             <div className="mt-3 flex flex-wrap items-center gap-2">
+              {row.brandName && <Badge variant="outline">{row.brandName}</Badge>}
               <Badge variant="outline" className={cn(DIFFICULTY_TONE[row.difficulty])}>
                 {difficultyLabels[row.difficulty]}
               </Badge>

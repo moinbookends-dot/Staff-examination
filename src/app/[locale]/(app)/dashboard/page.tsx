@@ -258,13 +258,22 @@ export default async function DashboardPage() {
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
             <section className="rounded-xl border bg-card p-5">
               <h2 className="text-title-md">{t('distributionTitle')}</h2>
+              <p className="mt-1 text-body-sm text-muted-foreground">
+                {t('distributionHint')}
+              </p>
               <div className="mt-4 space-y-4">
                 {DIFFICULTIES.map((d) => (
                   <DistributionBar
                     key={d}
                     label={difficultyLabels[d]}
                     count={stats.byDifficulty[d]}
-                    total={stats.total}
+                    /*
+                     * ACTIVE, not total. The bars count active questions, so
+                     * measuring them against a total that also holds drafts
+                     * and archived rows would draw three bars that never fill
+                     * the width and never explain why.
+                     */
+                    total={stats.active}
                   />
                 ))}
               </div>

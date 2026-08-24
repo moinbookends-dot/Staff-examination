@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState, useTransition } from 'react'
+import { useRouter } from '@/lib/i18n/navigation'
 import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 import { DownloadIcon, FileJsonIcon, RotateCcwIcon, UploadIcon } from 'lucide-react'
@@ -16,9 +17,9 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { analyseImport, difficultyBalance, isImportable, type ImportReport } from '@/lib/bank/import/analyse'
-import { REJECTION_REASONS, type RejectionReason } from '@/lib/bank/import/format'
+import { REJECTION_REASONS, topicSlug, type RejectionReason } from '@/lib/bank/import/format'
 import { batchRows, toCommitRow, type CommitRow } from '@/lib/bank/import/commit'
-import type { BankLocale, Difficulty } from '@/lib/bank/vocabulary'
+import type { BankLocale, Difficulty, QuestionType } from '@/lib/bank/vocabulary'
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -54,13 +55,21 @@ export type CommitResult =
   | { ok: false; message: string }
 
 export interface ImportPanelProps {
-  brands: { id: string; name: string }[]
+  brands: { id: string; name: string; slug: string }[]
   defaultBrandId: string
   /** Topic slugs that exist. An unknown topic is rejected, never created. */
   knownTopics: string[]
   requiredLocales: BankLocale[]
   /** externalIds already in the bank, so the report can say new vs updated. */
   existingExternalIds: string[]
+  /**
+   * Every question already in this brand's bank, keyed by level + English text.
+   *
+   * What lets a file adding a language recognise the questions it belongs to.
+   * Without it a bank imported without externalIds reads as entirely new on
+   * every re-import, and the commit then collides with the text index.
+   */
+  existingQuestions: { key: string; qtype: QuestionType }[]
   difficultyLabels: Record<Difficulty, string>
   /**
    * Decided on the server from bank.export. Passed as a boolean rather than
@@ -77,15 +86,29 @@ export function ImportPanel({
   knownTopics,
   requiredLocales,
   existingExternalIds,
+  existingQuestions,
   difficultyLabels,
   canExport,
   onCommit,
 }: ImportPanelProps) {
   const t = useTranslations('import')
+  const router = useRouter()
   const [pending, startTransition] = useTransition()
 
   const fileInput = useRef<HTMLInputElement>(null)
-  const [brandId, setBrandId] = useState(defaultBrandId)
+  /*
+   * The brand is URL state, not component state. The report compares the file
+   * against ONE brand's bank, and that comparison is made on the server — so a
+   * brand changed only here would leave the numbers describing the wrong bank
+   * while the commit wrote to the right one.
+   */
+  const brandId = defaultBrandId
+
+  const chooseBrand = (next: string) => {
+    // The report was computed against the old brand; it cannot survive the move.
+    reset()
+    router.push(`/questions/import?brand=${encodeURIComponent(next)}`)
+  }
   const [fileName, setFileName] = useState<string | null>(null)
   const [report, setReport] = useState<ImportReport | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -102,6 +125,7 @@ export function ImportPanel({
       analyseImport(raw, {
         knownTopics,
         existingExternalIds,
+        existingQuestions,
         requiredLocales,
       }),
     )
@@ -113,6 +137,38 @@ export function ImportPanel({
     setFileName(null)
     setProgress(null)
     if (fileInput.current) fileInput.current.value = ''
+  }
+
+  /*
+   * The full report as a file. The analyse layer deliberately keeps EVERY
+   * issue for EVERY row ("somebody fixing a generator needs the whole list"),
+   * and the screen samples it — so at 1,000 rejections the actionable detail
+   * only exists here. Built in the browser from state; nothing touches the
+   * server.
+   */
+  const downloadErrorReport = () => {
+    if (!report) return
+    const payload = {
+      file: fileName,
+      totalRows: report.totalRows,
+      rejectedCount: report.rejectedCount,
+      duplicateCount: report.duplicateCount,
+      rejectionsByReason: report.rejectionsByReason,
+      rejected: report.rejected.map((r) => ({
+        row: r.row,
+        externalId: r.externalId ?? null,
+        reason: r.reason,
+        issues: r.issues,
+      })),
+      duplicates: report.duplicates,
+    }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `${(fileName ?? 'import').replace(/.[^.]*$/, '')}-errors.json`
+    anchor.click()
+    URL.revokeObjectURL(url)
   }
 
   const commit = () => {
@@ -161,6 +217,22 @@ export function ImportPanel({
   const importable = report ? isImportable(report) : false
   const commitCount = report ? report.importedCount + report.updatedCount : 0
 
+  /*
+   * The file may say which brand it is for — an optional envelope field, and
+   * the only thing standing between a Capiche file and the Aiko bank when the
+   * dropdown is left on its default. Declared-but-different blocks the commit;
+   * a file with no declaration imports exactly as before. Derived, not stored,
+   * so switching the dropdown to the right brand clears it without
+   * re-analysing. topicSlug() is the normaliser the topic field already uses,
+   * so "Capiche" in the file matches the slug `capiche`.
+   */
+  const selectedBrand = brands.find((brand) => brand.id === brandId)
+  const brandMismatch = Boolean(
+    report?.declaredBrand &&
+      selectedBrand &&
+      topicSlug(report.declaredBrand) !== selectedBrand.slug,
+  )
+
   return (
     <div className="space-y-6">
       {error && <InlineError>{error}</InlineError>}
@@ -181,7 +253,7 @@ export function ImportPanel({
                 nothing. */}
             <Select
               value={brandId}
-              onValueChange={(value) => setBrandId(value ?? brandId)}
+              onValueChange={(value) => chooseBrand(value ?? brandId)}
               disabled={pending}
             >
               <SelectTrigger id="import-brand" className="w-full sm:w-80">
@@ -263,6 +335,15 @@ export function ImportPanel({
 
       {report && !report.fatal && (
         <div className="space-y-6">
+          {brandMismatch && report.declaredBrand && (
+            <InlineError>
+              {t('brandMismatch', {
+                declared: report.declaredBrand,
+                selected: selectedBrand?.name ?? '',
+              })}
+            </InlineError>
+          )}
+
           <div>
             <h2 className="text-title-md">{t('reportTitle')}</h2>
             <p className="text-body-sm text-muted-foreground">
@@ -276,6 +357,21 @@ export function ImportPanel({
             <StatCard label={t('willReject')} value={report.rejectedCount} />
             <StatCard label={t('willSkip')} value={report.duplicateCount} />
           </div>
+
+          {/* The split that diagnoses a generator: a file whose short answers
+              land and whose MCQs all reject is one systematic fault, and this
+              line is where that pattern becomes visible. */}
+          <p className="text-body-sm text-muted-foreground tabular-nums">
+            {t('mcqSummary', {
+              valid: report.countsByType.mcq,
+              invalid: report.rejectedByType.mcq,
+            })}
+            {' · '}
+            {t('shortSummary', {
+              valid: report.countsByType.short_answer,
+              invalid: report.rejectedByType.short_answer,
+            })}
+          </p>
 
           {/* Balance by level, because a 3,000-row file that turns out to be
               1,400 Easy and 600 Hard is worth seeing BEFORE it lands rather
@@ -304,9 +400,15 @@ export function ImportPanel({
               412 sentences is a log; this is the number that drives a fix. */}
           {report.rejectedCount > 0 && (
             <section className="space-y-3 rounded-xl border bg-card p-5">
-              <div>
-                <h3 className="text-label-caps text-muted-foreground">{t('rejectionsTitle')}</h3>
-                <p className="text-body-sm text-muted-foreground">{t('rejectionsHint')}</p>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-label-caps text-muted-foreground">{t('rejectionsTitle')}</h3>
+                  <p className="text-body-sm text-muted-foreground">{t('rejectionsHint')}</p>
+                </div>
+                <Button variant="outline" size="sm" onClick={downloadErrorReport}>
+                  <DownloadIcon />
+                  {t('downloadErrors')}
+                </Button>
               </div>
 
               <ul className="divide-y">
@@ -320,16 +422,22 @@ export function ImportPanel({
                   ))}
               </ul>
 
-              {/* A sample rather than the lot: at 3,000 rows the categories are
-                  the actionable part, and the first few examples are enough to
-                  recognise the pattern. */}
+              {/* A sample rather than the lot — the file download above carries
+                  everything — but each sampled row shows its FULL issue list:
+                  a row failing three ways diagnosed by its first issue alone
+                  sends somebody around the fix-reimport loop three times. */}
               <ul className="space-y-2 border-t pt-3">
-                {report.rejected.slice(0, 10).map((row) => (
+                {report.rejected.slice(0, 20).map((row) => (
                   <li key={row.row} className="text-body-sm">
                     <span className="text-label-caps text-muted-foreground">
                       {t('row', { row: row.row })}
-                    </span>{' '}
-                    {row.issues[0]}
+                      {row.externalId ? ` · ${row.externalId}` : ''}
+                    </span>
+                    <ul className="mt-0.5 space-y-0.5 pl-4">
+                      {row.issues.map((issue, i) => (
+                        <li key={i}>{issue}</li>
+                      ))}
+                    </ul>
                   </li>
                 ))}
               </ul>
@@ -379,7 +487,7 @@ export function ImportPanel({
 
           {/* ── Commit ──────────────────────────────────────────────────────── */}
           <div className="flex flex-wrap items-center gap-3">
-            <Button onClick={commit} disabled={pending || !importable}>
+            <Button onClick={commit} disabled={pending || !importable || brandMismatch}>
               <UploadIcon />
               {pending ? t('committing') : t('commit', { count: commitCount })}
             </Button>
