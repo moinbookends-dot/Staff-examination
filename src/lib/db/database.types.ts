@@ -1825,6 +1825,10 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "approve_registration": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "assert_profile_self_edit": {
         Args: Record<string, unknown>
         Returns: unknown
@@ -2222,6 +2226,10 @@ export type Database = {
         Returns: unknown
       }
       "question_translation_stamp": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "reject_registration": {
         Args: Record<string, unknown>
         Returns: unknown
       }

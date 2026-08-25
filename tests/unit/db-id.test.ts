@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { readFileSync, readdirSync } from 'node:fs'
+import { resolve, join } from 'node:path'
 import { z } from 'zod'
 import { dbId } from '@/lib/db/id'
 
@@ -64,5 +64,54 @@ describe('every id in seed.sql', () => {
       rejected,
       `seed.sql contains ids the app would reject: ${rejected.join(', ')}`,
     ).toEqual([])
+  })
+})
+
+describe('no strict uuid validator on database-read ids', () => {
+  /*
+   * The trap in src/lib/db/id.ts has now bitten TWICE: getAppClaims() (every
+   * seeded user bounced to /pending with a valid token) and then
+   * approveRegistration (selecting a real outlet answered "Select an
+   * outlet."). Both times the code compiled, the tests passed, and only a
+   * person clicking the real page hit it — because strict z.uuid() rejects
+   * the seeded 00000000-…-00000000a001 ids that Postgres happily stores.
+   *
+   * So: scan the source for strict uuid validators. Entries come OFF this
+   * allowlist as call sites migrate to dbId(); none should ever be added.
+   * Every listed occurrence validates a value the APPLICATION minted with
+   * gen_random_uuid()/crypto.randomUUID — never a seeded fixture id — which
+   * is the one legitimate use the doctrine in id.ts leaves open.
+   */
+  const ALLOWED = new Set([
+    'src/lib/questions/schemas.ts', // mediaId — minted by upload, always v4
+    'src/server/actions/papers.ts', // topic rows from own RPC, gen_random_uuid
+    'src/server/papers/availability.ts', // item/topic pool rows, gen_random_uuid
+    'src/server/papers/repository.ts', // draw/save rows, gen_random_uuid
+  ])
+
+  it('finds no new strict uuid() call sites', () => {
+    const hits: string[] = []
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name)
+        if (entry.isDirectory()) walk(full)
+        else if (/\.(ts|tsx)$/.test(entry.name)) {
+          // Line-wise, skipping comments — half the codebase name-checks
+          // z.uuid() in comments explaining why NOT to use it, and flagging
+          // the warnings would teach people to delete them.
+          const offending = readFileSync(full, 'utf8')
+            .split('\n')
+            .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+            .some((line) => /z\.string\(\)\.uuid\(|z\.uuid\(/.test(line))
+          if (offending) {
+            hits.push(full.replaceAll('\\', '/').replace(/^.*?src\//, 'src/'))
+          }
+        }
+      }
+    }
+    walk(resolve(__dirname, '../../src'))
+
+    const strays = hits.filter((h) => !ALLOWED.has(h) && !h.endsWith('lib/db/id.ts'))
+    expect(strays, `use dbId() from src/lib/db/id.ts instead — see its header:\n  ${strays.join('\n  ')}`).toEqual([])
   })
 })

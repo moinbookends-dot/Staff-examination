@@ -1,0 +1,66 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# Drains email_outbox on a schedule.
+#
+# WHY GITHUB ACTIONS AND NOT RENDER CRON: Render's cron jobs require a paid
+# instance. This costs nothing and the repository already runs Actions.
+#
+# GitHub's scheduled runs are BEST EFFORT — they routinely lag by several
+# minutes under load, and can be skipped entirely. That is acceptable here
+# precisely because the outbox is a queue: a late tick sends the same rows in
+# the same priority order, and nothing is lost by being early or late. If mail
+# ever needs to be prompt to the minute, this is the piece to replace.
+# ═══════════════════════════════════════════════════════════════════════════
+name: Drain email outbox
+
+on:
+  schedule:
+    # Every 15 minutes. The daily cap, not this interval, bounds what is sent.
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      dryRun:
+        description: 'Report what would be sent without sending it'
+        type: boolean
+        default: false
+
+# One drain at a time. Two overlapping runs could both claim the same rows and
+# send a person the same email twice — the dedupe index only protects against
+# duplicate ENQUEUES, not duplicate sends.
+concurrency:
+  group: email-drain
+  cancel-in-progress: false
+
+jobs:
+  drain:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call the drain endpoint
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          DRY_RUN: ${{ inputs.dryRun && '1' || '' }}
+        run: |
+          if [ -z "$APP_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "APP_URL and CRON_SECRET must be set as repository secrets."
+            exit 1
+          fi
+
+          URL="$APP_URL/api/cron/drain-email"
+          if [ -n "$DRY_RUN" ]; then URL="$URL?dryRun=1"; fi
+
+          # -sS keeps it quiet but still prints errors; the body is the report.
+          code=$(curl -sS -o /tmp/drain.json -w '%{http_code}' \
+            -X POST "$URL" -H "Authorization: Bearer $CRON_SECRET")
+
+          echo "HTTP $code"
+          cat /tmp/drain.json
+          echo
+
+          # A non-200 means the queue could not be read at all. Per-email
+          # failures come back inside a 200 and are recorded on their rows.
+          if [ "$code" != "200" ]; then exit 1; fi
+
+          failed=$(node -e "process.stdout.write(String(require('/tmp/drain.json').failed ?? 0))")
+          if [ "$failed" != "0" ]; then
+            echo "::warning::$failed email(s) failed to send; see last_error on those rows."
+          fi

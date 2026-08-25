@@ -5,6 +5,7 @@ import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { routing } from '@/lib/i18n/routing'
+import { getTranslations } from 'next-intl/server'
 
 /**
  * Authentication actions.
@@ -84,7 +85,9 @@ export async function registerAction(
   })
 
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Check the form and try again.' }
+    const locale = String(formData.get('locale') ?? 'en')
+    const te = await getTranslations({ locale, namespace: 'auth.errors' })
+    return { ok: false, error: parsed.error.issues[0]?.message ?? te('checkTheForm') }
   }
 
   const { email, password, fullName, phone, locale, preferredLocale } = parsed.data
@@ -104,7 +107,7 @@ export async function registerAction(
        * │ to a 404, so a registrant could never confirm and could never sign    │
        * │ in. Signup was a dead end for the whole life of the product.          │
        * │                                                                       │
-       * │ The route now exists, AND the primary flow is a 6-digit code typed    │
+       * │ The route now exists, AND the primary flow is a numeric code typed    │
        * │ on /verify-email. Both are supported deliberately: which one the      │
        * │ email carries is decided by a template in the Supabase dashboard,     │
        * │ not by this file, and supporting only one fails silently and in       │
@@ -146,14 +149,45 @@ export async function registerAction(
      * ║ until then.                                                               ║
      * ╚═══════════════════════════════════════════════════════════════════════════╝
      */
+    const te = await getTranslations({ locale, namespace: 'auth.errors' })
+
     if (/rate limit/i.test(error.message) || error.status === 429) {
-      return {
-        ok: false,
-        error: 'Too many accounts have been created just now. Wait a few minutes and try again.',
-      }
+      /*
+       * "Wait a few minutes" is what this said, and it was wrong in a way that
+       * mattered: the built-in SMTP quota resets HOURLY, so somebody who waited
+       * five minutes, retried, failed and retried again concluded that email
+       * verification was broken. The copy now names the real wait.
+       */
+      return { ok: false, error: te('emailRateLimited') }
     }
 
-    return { ok: false, error: 'Could not complete registration. Check your details and try again.' }
+    /*
+     * A MAIL-SEND FAILURE IS NOT A BAD FORM, AND MUST NOT READ AS ONE.
+     *
+     * With custom SMTP configured, a broken host, wrong port, bad credential
+     * or unverified sender surfaces as:
+     *
+     *   500 {"error_code":"unexpected_failure",
+     *        "msg":"Error sending confirmation email"}
+     *
+     * Under the generic message that becomes "Check your details and try
+     * again" — so the registrant retypes a perfectly correct form until they
+     * give up, and nobody is told the server cannot send mail. Same failure
+     * mode the rate-limit branch above exists to prevent, so it gets the same
+     * treatment: name it, and point at the person who can actually fix it.
+     *
+     * Deliberately says nothing about SMTP, hosts or credentials — that is
+     * infrastructure detail a candidate cannot act on and should not see.
+     */
+    if (
+      /error sending/i.test(error.message) ||
+      /confirmation email/i.test(error.message) ||
+      error.status === 500
+    ) {
+      return { ok: false, error: te('emailSendFailed') }
+    }
+
+    return { ok: false, error: te('registrationFailed') }
   }
 
   /*
@@ -227,7 +261,15 @@ export async function verifyEmailAction(
   })
 
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Enter the 6-digit code from your email.' }
+    /*
+     * The fallback said "6-digit", which is the exact mistake the box above
+     * records fixing in the SCHEMA: GoTrue mints EIGHT digits on this project.
+     * Telling somebody holding an 8-digit code to enter a 6-digit one reads as
+     * "your code is wrong" when the code is fine.
+     */
+    const locale = String(formData.get('locale') ?? 'en')
+    const te = await getTranslations({ locale, namespace: 'auth.errors' })
+    return { ok: false, error: parsed.error.issues[0]?.message ?? te('enterTheCode') }
   }
 
   const { email, token, locale } = parsed.data
@@ -261,10 +303,8 @@ export async function verifyEmailAction(
      * │ case it is.                                                           │
      * └───────────────────────────────────────────────────────────────────────┘
      */
-    return {
-      ok: false,
-      error: 'That code did not work. It may have expired — check the email, or ask for a new code.',
-    }
+    const te = await getTranslations({ locale, namespace: 'auth.errors' })
+    return { ok: false, error: te('codeNotAccepted') }
   }
 
   // Verified, but not yet approved by a manager — /pending is the next stop,

@@ -13,3 +13,15 @@ services:
         sync: false
       - key: SUPABASE_SECRET_KEY
         sync: false
+      # Email. Set these in the Render dashboard; sync:false means Render will
+      # not read a value from this file, which is what keeps the key out of git.
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: CRON_SECRET
+        sync: false
+      # Absolute origin used to build links inside emails. Without it the
+      # templates omit the button rather than linking nowhere.
+      - key: APP_URL
+        sync: false

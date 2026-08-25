@@ -31,4 +31,5 @@ import { z } from 'zod'
  * Use strict z.uuid() only where a value must genuinely be a v4 UUID minted by
  * this application, never for something read back from the database.
  */
-export const dbId = () => z.guid()
+/** `message` surfaces as the field error — e.g. dbId('Select an outlet.'). */
+export const dbId = (message?: string) => (message ? z.guid(message) : z.guid())

@@ -21,6 +21,12 @@ import { Badge } from '@/components/ui/badge'
 import { InlineError } from '@/components/ui/inline-error'
 import { DIFFICULTIES, type Difficulty } from '@/lib/bank/vocabulary'
 import { formatCombinationCount, isRunningLow } from '@/lib/papers/format'
+import {
+  excludedItemIds,
+  filterItemsBySearch,
+  itemsNeedingChange,
+  partitionByUsage,
+} from '@/lib/papers/item-selection'
 import { isEffectivelyUnlimited } from '@/lib/papers/combinations'
 import type { GenerateAvailability } from '@/server/papers/availability'
 import { cn } from '@/lib/utils'
@@ -216,21 +222,22 @@ export function GeneratePanel({
 
   const levelTotal = level ? level.pool.mcq + level.pool.shortAnswer : 0
 
-  const needle = itemSearch.trim().toLowerCase()
-  const shownItems = needle
-    ? itemPool.filter((i) => i.name.toLowerCase().includes(needle))
-    : itemPool
+  const shownItems = filterItemsBySearch(itemPool, itemSearch)
 
-  const notInUse = itemPool.filter((i) => !i.inUse)
+  const notInUse = partitionByUsage(itemPool).notInUse
 
   /*
    * Two groups rather than one list with strikethrough. A withdrawn dish is
    * a decision somebody made and may need to undo, and hunting for it among
    * forty-nine that are fine is the hard part — putting them together makes
    * "what have I taken off the menu" answerable at a glance.
+   *
+   * Note which list each group is derived from: the two headings partition the
+   * SHOWN items, while `notInUse` above partitions the WHOLE pool, because a
+   * dish withdrawn earlier stays excluded from generation while you search for
+   * something else. See item-selection.ts.
    */
-  const shownInUse = shownItems.filter((i) => i.inUse)
-  const shownNotInUse = shownItems.filter((i) => !i.inUse)
+  const { inUse: shownInUse, notInUse: shownNotInUse } = partitionByUsage(shownItems)
 
   // Steps are numbered by what is actually on screen: a brand with no topics
   // and no items must not show a gap where steps 3 and 4 would have been.
@@ -254,7 +261,7 @@ export function GeneratePanel({
   const setAllShown = (inUse: boolean) => {
     if (!onSetItemUsage) return
 
-    const changing = shownItems.filter((i) => i.id !== null && i.inUse !== inUse)
+    const changing = itemsNeedingChange(shownItems, inUse)
     if (changing.length === 0) return
 
     setOutcome(null)
@@ -321,9 +328,7 @@ export function GeneratePanel({
           includeNoTopic: includedEntries.some((e) => e.id === null),
           // The server adds every item already marked Not in Use, so this
           // list narrows the pool and can never widen it.
-          excludedItemIds: notInUse
-            .map((i) => i.id)
-            .filter((id): id is string => id !== null),
+          excludedItemIds: excludedItemIds(itemPool),
           includeNoItem: itemPool.every((i) => i.id !== null) || notInUse.every((i) => i.id !== null),
         }),
       )

@@ -43,11 +43,34 @@ const CHROME = process.env.CHROME_PATH ?? 'C:/Program Files/Google/Chrome/Applic
 const PASSWORD = 'Sample-2026!'
 const MIN_TARGET = 44
 
-/** Real devices, not round numbers: a Pixel-ish, an iPhone, a large Android. */
+/**
+ * Real devices, not round numbers.
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ 320 AND 430 ARE THE TWO THAT MATTER, AND THEY WERE THE TWO MISSING.       │
+ * │                                                                           │
+ * │ Everything between them is forgiving; the ends are where an exam screen   │
+ * │ actually breaks:                                                          │
+ * │                                                                           │
+ * │   320 — iPhone SE and every budget Android a kitchen porter is likely to  │
+ * │         own. The narrowest viewport still in real use, and the first to   │
+ * │         overflow horizontally or squeeze an option below 44px. If the     │
+ * │         exam fails anywhere, it fails here first.                         │
+ * │   430 — iPhone Pro Max. Fails the opposite way: a layout that only ever   │
+ * │         grows leaves the timer or the submit control stranded, and safe-  │
+ * │         area insets are largest on exactly these devices.                 │
+ * │                                                                           │
+ * │ check-mobile.mjs already spans 320–390 for the ordinary app. The exam is  │
+ * │ the one screen a candidate cannot leave to work around a layout bug, so   │
+ * │ it gets the wider sweep.                                                  │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ */
 const VIEWPORTS = [
+  { w: 320, h: 568, name: '320x568 (iPhone SE / budget Android)' },
   { w: 360, h: 800, name: '360x800 (small Android)' },
   { w: 390, h: 844, name: '390x844 (iPhone)' },
   { w: 412, h: 915, name: '412x915 (large Android)' },
+  { w: 430, h: 932, name: '430x932 (iPhone Pro Max)' },
 ]
 
 const env = {}

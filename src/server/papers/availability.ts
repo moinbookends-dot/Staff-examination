@@ -4,9 +4,13 @@ import { createClient } from '@/lib/supabase/server'
 import { examState, type ExamState, type StoredExamStatus } from '@/lib/exams/state'
 import type { AssignmentTarget } from '@/lib/exams/rules'
 import type { BankLocale, Difficulty } from '@/lib/bank/vocabulary'
-import { DIFFICULTIES } from '@/lib/bank/vocabulary'
-import { blueprintFor, PAPER_SIZES, type PaperBlueprint } from '@/lib/papers/blueprint'
-import { totalPossiblePapers, type PoolCounts } from '@/lib/papers/combinations'
+import { PAPER_SIZES, type PaperBlueprint } from '@/lib/papers/blueprint'
+import type { PoolCounts } from '@/lib/papers/combinations'
+import {
+  buildLevels,
+  poolCountRowSchema,
+  type LevelAvailability,
+} from '@/lib/papers/availability-levels'
 import type { PaperHistoryEntry, PaperHistoryPage } from '@/lib/papers/repository'
 import { loadTopics } from '@/server/papers/bank-data'
 
@@ -41,11 +45,12 @@ export interface PaperSizeOption extends PaperBlueprint {
   available: boolean
 }
 
-export interface LevelAvailability {
-  difficulty: Difficulty
-  pool: PoolCounts
-  combinationsBySize: Record<number, number>
-}
+/*
+ * Defined in lib/papers/availability-levels.ts alongside the function that
+ * builds it, and re-exported here so every existing importer of this module is
+ * unaffected. See that file for why the arithmetic had to move.
+ */
+export type { LevelAvailability, PoolCountRow } from '@/lib/papers/availability-levels'
 
 /**
  * One selectable topic in the pool picker, with the counts it contributes.
@@ -106,14 +111,6 @@ export interface GenerateAvailability {
 }
 
 /**
- * Pool counts per level, and how many distinct papers each size can still make.
- *
- * The combination arithmetic is NOT duplicated here — totalPossiblePapers()
- * from src/lib/papers/combinations.ts does it, the same function the generator
- * uses, so the number on the screen and the number that decides exhaustion
- * cannot disagree.
- */
-/**
  * The RPC's result, validated rather than asserted.
  *
  * ┌───────────────────────────────────────────────────────────────────────────┐
@@ -141,11 +138,8 @@ const topicPoolRowSchema = z.object({
   n: z.number().int().nonnegative(),
 })
 
-const poolCountRowSchema = z.object({
-  difficulty: z.enum(['easy', 'medium', 'hard']),
-  qtype: z.enum(['mcq', 'short_answer']),
-  n: z.coerce.number().int().min(0),
-})
+// Schema and row type live with buildLevels — the parse and the arithmetic
+// that consumes it must not be able to drift apart.
 
 /**
  * @param brandId REQUIRED. Passing null to bank_pool_counts sums EVERY brand,
@@ -172,19 +166,7 @@ export async function loadGenerateAvailability(brandId: string): Promise<Generat
   const parsed = z.array(poolCountRowSchema).safeParse(data ?? [])
   const rows = error || !parsed.success ? [] : parsed.data
 
-  const levels: LevelAvailability[] = DIFFICULTIES.map((difficulty) => {
-    const forLevel = rows.filter((r) => r.difficulty === difficulty)
-    const pool: PoolCounts = {
-      mcq: forLevel.find((r) => r.qtype === 'mcq')?.n ?? 0,
-      shortAnswer: forLevel.find((r) => r.qtype === 'short_answer')?.n ?? 0,
-    }
-
-    const combinationsBySize: Record<number, number> = {}
-    for (const marks of sizes) {
-      combinationsBySize[marks] = totalPossiblePapers(pool, blueprintFor(marks))
-    }
-    return { difficulty, pool, combinationsBySize }
-  })
+  const levels = buildLevels(rows, sizes)
 
   const total = rows.reduce((sum, r) => sum + r.n, 0)
 

@@ -36,7 +36,8 @@
     "check:touch": "node scripts/check-touch.mjs",
     "check:mobile": "node scripts/check-mobile.mjs",
     "make:icons": "node scripts/make-icons.mjs",
-    "check:exam": "node scripts/check-exam-mobile.mjs"
+    "check:exam": "node scripts/check-exam-mobile.mjs",
+    "drain:emails": "node scripts/drain-emails.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -58,6 +59,7 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-hook-form": "^7.83.0",
+    "resend": "^6.22.1",
     "server-only": "^0.0.1",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.6.0",

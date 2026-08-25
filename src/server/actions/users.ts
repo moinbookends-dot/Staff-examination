@@ -4,7 +4,6 @@ import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { requirePermission } from '@/lib/auth/guards'
 import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
 import { dbId } from '@/lib/db/id'
 
 /**
@@ -15,6 +14,27 @@ import { dbId } from '@/lib/db/id'
  * Everything downstream (which staff they appear among, which exams reach
  * them, which rows RLS returns) follows from those two columns, so they must
  * come from someone with authority.
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ NO ADMIN CLIENT IN THIS FILE ANY MORE — and that is the whole point.      │
+ * │                                                                           │
+ * │ Both decisions used to run through createAdminClient(), because a chef    │
+ * │ holds users.approve but NOT users.update, so profiles_admin_update would  │
+ * │ refuse to let them write another person's outlet. RLS was genuinely in    │
+ * │ the way and the service key was a reasonable way through it.              │
+ * │                                                                           │
+ * │ It also meant getSecretKey() ran on every click, and that THROWS when     │
+ * │ SUPABASE_SECRET_KEY is unset. On a host missing the variable, pressing    │
+ * │ Accept did not show an error — the action threw and the screen fell into  │
+ * │ the error boundary, so the queue looked broken with no way to approve     │
+ * │ anybody. Exactly the failure 0081 removed from registration.              │
+ * │                                                                           │
+ * │ 0085/0086 replaced it with approve_registration() and                     │
+ * │ reject_registration(): SECURITY DEFINER, gated on has_perm('users.approve')│
+ * │ and scoped to the caller's own company, doing the update, the notification│
+ * │ and the queued email in ONE transaction. Narrow privilege for one         │
+ * │ operation, instead of a key that reads every row in the database.         │
+ * └───────────────────────────────────────────────────────────────────────────┘
  */
 
 export interface PendingRegistration {
@@ -56,13 +76,22 @@ export async function listPendingRegistrations(): Promise<PendingRegistration[]>
 
 const approveSchema = z.object({
   userId: dbId(),
-  outletId: z.string().uuid('Select an outlet.'),
-  departmentId: z.string().uuid('Select a department.'),
+  /*
+   * dbId(), NOT z.string().uuid() — and this one actually bit. Zod 4's uuid()
+   * enforces RFC 4122 version/variant nibbles; the seeded outlet ids
+   * (00000000-…-00000000a001) have both nibbles zero, so selecting a real
+   * outlet failed validation and the chef was told "Select an outlet." while
+   * looking at their selection. The warning predicting exactly this sits in
+   * src/lib/db/id.ts. Departments happen to be v4 today, but they are read
+   * from a uuid column, so the same contract applies.
+   */
+  outletId: dbId('Select an outlet.'),
+  departmentId: dbId('Select a department.'),
   brandId: dbId().optional().nullable(),
 })
 
 export async function approveRegistration(input: unknown): Promise<MutationResult> {
-  const claims = await requirePermission('users.approve')
+  await requirePermission('users.approve')
 
   const parsed = approveSchema.safeParse(input)
   if (!parsed.success) {
@@ -70,68 +99,45 @@ export async function approveRegistration(input: unknown): Promise<MutationResul
   }
 
   const { userId, outletId, departmentId } = parsed.data
+  const supabase = await createClient()
 
-  // Admin client: setting another user's outlet is intentionally not something
-  // the profiles_admin_update policy grants a chef — chefs hold users.approve,
-  // not users.update. The requirePermission() above is the authorisation check.
-  const admin = createAdminClient()
-
-  // Guard against approving out of scope. A chef's queue is already filtered by
-  // RLS, but this action takes a userId from the client, so re-verify rather
-  // than trusting it.
-  const { data: target } = await admin
-    .from('profiles')
-    .select('id, email, outlet_id, company_id, approval_status')
-    .eq('id', userId)
-    .single()
-
-  if (!target) return { ok: false, error: 'That registration no longer exists.' }
-  if (target.approval_status !== 'pending') {
-    return { ok: false, error: 'That registration has already been decided.' }
-  }
-  if (target.company_id !== claims.company_id) {
-    return { ok: false, error: 'That registration belongs to another company.' }
-  }
-
-  const { error, count } = await admin
-    .from('profiles')
-    .update(
-      {
-        approval_status: 'approved',
-        approved_by: claims.userId,
-        approved_at: new Date().toISOString(),
-        outlet_id: outletId,
-        department_id: departmentId,
-        rejection_reason: null,
-      },
-      { count: 'exact' },
-    )
-    .eq('id', userId)
-    // Optimistic guard. Two chefs share one queue; without this, the second
-    // click would silently overwrite the first chef's outlet assignment.
-    .eq('approval_status', 'pending')
-
-  if (error) return { ok: false, error: 'Could not approve this registration.' }
-  if (count === 0) return { ok: false, error: 'Someone else just decided this registration.' }
-
-  await admin.from('notifications').insert({
-    user_id: userId,
-    kind: 'registration.approved',
-    title: 'Your account has been approved',
-    body: 'You can now sign in and see your assigned exams.',
-    link: '/dashboard',
+  /*
+   * One call. The function re-verifies the applicant is this company's, that
+   * the outlet and department are live and ours, and that the row is still
+   * pending — none of which can be trusted from the client, and all of which
+   * used to be three separate round trips here.
+   */
+  const { data, error } = await supabase.rpc('approve_registration', {
+    p_user_id: userId,
+    p_outlet_id: outletId,
+    p_department_id: departmentId,
   })
 
-  // Queued, never sent inline — approving a batch of new starters must not
-  // blow the 100/day provider quota (plan §10).
-  await admin.from('email_outbox').insert({
-    to_email: target.email as string,
-    to_user_id: userId,
-    subject: 'Your Bookends Learning account is ready',
-    template: 'registration-approved',
-    priority: 2,
-    payload: { dedupe_key: `registration-approved:${userId}` },
-  })
+  if (error) {
+    // The function raises named errors; map them to something a chef can act
+    // on rather than showing a Postgres message.
+    if (/already decided/i.test(error.message)) {
+      return { ok: false, error: 'That registration has already been decided.' }
+    }
+    if (/registration not found/i.test(error.message)) {
+      return { ok: false, error: 'That registration no longer exists.' }
+    }
+    if (/unknown outlet/i.test(error.message)) {
+      return { ok: false, error: 'That outlet is no longer available. Pick another.' }
+    }
+    if (/unknown department/i.test(error.message)) {
+      return { ok: false, error: 'That department is no longer available. Pick another.' }
+    }
+    if (/forbidden/i.test(error.message)) {
+      return { ok: false, error: 'You do not have permission to approve registrations.' }
+    }
+    return { ok: false, error: 'Could not approve this registration.' }
+  }
+
+  const approved = Array.isArray(data) ? (data[0]?.approved ?? 0) : 0
+  if (approved === 0) {
+    return { ok: false, error: 'Someone else just decided this registration.' }
+  }
 
   revalidatePath('/approvals')
   return { ok: true }
@@ -143,7 +149,7 @@ const rejectSchema = z.object({
 })
 
 export async function rejectRegistration(input: unknown): Promise<MutationResult> {
-  const claims = await requirePermission('users.approve')
+  await requirePermission('users.approve')
 
   const parsed = rejectSchema.safeParse(input)
   if (!parsed.success) {
@@ -151,45 +157,30 @@ export async function rejectRegistration(input: unknown): Promise<MutationResult
   }
 
   const { userId, reason } = parsed.data
-  const admin = createAdminClient()
+  const supabase = await createClient()
 
-  const { data: target } = await admin
-    .from('profiles')
-    .select('id, company_id, approval_status')
-    .eq('id', userId)
-    .single()
+  const { data, error } = await supabase.rpc('reject_registration', {
+    p_user_id: userId,
+    p_reason: reason,
+  })
 
-  if (!target) return { ok: false, error: 'That registration no longer exists.' }
-  if (target.company_id !== claims.company_id) {
-    return { ok: false, error: 'That registration belongs to another company.' }
+  if (error) {
+    if (/already decided/i.test(error.message)) {
+      return { ok: false, error: 'That registration has already been decided.' }
+    }
+    if (/registration not found/i.test(error.message)) {
+      return { ok: false, error: 'That registration no longer exists.' }
+    }
+    if (/forbidden/i.test(error.message)) {
+      return { ok: false, error: 'You do not have permission to decide registrations.' }
+    }
+    return { ok: false, error: 'Could not reject this registration.' }
   }
 
-  const { error, count } = await admin
-    .from('profiles')
-    .update(
-      {
-        approval_status: 'rejected',
-        rejection_reason: reason,
-        approved_by: claims.userId,
-        approved_at: new Date().toISOString(),
-      },
-      { count: 'exact' },
-    )
-    .eq('id', userId)
-    .eq('approval_status', 'pending')
-
-  if (error) return { ok: false, error: 'Could not reject this registration.' }
-  if (count === 0) return { ok: false, error: 'Someone else just decided this registration.' }
-
-  // The rejected user can still read their own notifications — the
-  // notifications_self_read policy has no approval gate precisely so this
-  // message reaches them.
-  await admin.from('notifications').insert({
-    user_id: userId,
-    kind: 'registration.rejected',
-    title: 'Your registration was not approved',
-    body: reason,
-  })
+  const rejected = Array.isArray(data) ? (data[0]?.rejected ?? 0) : 0
+  if (rejected === 0) {
+    return { ok: false, error: 'Someone else just decided this registration.' }
+  }
 
   revalidatePath('/approvals')
   return { ok: true }

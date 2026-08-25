@@ -99,6 +99,14 @@
       "continue": "Continue",
       "noAddress": "Enter the address you registered with and we will send a new code.",
       "linkExpired": "That link has already been used or has expired. Ask for a new code below."
+    },
+    "errors": {
+      "emailRateLimited": "We could not send the verification email — too many have been sent from this site recently. Please try again in about an hour, or ask your manager to add you.",
+      "registrationFailed": "Could not complete registration. Check your details and try again.",
+      "checkTheForm": "Check the form and try again.",
+      "codeNotAccepted": "That code did not work. It may have expired — check the email, or ask for a new code.",
+      "enterTheCode": "Enter the code from your email.",
+      "emailSendFailed": "We could not send the verification email. This is a problem on our side, not with your details — please tell your administrator and try again shortly."
     }
   },
   "questions": {
@@ -1547,5 +1555,24 @@
     "empty": "Nothing yet.",
     "markAllRead": "Mark all read",
     "close": "Close notifications"
+  },
+  "emails": {
+    "greeting": "Hello {name},",
+    "examAssigned": {
+      "heading": "You have a new exam",
+      "body": "A new exam has been assigned to you: {title}. You can take it from the Bookends app when it opens.",
+      "cta": "Open my exams"
+    },
+    "resultPublished": {
+      "heading": "Your result is ready",
+      "body": "Your result for {title} has been published. You can view it in the Bookends app.",
+      "cta": "View my result"
+    },
+    "footer": "Bookends Staff Examination",
+    "registrationApproved": {
+      "heading": "Your account is ready",
+      "body": "Your Bookends account has been approved. You can sign in now and see the exams assigned to you.",
+      "cta": "Sign in"
+    }
   }
 }
