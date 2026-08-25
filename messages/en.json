@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "Bookends",
+    "name": "Performix",
     "tagline": "Training and assessment for Aiko and Capiche",
     "subtitle": "Staff Examination"
   },
@@ -1560,19 +1560,37 @@
     "greeting": "Hello {name},",
     "examAssigned": {
       "heading": "You have a new exam",
-      "body": "A new exam has been assigned to you: {title}. You can take it from the Bookends app when it opens.",
+      "body": "A new exam has been assigned to you: {title}. You can take it from the Performix app when it opens.",
       "cta": "Open my exams"
     },
     "resultPublished": {
       "heading": "Your result is ready",
-      "body": "Your result for {title} has been published. You can view it in the Bookends app.",
+      "body": "Your result for {title} has been published. You can view it in the Performix app.",
       "cta": "View my result"
     },
-    "footer": "Bookends Staff Examination",
+    "footer": "Performix · Bookends Hospitality",
     "registrationApproved": {
       "heading": "Your account is ready",
-      "body": "Your Bookends account has been approved. You can sign in now and see the exams assigned to you.",
+      "body": "Your Performix account has been approved. You can sign in now and see the exams assigned to you.",
       "cta": "Sign in"
     }
+  },
+  "landing": {
+    "badge": "By Bookends Hospitality",
+    "heroTitle": "Staff exams that run themselves",
+    "heroBody": "Performix builds question papers from your own recipe bank, runs the exam on any phone — even with kitchen Wi-Fi — and marks it the moment it is submitted.",
+    "signIn": "Sign in",
+    "register": "Create an account",
+    "featuresHeading": "Built for the pass",
+    "f1Title": "Made for phones",
+    "f1Body": "Full-screen exam mode with big touch targets. Answers are saved on the device first, so a dropped connection never loses work.",
+    "f2Title": "Marked instantly",
+    "f2Body": "Papers grade themselves on submission and results publish straight away. Evaluators only see the answers that genuinely need a human.",
+    "f3Title": "Three languages",
+    "f3Body": "Every exam can be sat in English, Hindi or Gujarati — the candidate chooses, the paper follows.",
+    "f4Title": "Recipe-aware papers",
+    "f4Body": "Generate papers per brand and difficulty from the live question bank. Take a dish off the menu and its questions leave the pool automatically.",
+    "langLine": "Also available in",
+    "footerRights": "All rights reserved."
   }
 }

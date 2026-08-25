@@ -79,20 +79,19 @@ const gujarati = Noto_Sans_Gujarati({
  * └───────────────────────────────────────────────────────────────────────────┘
  */
 export const metadata: Metadata = {
-  title: 'Bookends Learning',
-  description: 'Training and assessment for Aiko and Capiche',
-  applicationName: 'Bookends Learning',
+  title: 'Performix',
+  description: 'Staff training and assessment by Bookends Hospitality',
+  applicationName: 'Performix',
   manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
-    title: 'Bookends',
+    title: 'Performix',
     statusBarStyle: 'default',
   },
   icons: {
-    icon: [
-      { url: '/icons/icon.svg', type: 'image/svg+xml' },
-      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
-    ],
+    // PNG only. The old hand-drawn icon.svg died with the rebrand — the mark
+    // now comes from delivered art (assets/brand), which has no vector form.
+    icon: [{ url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' }],
     apple: [{ url: '/icons/apple-touch-icon.png', sizes: '180x180' }],
   },
   // A phone installing this is not a search result; it is a tool somebody

@@ -48,8 +48,12 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
         />
 
         <div className="relative flex items-center gap-2.5">
-          <span className="grid size-9 place-items-center rounded-xl bg-primary text-sm font-bold text-primary-foreground">
-            B
+          {/* White tile behind the mark: the P is two-thirds navy and would
+              drown on the dark sidebar without it. */}
+          <span className="grid size-9 place-items-center rounded-xl bg-white p-1 shadow-sm">
+            {/* eslint-disable-next-line @next/next/no-img-element -- static
+                brand asset, fixed size, nothing for next/image to optimise */}
+            <img src="/brand/performix-mark.png" alt="" className="size-7" />
           </span>
           <span className="font-heading text-lg font-semibold tracking-tight">{t('name')}</span>
         </div>

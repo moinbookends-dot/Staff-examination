@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
-import { CircleHelpIcon, SearchIcon, UtensilsCrossedIcon } from 'lucide-react'
+import { CircleHelpIcon, SearchIcon } from 'lucide-react'
 import { getAppClaims } from '@/lib/auth/claims'
 import { mobileNavItems, visibleFootItems, visibleNavItems } from '@/lib/auth/nav'
 import { logoutAction } from '@/server/actions/auth'
@@ -95,9 +95,10 @@ export default async function AppLayout({
         >
           <span
             aria-hidden
-            className="grid size-10 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground"
+            className="grid size-10 shrink-0 place-items-center rounded-md bg-white p-1 shadow-sm"
           >
-            <UtensilsCrossedIcon className="size-5" />
+            {/* eslint-disable-next-line @next/next/no-img-element -- static brand asset */}
+            <img src="/brand/performix-mark.png" alt="" className="size-8" />
           </span>
           <span className="min-w-0">
             <span className="block truncate text-title-md">{t('name')}</span>
@@ -128,9 +129,10 @@ export default async function AppLayout({
           <span className="flex min-w-0 items-center gap-2 md:hidden">
             <span
               aria-hidden
-              className="grid size-8 place-items-center rounded-md bg-primary text-primary-foreground"
+              className="grid size-8 place-items-center rounded-md bg-white p-0.5 shadow-sm"
             >
-              <UtensilsCrossedIcon className="size-4" />
+              {/* eslint-disable-next-line @next/next/no-img-element -- static brand asset */}
+              <img src="/brand/performix-mark.png" alt="" className="size-7" />
             </span>
             <span className="truncate text-title-md">{t('name')}</span>
           </span>

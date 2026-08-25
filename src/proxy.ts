@@ -42,6 +42,10 @@ const intlMiddleware = createIntlMiddleware(routing)
 
 /** Reachable without a session. Locale prefix is stripped before matching. */
 const PUBLIC_PATHS = [
+  // The Performix landing page. Signed-out visitors read it; signed-in staff
+  // are bounced to /dashboard by rule 4 below, same as the auth pages. Safe in
+  // the startsWith branch too: `startsWith('//')` matches no real path.
+  '/',
   '/login',
   '/register',
   '/forgot-password',
