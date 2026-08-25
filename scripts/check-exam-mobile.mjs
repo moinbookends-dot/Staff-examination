@@ -350,7 +350,9 @@ try {
     p_duration_minutes: 45,
     p_opens_at: null,
     p_closes_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
-    p_max_attempts: 1,
+    // 2, not 1: the leave-policy section needs a second, fresh attempt after
+    // the voluntary submit closes the first.
+    p_max_attempts: 2,
     p_pass_mark_percent: 60,
     p_instructions: null,
     p_results_release: 'immediate',
@@ -508,8 +510,14 @@ try {
     `document.dispatchEvent(new Event('visibilitychange')); 'ok'`,
   )
   await sleep(400)
-  check('the offline answer survives backgrounding', (await evaluate(page, selectedIndex)) === 0)
-  check('the exam did not auto-submit', (await evaluate(page, `!!document.querySelector('[role="timer"]')`)) === true)
+  check('the offline answer survives a visibility event', (await evaluate(page, selectedIndex)) === 0)
+  /*
+   * visibilityState is still 'visible' here — headless Chrome cannot actually
+   * hide a page, so this event is the RETURN-to-exam signal, which must never
+   * submit. The leave-policy section at the end tests the hidden case for
+   * real, by overriding the visibilityState getter.
+   */
+  check('a visibility event while still visible does not submit', (await evaluate(page, `!!document.querySelector('[role="timer"]')`)) === true)
 
   // ── 4. Reconnect ──────────────────────────────────────────────────────────
   console.log('\n── Reconnect ───────────────────────────────────────────')
@@ -667,6 +675,45 @@ try {
   ])
   check('the attempt is closed server-side', after[0].status !== 'in_progress', after[0].status)
 
+  // ── 8. Leaving is submitting ──────────────────────────────────────────────
+  //
+  // Product decision: minimising, switching apps, or navigating away closes
+  // the paper as it stands, reason 'tab_switch'. A fresh attempt (the exam
+  // allows two), backgrounded for real by overriding the visibilityState
+  // getter — dispatching the event alone leaves the state 'visible' and the
+  // runner rightly ignores it.
+  console.log('\n── Leaving is submitting ───────────────────────────────')
+  const second = await rpc(employee, 'start_attempt', { p_exam_id: examId })
+  if (!second.ok) throw new Error(`second start_attempt failed: ${JSON.stringify(second.error)}`)
+  const secondId = second.data[0].attempt_id
+  // The SECOND attempt's page — examUrl() points at the first, which is
+  // already submitted and mounts no runner, so nothing there would ever fire.
+  await goto(page, `${APP}/en/attempt/${secondId}`)
+  await sleep(1200)
+
+  await evaluate(
+    page,
+    `(() => {
+      Object.defineProperty(document, 'visibilityState', { get: () => 'hidden', configurable: true })
+      document.dispatchEvent(new Event('visibilitychange'))
+      return 'hidden'
+    })()`,
+  )
+  await sleep(2500)
+
+  const { rows: closed } = await db.query(
+    `select status, submit_reason from public.attempts where id = $1`,
+    [secondId],
+  )
+  check('minimising submits the attempt', closed[0].status !== 'in_progress', closed[0].status)
+  check(
+    "the record says why — submit_reason 'tab_switch'",
+    closed[0].submit_reason === 'tab_switch',
+    String(closed[0].submit_reason),
+  )
+  // Restore, so any later navigation in this run behaves normally.
+  await evaluate(page, `(() => { delete document.visibilityState; return 'restored' })()`)
+
   // ── What cannot be tested here ────────────────────────────────────────────
   console.log('\n── Not testable in this environment ────────────────────')
   note('Android / iOS soft keyboard', 'headless Chrome raises no keyboard')
@@ -688,9 +735,18 @@ try {
   // ── Put everything back ───────────────────────────────────────────────────
   try {
     if (attemptId) {
-      await db.query('delete from public.attempt_answers where attempt_id = $1', [attemptId])
-      await db.query('delete from public.attempt_questions where attempt_id = $1', [attemptId])
-      await db.query('delete from public.attempts where id = $1', [attemptId])
+      // By exam, not by the first attempt's id: the leave-policy section
+      // starts a SECOND attempt, and deleting only the first would leave its
+      // rows behind and fail the exam delete below on the foreign key.
+      await db.query(
+        'delete from public.attempt_answers where attempt_id in (select id from public.attempts where exam_id = $1)',
+        [examId],
+      )
+      await db.query(
+        'delete from public.attempt_questions where attempt_id in (select id from public.attempts where exam_id = $1)',
+        [examId],
+      )
+      await db.query('delete from public.attempts where exam_id = $1', [examId])
     }
     if (examId) {
       await db.query('delete from public.exam_assignments where exam_id = $1', [examId])

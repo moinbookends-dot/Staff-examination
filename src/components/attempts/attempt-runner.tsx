@@ -340,7 +340,7 @@ export function AttemptRunner({
   // ── The clock ──────────────────────────────────────────────────────────────
 
   const doSubmit = useCallback(
-    async (reason: 'user' | 'timer') => {
+    async (reason: 'user' | 'timer' | 'tab_switch') => {
       if (submitted.current) return
       submitted.current = true
       // The attempt is closed; the server will refuse these from here on.
@@ -370,6 +370,37 @@ export function AttemptRunner({
     },
     [answers, attempt.attempt_id, router, startNavigation],
   )
+
+  /*
+   * ── Leaving the exam IS submitting the exam ───────────────────────────────
+   *
+   * Explicit product decision, reversing the earlier "the timer keeps running
+   * if you leave": minimising the app, switching tabs, or navigating away
+   * closes the paper as it stands, with reason 'tab_switch' — the one
+   * violation reason submit_attempt accepts from a candidate.
+   *
+   * THE COST IS REAL AND ACCEPTED: visibilitychange→hidden also fires for an
+   * incoming call answered, a screen that auto-locks while the candidate is
+   * thinking, or a notification followed by an accidental tap. All of those
+   * now count as attempt given. Every answer is already on the server (each
+   * change saves through the outbox), so what is lost is the chance to keep
+   * going — never work already done. The exit dialog says exactly this before
+   * anybody can claim surprise, and the server sweeper remains the authority
+   * if this handler never gets to run.
+   *
+   * Distinct from the drain-on-visible listener above on purpose: that one
+   * recovers answers, this one enforces policy, and coupling them would make
+   * the recovery path depend on the punishment path.
+   */
+  useEffect(() => {
+    const onHidden = () => {
+      if (document.visibilityState === 'hidden' && !submitted.current) {
+        void doSubmit('tab_switch')
+      }
+    }
+    document.addEventListener('visibilitychange', onHidden)
+    return () => document.removeEventListener('visibilitychange', onHidden)
+  }, [doSubmit])
 
   /** Thresholds already spoken, so a re-render cannot repeat one. */
   const announced = useRef(new Set<number>())

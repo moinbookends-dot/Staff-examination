@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslations } from 'next-intl'
 import { BellIcon, Loader2Icon } from 'lucide-react'
 import { markNotificationsRead, type AppNotification } from '@/server/actions/notifications'
@@ -68,7 +69,23 @@ export function NotificationBell({
         )}
       </Button>
 
-      {open && (
+      {open &&
+        /*
+         * PORTALED TO <body>, AND NOT AS A STYLE PREFERENCE. The header this
+         * bell lives in carries `glass`, whose backdrop-filter makes the
+         * header a CONTAINING BLOCK for fixed-position descendants — so the
+         * phone bottom sheet, asked to pin to the viewport's bottom edge,
+         * pinned to the header's instead and rendered hanging off the top of
+         * the screen. Measured, not theorised: bottom=63 against a 800px
+         * viewport. A portal is the only clean escape from a transformed or
+         * filtered ancestor.
+         *
+         * The desktop dropdown pays for the escape by losing its anchor, so
+         * from sm up it is placed at the header's right corner explicitly —
+         * top-[4.5rem] is the 64px header plus the 8px gap the old mt-2 gave,
+         * and right-4/lg:right-10 mirror the header's own padding.
+         */
+        createPortal(
         <>
           {/*
             A full-screen click-catcher rather than an outside-click listener.
@@ -78,14 +95,30 @@ export function NotificationBell({
           <button
             type="button"
             aria-label={t('close')}
-            className="fixed inset-0 z-40 cursor-default"
+            // Dimmed on phones, where the panel is a bottom sheet and needs a
+            // scrim to read as one layer above the page; invisible from sm up,
+            // where the anchored dropdown supplies its own edge.
+            className="fixed inset-0 z-40 cursor-default bg-black/40 sm:bg-transparent"
             onClick={() => setOpen(false)}
           />
 
           <div
             role="menu"
             aria-label={t('label')}
-            className="absolute right-0 z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border bg-card shadow-lg"
+            /*
+             * Two shapes for one panel.
+             *
+             * On a phone this used to render as the desktop dropdown — 320px
+             * anchored to a bell in the header — which on a 360px screen is
+             * "the whole screen, but hung from a corner": a computer UI pasted
+             * onto a phone. Small screens now get the native pattern, a bottom
+             * sheet: full width, safe-area padded, capped at 70dvh so the page
+             * visibly continues behind the scrim.
+             *
+             * sm and up keeps the dropdown look, pinned to the header corner — see
+             * the portal note above for why it can no longer anchor to the bell.
+             */
+            className="fixed inset-x-0 bottom-0 z-50 max-h-[70dvh] overflow-hidden rounded-t-xl border bg-card pb-safe shadow-lg sm:inset-x-auto sm:top-[4.5rem] sm:right-4 sm:bottom-auto sm:max-h-none sm:w-80 sm:max-w-[calc(100vw-2rem)] sm:rounded-xl sm:pb-0 lg:right-10"
           >
             <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
               <span className="text-label-caps text-muted-foreground">{t('label')}</span>
@@ -100,7 +133,9 @@ export function NotificationBell({
             {items.length === 0 ? (
               <p className="px-3 py-6 text-center text-sm text-muted-foreground">{t('empty')}</p>
             ) : (
-              <ul className="max-h-96 overflow-y-auto">
+              // On phones the sheet's 70dvh cap governs (minus its header); the
+              // 96 is the desktop dropdown's own limit.
+              <ul className="max-h-[calc(70dvh-3rem)] overflow-y-auto sm:max-h-96">
                 {items.map((n) => {
                   const inner = (
                     <>
@@ -148,7 +183,8 @@ export function NotificationBell({
               </ul>
             )}
           </div>
-        </>
+        </>,
+        document.body,
       )}
     </div>
   )

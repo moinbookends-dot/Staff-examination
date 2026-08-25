@@ -713,7 +713,7 @@
     "savedOnDevice": "Saved on this device",
     "offlineBanner": "No connection. Your answers are on this device and will be sent when it returns.",
     "leaveTitle": "Leave exam?",
-    "leaveBody": "Your exam is still in progress. Your answers are kept, but the timer keeps running.",
+    "leaveBody": "Leaving, minimising, or switching apps will SUBMIT your exam as it stands. Your saved answers will be marked and you cannot return to the paper.",
     "leaveStay": "Stay in exam",
     "leaveConfirm": "Leave exam"
   },
