@@ -4,7 +4,7 @@ import { CircleHelpIcon, SearchIcon } from 'lucide-react'
 import { getAppClaims } from '@/lib/auth/claims'
 import { mobileNavItems, visibleFootItems, visibleNavItems } from '@/lib/auth/nav'
 import { logoutAction } from '@/server/actions/auth'
-import { MobileTabBar, SidebarNav } from '@/components/shell/app-nav'
+import { MobileMenu, MobileTabBar, SidebarNav } from '@/components/shell/app-nav'
 import { NotificationBell } from '@/components/shell/notification-bell'
 import { loadMyNotifications } from '@/server/actions/notifications'
 import { LocaleSwitcher } from '@/components/shell/locale-switcher'
@@ -156,6 +156,10 @@ export default async function AppLayout({
           </div>
 
           <div className="ml-auto flex shrink-0 items-center gap-1 md:ml-0">
+            {/* Everything the five tabs cannot hold. The full list, so the
+                phone finally reaches what the sidebar reaches — see the box on
+                MobileMenu for what was unreachable before it. */}
+            <MobileMenu items={[...items, ...footItems]} />
             <NotificationBell items={notifications} unread={unread} />
             {/* Hidden below md: it is presentational and disabled, and a
                 control that does nothing is not worth a thumb-sized slot on a

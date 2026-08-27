@@ -29,6 +29,25 @@ import { ExportLink } from '@/components/reports/export-link'
  * │ confident-looking statistic computed from four attempts.                   │
  * └───────────────────────────────────────────────────────────────────────────┘
  */
+/**
+ * One labelled figure on a phone card.
+ *
+ * The desktop tables survive from md up — columns of tabular numbers are the
+ * right shape at that width. Below md each table used to force the whole page
+ * to scroll SIDEWAYS, so every row becomes a stacked card and each figure
+ * carries its own label instead of relying on a column header that has
+ * scrolled away. Same translation keys as the headers, so the two renderings
+ * cannot drift apart.
+ */
+function Figure({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <span className="flex flex-col">
+      <span className="text-label-caps text-muted-foreground">{label}</span>
+      <span className="tabular-nums">{children}</span>
+    </span>
+  )
+}
+
 export async function TeamSections({ canExport }: { canExport: boolean }) {
   const t = await getTranslations('reports')
   const format = await getFormatter()
@@ -58,6 +77,33 @@ export async function TeamSections({ canExport }: { canExport: boolean }) {
           {team.length === 0 ? (
             <p className="p-6 pt-0 text-sm text-muted-foreground">{t('noTeam')}</p>
           ) : (
+            <>
+            <ul className="divide-y md:hidden">
+              {team.map((m) => (
+                <li key={m.candidate_id} className="space-y-2 px-4 py-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="min-w-0 truncate font-medium">{m.full_name}</p>
+                    {m.last_attempt_at ? (
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {format.dateTime(new Date(m.last_attempt_at), { dateStyle: 'medium' })}
+                      </span>
+                    ) : (
+                      <Badge variant="outline">{t('neverSat')}</Badge>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-sm">
+                    <Figure label={t('taken')}>{m.attempts_n}</Figure>
+                    <Figure label={t('rate')}>
+                      {m.pass_rate != null ? t('percentValue', { value: m.pass_rate }) : '—'}
+                    </Figure>
+                    <Figure label={t('avg')}>
+                      {m.avg_percent != null ? t('percentValue', { value: m.avg_percent }) : '—'}
+                    </Figure>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="hidden md:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -92,6 +138,8 @@ export async function TeamSections({ canExport }: { canExport: boolean }) {
                 ))}
               </TableBody>
             </Table>
+            </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -111,6 +159,28 @@ export async function TeamSections({ canExport }: { canExport: boolean }) {
           {sat.length === 0 ? (
             <p className="p-6 pt-0 text-sm text-muted-foreground">{t('noExams')}</p>
           ) : (
+            <>
+            <ul className="divide-y md:hidden">
+              {sat.map((e) => (
+                <li key={e.exam_id} className="space-y-2 px-4 py-3">
+                  <p className="font-medium">{e.title}</p>
+                  <div className="grid grid-cols-3 gap-2 text-sm">
+                    <Figure label={t('taken')}>{e.attempts_n}</Figure>
+                    <Figure label={t('candidates')}>{e.candidates_n}</Figure>
+                    <Figure label={t('rate')}>
+                      {e.pass_rate != null ? t('percentValue', { value: e.pass_rate }) : '—'}
+                    </Figure>
+                    <Figure label={t('median')}>
+                      {e.median_percent != null ? t('percentValue', { value: e.median_percent }) : '—'}
+                    </Figure>
+                    <Figure label={t('duration')}>
+                      {e.avg_minutes != null ? t('minutes', { value: e.avg_minutes }) : '—'}
+                    </Figure>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="hidden md:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -143,6 +213,8 @@ export async function TeamSections({ canExport }: { canExport: boolean }) {
                 ))}
               </TableBody>
             </Table>
+            </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -162,6 +234,43 @@ export async function TeamSections({ canExport }: { canExport: boolean }) {
           {questions.length === 0 ? (
             <p className="p-6 pt-0 text-sm text-muted-foreground">{t('noQuestions')}</p>
           ) : (
+            <>
+            <ul className="divide-y md:hidden">
+              {questions.map((q) => (
+                <li key={`m-${q.question_id}-${q.question_revision}`} className="space-y-2 px-4 py-3">
+                  <div className="space-y-1">
+                    <p className="line-clamp-2 font-medium">{q.stem}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {q.category_name}
+                      {' · '}
+                      {t('revision', { n: q.question_revision })}
+                    </p>
+                    {q.misrated && (
+                      <Badge variant="outline" className="gap-1 text-amber-700 dark:text-amber-500">
+                        <AlertTriangleIcon className="size-3" />
+                        {t('misrated')}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-sm">
+                    <Figure label={t('responses')}>{q.attempts_n}</Figure>
+                    <Figure label={t('facility')}>
+                      {q.facility != null ? t('percentValue', { value: Math.round(q.facility * 100) }) : '—'}
+                    </Figure>
+                    <Figure label={t('rated')}>{q.author_difficulty}</Figure>
+                    <Figure label={t('behaves')}>{q.observed_difficulty}</Figure>
+                    <Figure label={t('discrimination')}>
+                      {q.discrimination != null ? (
+                        q.discrimination
+                      ) : (
+                        <span className="text-xs whitespace-normal">{t('notEnough')}</span>
+                      )}
+                    </Figure>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="hidden md:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -217,6 +326,8 @@ export async function TeamSections({ canExport }: { canExport: boolean }) {
                 ))}
               </TableBody>
             </Table>
+            </div>
+            </>
           )}
         </CardContent>
       </Card>

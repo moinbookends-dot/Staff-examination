@@ -103,7 +103,64 @@ export async function ExamMonitoring({
         ) : participants.length === 0 ? (
           <p className="mt-3 text-body-sm text-muted-foreground">{t('monNobody')}</p>
         ) : (
-          <div className="mt-4 overflow-x-auto">
+          <>
+          {/* Phones: one card per person. The eight-column table forced the
+              whole page to pan sideways at 390px, which on a live exam is the
+              moment a chef most needs to read it one-handed. */}
+          <ul className="mt-4 space-y-3 md:hidden">
+            {participants.map((p) => {
+              const percent =
+                p.score !== null && p.maxScore
+                  ? Math.round((p.score / p.maxScore) * 100)
+                  : null
+              return (
+                <li key={`m-${p.employeeId}`} className="rounded-lg border p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{p.fullName || p.email}</p>
+                      <p className="truncate text-sm text-muted-foreground">{p.department ?? '—'}</p>
+                    </div>
+                    <Badge variant="outline" className={cn('shrink-0', STATE_TONE[p.state])}>
+                      {t(
+                        (p.state === 'not_started' ? 'pNotStarted'
+                          : p.state === 'in_progress' ? 'pInProgress'
+                          : p.state === 'submitted' ? 'pSubmitted'
+                          : p.state === 'expired' ? 'pExpired'
+                          : 'pReleased') as 'pNotStarted',
+                      )}
+                    </Badge>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                    <span className="tabular-nums">{t('monStarted')}: {when(p.startedAt)}</span>
+                    <span className="tabular-nums">{t('monSubmittedCol')}: {when(p.submittedAt)}</span>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <span className="tabular-nums text-sm">
+                      {p.score !== null ? `${p.score} / ${p.maxScore ?? 0}` : '—'}
+                      {percent !== null && ` · ${percent}%`}
+                    </span>
+                    {p.passed === null ? (
+                      <span className="text-body-sm text-muted-foreground">
+                        {p.state === 'not_started' ? '—' : t('resultPending')}
+                      </span>
+                    ) : (
+                      <Badge
+                        variant="outline"
+                        className={
+                          p.passed
+                            ? 'border-emerald-500/40 text-emerald-700 dark:text-emerald-400'
+                            : 'border-destructive/40 text-destructive'
+                        }
+                      >
+                        {p.passed ? t('resultPass') : t('resultFail')}
+                      </Badge>
+                    )}
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+          <div className="mt-4 hidden overflow-x-auto md:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -175,6 +232,7 @@ export async function ExamMonitoring({
               </TableBody>
             </Table>
           </div>
+          </>
         )}
       </section>
     </div>

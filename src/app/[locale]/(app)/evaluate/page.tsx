@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { ClipboardCheckIcon } from 'lucide-react'
+import { ClipboardCheckIcon, ChevronRightIcon } from 'lucide-react'
 
 /**
  * The marking queue.
@@ -49,6 +49,41 @@ export default async function EvaluatePage() {
       ) : (
         <Card>
           <CardContent className="p-0">
+            {/* Phones get a tap-through list — the whole row is the action, so
+                the row IS the link and the thumb target is the full width.
+                The table survives from md up, where its columns earn the room. */}
+            <ul className="divide-y md:hidden">
+              {queue.map((item) => (
+                <li key={`m-${item.attempt_id}`}>
+                  <Link
+                    href={`/evaluate/${item.attempt_id}`}
+                    className="flex min-h-14 items-center justify-between gap-3 px-4 py-3"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium">{item.candidate_name}</span>
+                      <span className="mt-0.5 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                        <span className="truncate">{item.exam_title}</span>
+                        {item.returned_count > 0 && (
+                          <Badge variant="outline">
+                            {t('sentBack', { count: item.returned_count })}
+                          </Badge>
+                        )}
+                      </span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                        {item.submitted_at
+                          ? format.dateTime(new Date(item.submitted_at), {
+                              dateStyle: 'medium',
+                              timeStyle: 'short',
+                            })
+                          : '—'}
+                      </span>
+                    </span>
+                    <ChevronRightIcon aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <div className="hidden md:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -92,6 +127,7 @@ export default async function EvaluatePage() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       )}

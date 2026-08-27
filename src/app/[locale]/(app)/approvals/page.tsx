@@ -1,7 +1,6 @@
 import { requirePermission } from '@/lib/auth/guards'
 import { listPendingRegistrations } from '@/server/actions/users'
 import { listOutletsForRegistration, listDepartmentsForRegistration } from '@/server/actions/org'
-import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ApprovalRow } from './approval-row'
 
@@ -39,27 +38,18 @@ export default async function ApprovalsPage() {
               Nothing waiting. New registrations appear here.
             </p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Applicant</TableHead>
-                  <TableHead>Language</TableHead>
-                  <TableHead>Outlet</TableHead>
-                  <TableHead>Department</TableHead>
-                  <TableHead className="text-right">Decision</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {registrations.map((r) => (
-                  <ApprovalRow
-                    key={r.id}
-                    registration={r}
-                    outlets={outlets}
-                    departments={departments}
-                  />
-                ))}
-              </TableBody>
-            </Table>
+            /* One card per applicant — see the box in approval-row.tsx for why
+               the table died. The list element keeps it announced as a list. */
+            <ul className="space-y-4">
+              {registrations.map((r) => (
+                <ApprovalRow
+                  key={r.id}
+                  registration={r}
+                  outlets={outlets}
+                  departments={departments}
+                />
+              ))}
+            </ul>
           )}
         </CardContent>
       </Card>

@@ -1,8 +1,11 @@
 'use client'
 
+import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslations } from 'next-intl'
 import {
   Award,
+  MenuIcon,
   ClipboardList,
   Database,
   FilePlus2,
@@ -188,5 +191,87 @@ export function MobileTabBar({ items }: { items: NavItem[] }) {
         )
       })}
     </nav>
+  )
+}
+
+/**
+ * The rest of the app, on a phone.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║ THE TAB BAR CAPS AT FIVE, AND BELOW `md` THE SIDEBAR DOES NOT EXIST — so  ║
+ * ║ until this component, Approvals, Evaluate, Reports, History and Settings  ║
+ * ║ were REACHABLE ON A PHONE ONLY BY TYPING THE URL. nav.ts's comment        ║
+ * ║ ("the sidebar always carries the complete list — nothing is unreachable") ║
+ * ║ was true only at desktop widths, and the shell.openMenu / closeMenu       ║
+ * ║ message keys had been sitting in all three bundles, wired to nothing.     ║
+ * ║                                                                           ║
+ * ║ A bottom sheet, not a hamburger drawer: it matches the notification       ║
+ * ║ panel's established pattern and sits where the thumb already is.          ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Portaled to <body> for the same measured reason as the notification bell:
+ * the header's `glass` backdrop-filter makes it a containing block, so a
+ * fixed-position sheet would pin to the header instead of the viewport.
+ */
+export function MobileMenu({ items }: { items: NavItem[] }) {
+  const t = useTranslations('nav')
+  const ts = useTranslations('shell')
+  const isActive = useIsActive()
+  const [open, setOpen] = useState(false)
+
+  return (
+    <>
+      <button
+        type="button"
+        aria-label={open ? ts('closeMenu') : ts('openMenu')}
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="grid min-h-11 min-w-11 place-items-center rounded-md text-foreground md:hidden"
+      >
+        <MenuIcon aria-hidden className="size-5" />
+      </button>
+
+      {open &&
+        createPortal(
+          <>
+            <button
+              type="button"
+              aria-label={ts('closeMenu')}
+              className="fixed inset-0 z-40 cursor-default bg-black/40 md:hidden"
+              onClick={() => setOpen(false)}
+            />
+            <nav
+              aria-label={ts('openMenu')}
+              className="pb-safe fixed inset-x-0 bottom-0 z-50 max-h-[75dvh] overflow-y-auto rounded-t-xl border bg-card shadow-lg md:hidden"
+            >
+              <ul className="grid grid-cols-2 gap-1 p-3">
+                {items.map((item) => {
+                  const active = isActive(item)
+                  const Icon = ICONS[item.icon]
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        aria-current={active ? 'page' : undefined}
+                        onClick={() => setOpen(false)}
+                        className={cn(
+                          'flex min-h-12 items-center gap-3 rounded-md px-3 text-sm font-medium',
+                          active
+                            ? 'bg-primary text-primary-foreground'
+                            : 'text-foreground hover:bg-accent',
+                        )}
+                      >
+                        <Icon aria-hidden className="size-4 shrink-0" />
+                        <span className="truncate">{t(item.labelKey)}</span>
+                      </Link>
+                    </li>
+                  )
+                })}
+              </ul>
+            </nav>
+          </>,
+          document.body,
+        )}
+    </>
   )
 }
