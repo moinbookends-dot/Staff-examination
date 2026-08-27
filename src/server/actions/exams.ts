@@ -308,6 +308,40 @@ export async function setExamStatus(input: unknown): Promise<MutationResult> {
   if (!parsed.success) return { ok: false, error: 'Invalid status.' }
 
   const supabase = await createClient()
+
+  /*
+   * ── The scheduled-but-open gap ─────────────────────────────────────────────
+   *
+   * An exam published with no opening time is open the moment it exists —
+   * examState() derives 'live' — but its STORED status stays 'scheduled',
+   * because nothing ever advances it (there is no clock in the database).
+   * 0016's transition matrix, reasoning from the stored value, then refuses
+   * scheduled → completed, and the "Close now" button the live state offers
+   * became a button that could only fail.
+   *
+   * The stored row is stepped through the legal path instead: scheduled →
+   * active is what the passage of the opening time MEANS, so recording it on
+   * the way to 'completed' is writing down a fact, not forging one. Each step
+   * runs the trigger's own validation.
+   */
+  if (parsed.data.status === 'completed') {
+    const { data: current } = await supabase
+      .from('exams')
+      .select('status')
+      .eq('id', parsed.data.id)
+      .is('deleted_at', null)
+      .maybeSingle()
+
+    if (current?.status === 'scheduled') {
+      const { error: stepError } = await supabase
+        .from('exams')
+        .update({ status: 'active' })
+        .eq('id', parsed.data.id)
+        .is('deleted_at', null)
+      if (stepError) return { ok: false, error: friendlyWriteError(stepError) }
+    }
+  }
+
   const { error } = await supabase
     .from('exams')
     .update({ status: parsed.data.status })
