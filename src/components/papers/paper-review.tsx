@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useTranslations } from 'next-intl'
 import {
   ArrowDownIcon,
@@ -375,8 +375,28 @@ function QuestionPicker({
     })
   }
 
-  // Opened but not yet searched: show the first page rather than an empty box.
-  if (rows === null && !loading && !error) run('')
+  /*
+   * Opened but not yet searched: show the first page rather than an empty box.
+   *
+   * ┌─────────────────────────────────────────────────────────────────────────┐
+   * │ AN EFFECT, NOT A RENDER-PHASE CALL — AND THIS ONE WAS CAUGHT IN THE     │
+   * │ WILD. This line used to be                                              │
+   * │                                                                         │
+   * │   if (rows === null && !loading && !error) run('')                      │
+   * │                                                                         │
+   * │ i.e. startTransition fired DURING render. React discards state set in a │
+   * │ render it throws away, and with the compiler's memoisation the observed │
+   * │ result was total: clicking Replace opened NOTHING — no list, no Cancel, │
+   * │ no error, ever. Verified in a real browser before and after.            │
+   * └─────────────────────────────────────────────────────────────────────────┘
+   */
+  useEffect(() => {
+    run('')
+    // run is recreated per render but only reads paperId/wanted, which are
+    // the identity of this picker instance — remounting is the only way they
+    // change, so mount-only is exactly right.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <div className="mt-3 rounded-lg border bg-muted/20 p-3">
