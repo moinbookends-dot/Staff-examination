@@ -1,4 +1,5 @@
 import { getFormatter, getTranslations } from 'next-intl/server'
+import { EnablePush } from '@/components/pwa/enable-push'
 import { notFound } from 'next/navigation'
 import { PageHeader } from '@/components/ui/page-header'
 import { loadMyProfile } from '@/server/actions/profile'
@@ -51,6 +52,7 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
 
 export default async function ProfilePage() {
   const t = await getTranslations('profile')
+  const tp = await getTranslations('push')
   const format = await getFormatter()
 
   const profile = await loadMyProfile()
@@ -69,6 +71,16 @@ export default async function ProfilePage() {
         <h2 className="text-title-md">{t('yourDetails')}</h2>
         <p className="mt-1 mb-4 text-body-sm text-muted-foreground">{t('yourDetailsHint')}</p>
         <ProfileForm profile={profile} />
+      </section>
+
+      {/* ── This device ──────────────────────────────────────────────────
+          Client-side by necessity: whether push is on is a property of THIS
+          browser, and only the browser can answer. */}
+      <section className="rounded-xl border bg-card p-5">
+        <h2 className="text-title-md">{tp('title')}</h2>
+        <div className="mt-3">
+          <EnablePush />
+        </div>
       </section>
 
       {/* ── What a manager set ───────────────────────────────────────────── */}

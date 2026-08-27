@@ -1592,5 +1592,13 @@
     "f4Body": "Generate papers per brand and difficulty from the live question bank. Take a dish off the menu and its questions leave the pool automatically.",
     "langLine": "Also available in",
     "footerRights": "All rights reserved."
+  },
+  "push": {
+    "title": "Notifications on this device",
+    "why": "Get a notification on this phone the moment an exam is assigned to you or a result is published — even when the app is closed.",
+    "enable": "Turn on notifications",
+    "disable": "Turn off",
+    "enabled": "Notifications are on for this device.",
+    "blocked": "Notifications are blocked for this site in your browser settings. Allow them there, then come back."
   }
 }

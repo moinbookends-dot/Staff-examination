@@ -25,3 +25,11 @@ services:
       # templates omit the button rather than linking nowhere.
       - key: APP_URL
         sync: false
+      # Web Push. The public key is baked into the client at BUILD time (it is
+      # NEXT_PUBLIC_*), so changing it requires a redeploy, not just a restart.
+      - key: NEXT_PUBLIC_VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_CONTACT
+        sync: false

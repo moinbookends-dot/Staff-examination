@@ -1,4 +1,5 @@
 import { getTranslations, getFormatter } from 'next-intl/server'
+import { EnablePush } from '@/components/pwa/enable-push'
 import { requirePermission } from '@/lib/auth/guards'
 import { listMyExams } from '@/server/actions/attempts'
 import { StartExamButton } from './start-exam-button'
@@ -40,6 +41,9 @@ export default async function MyExamsPage() {
   return (
     <div className="space-y-6">
       <PageHeader title={t('title')} description={t('subtitle')} />
+
+      {/* Asks once; disappears once notifications are on. See EnablePush. */}
+      <EnablePush variant="banner" />
 
       {exams.length === 0 ? (
         <Card>

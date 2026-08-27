@@ -10,7 +10,7 @@
 # the same priority order, and nothing is lost by being early or late. If mail
 # ever needs to be prompt to the minute, this is the piece to replace.
 # ═══════════════════════════════════════════════════════════════════════════
-name: Drain email outbox
+name: Drain notifications (email + push)
 
 on:
   schedule:
@@ -64,3 +64,16 @@ jobs:
           if [ "$failed" != "0" ]; then
             echo "::warning::$failed email(s) failed to send; see last_error on those rows."
           fi
+
+      - name: Call the push drain endpoint
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          # Best-effort on purpose: the inline nudge after publishing already
+          # delivered the common case; this sweeps up anything it missed.
+          code=$(curl -sS -o /tmp/push.json -w '%{http_code}'             -X POST "$APP_URL/api/cron/push" -H "Authorization: Bearer $CRON_SECRET")
+          echo "HTTP $code"
+          cat /tmp/push.json
+          echo
+          if [ "$code" != "200" ]; then exit 1; fi

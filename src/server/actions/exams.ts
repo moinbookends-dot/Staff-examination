@@ -1,6 +1,7 @@
 'use server'
 
 import { z } from 'zod'
+import { drainPushSafely } from '@/app/api/cron/push/deps'
 import { revalidatePath } from 'next/cache'
 import { requirePermission } from '@/lib/auth/guards'
 import { createClient } from '@/lib/supabase/server'
@@ -272,6 +273,14 @@ export async function setAssignments(input: unknown): Promise<MutationResult> {
     )
     if (error) return { ok: false, error: friendlyWriteError(error) }
   }
+
+  /*
+   * The inline push nudge. The insert above fired 0074's trigger, which wrote
+   * the notification rows; draining here puts them on lock screens in seconds
+   * instead of at the next cron tick. Fire-and-forget by contract — push
+   * failing must never fail the assignment that caused it.
+   */
+  await drainPushSafely()
 
   revalidatePath(`/exams/${parsed.data.examId}`)
   return { ok: true }

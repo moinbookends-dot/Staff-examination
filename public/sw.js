@@ -30,7 +30,7 @@
  * under the new key and deletes every older one on activate. The date is part
  * of it so two deploys on the same day still differ.
  */
-const CACHE = 'bookends-v1-2026-08-24'
+const CACHE = 'performix-v2-2026-08-27'
 
 /** Identical for every user, and needed before the network is gone. */
 const PRECACHE = ['/offline.html', '/icons/icon-192.png', '/icons/icon-512.png', '/manifest.webmanifest']
@@ -123,4 +123,64 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Everything else — data fetches, prefetches — is left entirely alone.
+})
+
+/*
+ * ═══════════════════════════════════════════════════════════════════════════
+ * Web Push — the notification that arrives with the app closed.
+ *
+ * The payload is BUILT AND SIGNED ON OUR SERVER (src/lib/notifications/push.ts)
+ * and encrypted to this browser's keys; the push service in between can read
+ * none of it. What arrives here is {title, body, link, tag}.
+ *
+ * showNotification() is wrapped in waitUntil and ALWAYS runs: several
+ * platforms revoke push permission from a worker that receives a push and
+ * shows nothing, so even a malformed payload shows a generic notice rather
+ * than burning the permission.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+self.addEventListener('push', (event) => {
+  let data = {}
+  try {
+    data = event.data ? event.data.json() : {}
+  } catch {
+    // Malformed payload — fall through to the generic notice.
+  }
+
+  const title = data.title || 'Performix'
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: data.body || '',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      // Same tag = the OS replaces rather than stacks. Assignment notices for
+      // the same exam collapse into one, which is what a person wants.
+      tag: data.tag || 'performix',
+      data: { link: data.link || '/' },
+    }),
+  )
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const link = (event.notification.data && event.notification.data.link) || '/'
+  const url = new URL(link, self.location.origin).href
+
+  event.waitUntil(
+    (async () => {
+      /*
+       * Focus an existing window if one is open — tapping a notification must
+       * not stack a second copy of the app — otherwise open a fresh one.
+       */
+      const wins = await clients.matchAll({ type: 'window', includeUncontrolled: true })
+      for (const win of wins) {
+        if (new URL(win.url).origin === self.location.origin && 'focus' in win) {
+          await win.focus()
+          if ('navigate' in win && win.url !== url) await win.navigate(url)
+          return
+        }
+      }
+      await clients.openWindow(url)
+    })(),
+  )
 })

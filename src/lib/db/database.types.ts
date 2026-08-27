@@ -1141,6 +1141,7 @@ export type Database = {
           "data": Json
           "read_at": string | null
           "created_at": string
+          "pushed_at": string | null
         }
         Insert: {
           "id"?: string
@@ -1152,6 +1153,7 @@ export type Database = {
           "data"?: Json
           "read_at"?: string | null
           "created_at"?: string
+          "pushed_at"?: string | null
         }
         Update: {
           "id"?: string
@@ -1163,6 +1165,7 @@ export type Database = {
           "data"?: Json
           "read_at"?: string | null
           "created_at"?: string
+          "pushed_at"?: string | null
         }
         Relationships: []
       }
@@ -1361,6 +1364,42 @@ export type Database = {
           "deleted_at"?: string | null
           "created_at"?: string
           "updated_at"?: string
+        }
+        Relationships: []
+      }
+      "push_subscriptions": {
+        Row: {
+          "id": string
+          "user_id": string
+          "endpoint": string
+          "p256dh": string
+          "auth": string
+          "user_agent": string | null
+          "created_at": string
+          "last_ok_at": string | null
+          "failures": number
+        }
+        Insert: {
+          "id"?: string
+          "user_id": string
+          "endpoint": string
+          "p256dh": string
+          "auth": string
+          "user_agent"?: string | null
+          "created_at"?: string
+          "last_ok_at"?: string | null
+          "failures"?: number
+        }
+        Update: {
+          "id"?: string
+          "user_id"?: string
+          "endpoint"?: string
+          "p256dh"?: string
+          "auth"?: string
+          "user_agent"?: string | null
+          "created_at"?: string
+          "last_ok_at"?: string | null
+          "failures"?: number
         }
         Relationships: []
       }

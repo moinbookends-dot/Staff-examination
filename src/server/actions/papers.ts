@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
+import { drainPushSafely } from '@/app/api/cron/push/deps'
 import { getAppClaims, can } from '@/lib/auth/claims'
 import { loadEligibleQuestions, type EligibleQuestion } from '@/server/papers/paper-edit'
 import { canGeneratePapers } from '@/lib/auth/bank-access'
@@ -508,6 +509,10 @@ export async function publishPaperAsExam(raw: unknown): Promise<PublishPaperResu
 
     return { ok: false, message }
   }
+
+  // Same nudge as saveAssignments: the publish just enqueued assignment
+  // notifications, and seconds beat the next cron tick. Never throws.
+  await drainPushSafely()
 
   const result = z
     .object({ examId: dbId(), paperNo: z.number().int() })
