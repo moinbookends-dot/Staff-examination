@@ -28,7 +28,24 @@ const parsedPublic = publicSchema.safeParse({
 
 if (!parsedPublic.success) {
   const issues = parsedPublic.error.issues.map((i) => `  - ${i.message}`).join('\n')
-  throw new Error(`Invalid public environment configuration:\n${issues}\n\nCopy .env.example to .env.local and fill it in.`)
+  /*
+   * THROWING HERE FAILS `next build` TOO, AND THAT IS CORRECT. NEXT_PUBLIC_*
+   * values are inlined into the client bundle at build time — a build without
+   * them would ship an app whose browser half talks to `undefined`, failing
+   * at runtime in ways nothing traces back to configuration. Refusing the
+   * build is the guard working, not a bug in it.
+   *
+   * The message names both places the fix lives, because this fired once on a
+   * freshly created Render service that had no environment at all, and the
+   * old text ("copy .env.example to .env.local") pointed at the wrong one.
+   */
+  throw new Error(
+    `Invalid public environment configuration:\n${issues}\n\n` +
+      `Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY.\n` +
+      `  · Local development: copy .env.example to .env.local and fill it in.\n` +
+      `  · Hosted (Render etc.): add them under the service's Environment settings,\n` +
+      `    then redeploy — they are baked in at BUILD time, so a restart is not enough.`,
+  )
 }
 
 export const env = parsedPublic.data
