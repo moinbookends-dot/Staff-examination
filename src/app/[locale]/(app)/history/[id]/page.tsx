@@ -384,7 +384,15 @@ export default async function PaperDetailPage({
         <p className="mt-1 text-body-sm text-muted-foreground">{t('publishSubtitle')}</p>
 
         <div className="mt-4">
-          {paper.liveExam ? (
+          {/*
+             blocksRepublish, not truthiness. The loader deliberately returns
+             an exam of ANY status so the page can show who sat a closed one —
+             but branching the PUBLISH section on mere existence meant a
+             cancelled exam parked this panel on its corpse forever: no way to
+             republish the corrected paper, and lifecycle buttons for an exam
+             that was already called off. A dead exam yields the form back.
+           */}
+          {paper.liveExam && paper.liveExam.blocksRepublish ? (
             /*
              * ┌───────────────────────────────────────────────────────────────┐
              * │ "PUBLISHED" AND "ANYBODY CAN SEE IT" ARE DIFFERENT FACTS, AND │
