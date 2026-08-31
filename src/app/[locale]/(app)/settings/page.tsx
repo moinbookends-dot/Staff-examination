@@ -81,6 +81,11 @@ export default async function ProfilePage() {
         <div className="mt-3">
           <EnablePush />
         </div>
+        {/* Which build THIS device is running. The support question this
+            answers: "is the fix live on your phone, or is your app stale?" */}
+        <p className="mt-4 text-label-caps text-muted-foreground">
+          {tp('version')} · {process.env.NEXT_PUBLIC_BUILD_REF}
+        </p>
       </section>
 
       {/* ── What a manager set ───────────────────────────────────────────── */}
