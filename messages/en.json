@@ -1600,5 +1600,9 @@
     "disable": "Turn off",
     "enabled": "Notifications are on for this device.",
     "blocked": "Notifications are blocked for this site in your browser settings. Allow them there, then come back."
+  },
+  "pwa": {
+    "updateReady": "A new version of Performix is ready.",
+    "reload": "Reload"
   }
 }

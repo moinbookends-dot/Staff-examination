@@ -37,10 +37,17 @@ const PRECACHE = ['/offline.html', '/icons/icon-192.png', '/icons/icon-512.png',
 
 self.addEventListener('install', (event) => {
   /*
-   * No skipWaiting. A new worker taking over mid-session can reload the page
-   * under somebody, and this app is used to sit timed exams — losing a
-   * half-finished attempt to a deploy is not a trade worth making for a
-   * slightly faster rollout. The update lands the next time the app is opened.
+   * No AUTOMATIC skipWaiting. A new worker taking over mid-session can reload
+   * the page under somebody, and this app is used to sit timed exams — losing
+   * a half-finished attempt to a deploy is not a trade worth making for a
+   * slightly faster rollout.
+   *
+   * "The update lands the next time the app is opened" turned out to be
+   * optimistic: an INSTALLED app on a phone is often never fully closed, so a
+   * person can run week-old JavaScript indefinitely — which is how "the
+   * Replace button does nothing" was reported days after the fix shipped.
+   * So the waiting worker CAN be told to take over, but only by the person,
+   * through the update toast (service-worker.tsx) — never by a timer.
    */
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(PRECACHE)))
 })
@@ -183,4 +190,14 @@ self.addEventListener('notificationclick', (event) => {
       await clients.openWindow(url)
     })(),
   )
+})
+
+
+/*
+ * The update toast's lever. Fires only from an explicit tap on "Reload" —
+ * the reasoning against automatic takeover above stands; what changed is who
+ * pulls the trigger.
+ */
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting()
 })
