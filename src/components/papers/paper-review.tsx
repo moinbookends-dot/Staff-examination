@@ -7,6 +7,7 @@ import {
   ArrowUpIcon,
   CheckCircle2Icon,
   Loader2Icon,
+  PlusIcon,
   RotateCcwIcon,
   SearchIcon,
   TriangleAlertIcon,
@@ -98,6 +99,9 @@ export function PaperReview({
 
   // Which slot the picker is filling. null = closed.
   const [picking, setPicking] = useState<number | null>(null)
+  // Which SECTION an "Add question" picker is open for. Mutually exclusive
+  // with `picking` — two open pickers would race for the same shortfall.
+  const [adding, setAdding] = useState<'mcq' | 'short_answer' | null>(null)
 
   const dirty = useMemo(
     () =>
@@ -135,6 +139,34 @@ export function PaperReview({
     }
     setSlots(next)
     setPicking(null)
+    setResult(null)
+  }
+
+  /*
+   * An added question lands at the END OF ITS SECTION, not the end of the
+   * list. The paper's shape is MCQs first, then short answers — the same
+   * order placement() writes at generation — so an MCQ added after a removal
+   * must not appear below the short answers, where the section counts would
+   * still balance but the printed paper would interleave.
+   */
+  const add = (q: EligibleQuestion) => {
+    const slot: Slot = {
+      questionId: q.questionId,
+      section: q.qtype,
+      question: q.question,
+      topicName: q.topicName,
+      locales: q.locales,
+    }
+    const next = [...slots]
+    if (q.qtype === 'mcq') {
+      let lastMcq = -1
+      for (let i = 0; i < next.length; i++) if (next[i].section === 'mcq') lastMcq = i
+      next.splice(lastMcq + 1, 0, slot)
+    } else {
+      next.push(slot)
+    }
+    setSlots(next)
+    setAdding(null)
     setResult(null)
   }
 
@@ -218,13 +250,62 @@ export function PaperReview({
         button here would be a button that always fails.
       */}
       {!valid && (
-        <p
+        <div
           role="status"
-          className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/8 p-3 text-sm"
+          className="space-y-3 rounded-lg border border-warning/40 bg-warning/8 p-3 text-sm"
         >
-          <TriangleAlertIcon aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
-          <span>{t('reviewInvalid', { mcq: mcqExpected, short: shortExpected })}</span>
-        </p>
+          <p className="flex items-start gap-2">
+            <TriangleAlertIcon aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
+            <span>{t('reviewInvalid', { mcq: mcqExpected, short: shortExpected })}</span>
+          </p>
+
+          {/* The way OUT of the shortfall, right where it is announced: one
+              add button per section that is actually short. Removing a
+              question and hunting for a way to put one back was a dead end —
+              Replace only swaps in place. */}
+          {(mcq < mcqExpected || short < shortExpected) && (
+            <div className="flex flex-wrap gap-2">
+              {mcq < mcqExpected && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={saving}
+                  onClick={() => {
+                    setPicking(null)
+                    setAdding(adding === 'mcq' ? null : 'mcq')
+                  }}
+                >
+                  <PlusIcon />
+                  {t('reviewAddMcq', { n: mcqExpected - mcq })}
+                </Button>
+              )}
+              {short < shortExpected && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={saving}
+                  onClick={() => {
+                    setPicking(null)
+                    setAdding(adding === 'short_answer' ? null : 'short_answer')
+                  }}
+                >
+                  <PlusIcon />
+                  {t('reviewAddShort', { n: shortExpected - short })}
+                </Button>
+              )}
+            </div>
+          )}
+
+          {adding && (
+            <QuestionPicker
+              paperId={paperId}
+              wanted={adding}
+              excludeIds={slots.map((s) => s.questionId)}
+              onCancel={() => setAdding(null)}
+              onChoose={add}
+            />
+          )}
+        </div>
       )}
 
       {dirty && (
@@ -280,7 +361,10 @@ export function PaperReview({
                   variant="outline"
                   size="sm"
                   disabled={saving}
-                  onClick={() => setPicking(picking === index ? null : index)}
+                  onClick={() => {
+                    setAdding(null)
+                    setPicking(picking === index ? null : index)
+                  }}
                 >
                   {t('reviewReplace')}
                 </Button>
@@ -300,6 +384,7 @@ export function PaperReview({
               <QuestionPicker
                 paperId={paperId}
                 wanted={slot.section}
+                excludeIds={slots.filter((_, i) => i !== index).map((s) => s.questionId)}
                 onCancel={() => setPicking(null)}
                 onChoose={(q) => replace(index, q)}
               />
@@ -336,11 +421,19 @@ export function PaperReview({
 function QuestionPicker({
   paperId,
   wanted,
+  excludeIds,
   onChoose,
   onCancel,
 }: {
   paperId: string
   wanted: 'mcq' | 'short_answer'
+  /*
+   * The server excludes what is SAVED on the paper; this excludes what is in
+   * the LOCAL, unsaved list. Without it, adding a question and opening the
+   * picker again would offer the same question — and a second add would be
+   * refused only at save time, as a whole-paper rejection.
+   */
+  excludeIds?: string[]
   onChoose: (q: EligibleQuestion) => void
   onCancel: () => void
 }) {
@@ -432,7 +525,9 @@ function QuestionPicker({
       {error && <InlineError className="mt-2">{error}</InlineError>}
 
       <ul className="mt-3 max-h-72 space-y-1 overflow-y-auto">
-        {(rows ?? []).map((q) => (
+        {(rows ?? [])
+          .filter((q) => !excludeIds?.includes(q.questionId))
+          .map((q) => (
           <li key={q.questionId}>
             <button
               type="button"

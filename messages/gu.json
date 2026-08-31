@@ -848,7 +848,9 @@
     "itemsSelectAll": "દેખાતા બધા ચાલુ કરો",
     "itemsDeselectAll": "દેખાતા બધા બંધ કરો",
     "itemsInUse": "વપરાશમાં",
-    "poolRequested": "માંગેલા"
+    "poolRequested": "માંગેલા",
+    "reviewAddMcq": "MCQ ઉમેરો · {n} ખૂટે છે",
+    "reviewAddShort": "ટૂંકો જવાબ ઉમેરો · {n} ખૂટે છે"
   },
   "import": {
     "title": "પ્રશ્નો આયાત કરો",

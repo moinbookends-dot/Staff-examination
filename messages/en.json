@@ -1322,7 +1322,9 @@
     "itemsSelectAll": "Use all shown",
     "itemsDeselectAll": "Stop using all shown",
     "itemsInUse": "In use",
-    "poolRequested": "Requested"
+    "poolRequested": "Requested",
+    "reviewAddMcq": "Add MCQ · {n} missing",
+    "reviewAddShort": "Add short answer · {n} missing"
   },
   "import": {
     "title": "Import questions",

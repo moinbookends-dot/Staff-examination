@@ -848,7 +848,9 @@
     "itemsSelectAll": "दिख रहे सभी चालू करें",
     "itemsDeselectAll": "दिख रहे सभी बंद करें",
     "itemsInUse": "उपयोग में",
-    "poolRequested": "माँगे गए"
+    "poolRequested": "माँगे गए",
+    "reviewAddMcq": "MCQ जोड़ें · {n} कम हैं",
+    "reviewAddShort": "लघु-उत्तर जोड़ें · {n} कम हैं"
   },
   "import": {
     "title": "प्रश्न आयात करें",
