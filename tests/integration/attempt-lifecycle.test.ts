@@ -435,6 +435,17 @@ describeDb('attempt lifecycle', () => {
       })
     })
 
+    it("records 'focus_loss' — a window covering the visible exam", async () => {
+      await scenario(async () => {
+        const { attempt } = await startAndAnswer(() => 'a')
+        const r = await submit(attempt, 'focus_loss')
+        expect(r.status).not.toBe('in_progress')
+        const { rows } = await db.query(
+          'select submit_reason from public.attempts where id = $1', [attempt])
+        expect(rows[0].submit_reason).toBe('focus_loss')
+      })
+    })
+
     it('re-submitting cannot launder a cheating mark back to normal', async () => {
       await scenario(async () => {
         const { attempt } = await startAndAnswer(() => 'a')

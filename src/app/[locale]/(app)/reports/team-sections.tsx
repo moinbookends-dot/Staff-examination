@@ -85,7 +85,11 @@ export async function TeamSections({ canExport }: { canExport: boolean }) {
                   <div className="flex items-center justify-between gap-2">
                     <Link
                       href={`/users/${m.candidate_id}`}
-                      className="min-w-0 truncate font-medium text-primary hover:underline"
+                      // 44px floor BOTH ways: a name is the row's only way
+                      // into the person, was measuring 20px tall — and "moin"
+                      // is 31px wide. min-w-11 still shrinks long names into
+                      // the truncation the row needs.
+                      className="flex min-h-11 min-w-11 items-center truncate font-medium text-primary hover:underline"
                     >
                       {m.full_name}
                     </Link>
@@ -126,7 +130,7 @@ export async function TeamSections({ canExport }: { canExport: boolean }) {
                     <TableCell>
                       <Link
                         href={`/users/${m.candidate_id}`}
-                        className="font-medium text-primary hover:underline"
+                        className="inline-flex min-h-11 items-center font-medium text-primary hover:underline md:min-h-0"
                       >
                         {m.full_name}
                       </Link>

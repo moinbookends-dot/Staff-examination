@@ -758,7 +758,9 @@
     "leaveStay": "Stay in exam",
     "leaveConfirm": "Leave exam",
     "cheatedTitle": "Exam submitted",
-    "cheatedBody": "Your exam has been submitted and marked as cheating because you left the exam."
+    "cheatedBody": "Your exam has been submitted and marked as cheating because you left the exam.",
+    "focusWarnTitle": "Return to the exam",
+    "focusWarnBody": "The exam window lost focus. Return immediately or the exam will be submitted and marked as cheating."
   },
   "evaluation": {
     "title": "Evaluate",
@@ -1142,7 +1144,9 @@
     "help": "Help",
     "account": "Account",
     "openMenu": "Open menu",
-    "closeMenu": "Close menu"
+    "closeMenu": "Close menu",
+    "sidebarHide": "Hide sidebar",
+    "sidebarShow": "Show sidebar"
   },
   "papers": {
     "generateTitle": "Generate Exam",
@@ -1735,6 +1739,11 @@
     "savedNote": "Saved. Their access updates at their next sign-in or token refresh.",
     "unsavedNote": "Unsaved changes.",
     "saveFailed": "Could not save the changes.",
-    "tokenNote": "Access changes take effect when the person’s session token refreshes — within an hour, or immediately on their next sign-in."
+    "tokenNote": "Access changes take effect when the person’s session token refreshes — within an hour, or immediately on their next sign-in.",
+    "approvalsTitle": "Registration approvals",
+    "approvalsSubtitle": "New staff cannot sign in until approved. Assigning an outlet and department here sets what they can see across the platform.",
+    "approvalsPending": "Pending",
+    "approvalsOldest": "Oldest first.",
+    "approvalsEmpty": "Nothing waiting. New registrations appear here."
   }
 }

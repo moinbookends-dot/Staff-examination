@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
 import { getTranslations } from 'next-intl/server'
 import { CircleHelpIcon, SearchIcon } from 'lucide-react'
 import { getAppClaims } from '@/lib/auth/claims'
@@ -8,6 +9,7 @@ import { MobileMenu, MobileTabBar, SidebarNav } from '@/components/shell/app-nav
 import { NotificationBell } from '@/components/shell/notification-bell'
 import { loadMyNotifications } from '@/server/actions/notifications'
 import { LocaleSwitcher } from '@/components/shell/locale-switcher'
+import { SidebarToggle } from '@/components/shell/sidebar-toggle'
 import { ThemeToggle } from '@/components/shell/theme-toggle'
 import { Button } from '@/components/ui/button'
 import { SignOutButton } from '@/components/auth/sign-out-button'
@@ -75,18 +77,25 @@ export default async function AppLayout({
   const footItems = visibleFootItems(claims)
   const tabs = mobileNavItems(claims)
 
+  // The reader's open/closed choice, in the first HTML frame — the toggle
+  // writes this cookie and flips the attribute live; see sidebar-toggle.tsx.
+  const sidebarClosed = (await cookies()).get('sidebar')?.value === 'closed'
+
   const signOut = async () => {
     'use server'
     await logoutAction(locale)
   }
 
   return (
-    <div data-app-surface className="flex min-h-svh">
+    <div data-app-surface data-sidebar={sidebarClosed ? 'closed' : 'open'} className="flex min-h-svh">
       {/* ── Sidebar ──────────────────────────────────────────────────────
           320px, matching the Stitch proportion (20% of a 1600px canvas).
           `sticky` with its own height so the nav stays put while a long
           question list scrolls. */}
-      <aside className="sticky top-0 hidden h-svh w-80 shrink-0 flex-col border-r bg-card md:flex">
+      <aside
+        id="app-sidebar"
+        className="sticky top-0 hidden h-svh w-80 shrink-0 flex-col border-r bg-card md:flex"
+      >
         {/* A link, not a static block. The logo is the one element every user
             expects to return them to the start, and it costs nothing here. */}
         <Link
@@ -124,6 +133,11 @@ export default async function AppLayout({
       {/* ── Main column ──────────────────────────────────────────────── */}
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="glass pt-safe px-safe sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b px-4 lg:px-10">
+          <SidebarToggle
+            initiallyClosed={sidebarClosed}
+            hideLabel={ts('sidebarHide')}
+            showLabel={ts('sidebarShow')}
+          />
           {/* The brand repeats here below `md` only — the sidebar that
               normally carries it is not rendered at that width. */}
           <span className="flex min-w-0 items-center gap-2 md:hidden">

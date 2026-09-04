@@ -15,6 +15,7 @@ import {
   queueAnswer,
   readOutbox,
 } from '@/lib/attempts/outbox'
+import { isCheating } from '@/lib/attempts/closure'
 import { useExamChrome, useExitGuard, useOnline } from './use-exam-mode'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -103,6 +104,19 @@ const SAVE_DEBOUNCE_MS = 800
 /** First retry after a failed save. Doubles, capped — see scheduleRetry. */
 const RETRY_BASE_MS = 2_000
 const RETRY_MAX_MS = 30_000
+
+/**
+ * How long the exam window may stay unfocused-but-visible before the attempt
+ * is submitted as cheating, and how often that clock is checked.
+ *
+ * Four seconds is deliberate: comfortably longer than any accidental brush
+ * with browser chrome — an address-bar tap, a notification peeked and
+ * dismissed — and far shorter than any meaningful use of the thing that
+ * stole the focus. The warning overlay is on screen for the whole grace, so
+ * the deadline is never a surprise.
+ */
+const FOCUS_GRACE_MS = 4_000
+const FOCUS_POLL_MS = 1_000
 
 /**
  * Seconds remaining at which the time is spoken.
@@ -348,13 +362,13 @@ export function AttemptRunner({
   // ── The clock ──────────────────────────────────────────────────────────────
 
   const doSubmit = useCallback(
-    async (reason: 'user' | 'timer' | 'tab_switch') => {
+    async (reason: 'user' | 'timer' | 'tab_switch' | 'focus_loss') => {
       if (submitted.current) return
       submitted.current = true
       // Shown the moment they come back, not when the network round-trip
       // finishes — a candidate returning from another app should meet the
       // consequence, not a still-open paper.
-      if (reason === 'tab_switch') setLeftExam(true)
+      if (isCheating(reason)) setLeftExam(true)
       // The attempt is closed; the server will refuse these from here on.
       clearOutbox(attempt.attempt_id)
       setSubmitting(true)
@@ -424,6 +438,19 @@ export function AttemptRunner({
     document.addEventListener('visibilitychange', onHidden)
     return () => document.removeEventListener('visibilitychange', onHidden)
   }, [doSubmit])
+
+  /** The focus-loss warning overlay is up while this is true. */
+  const [focusWarn, setFocusWarn] = useState(false)
+  /**
+   * Enforcement arms only after the page has held focus once. A paper opened
+   * in a background window has not been engaged with; branding it cheating
+   * four seconds after a mount the candidate never saw would be a verdict on
+   * the browser, not the person.
+   */
+  const hadFocus = useRef(false)
+
+  // The focus-loss monitor lives below, after examLive exists — see
+  // "The exam window itself must stay focused".
 
   /** Thresholds already spoken, so a re-render cannot repeat one. */
   const announced = useRef(new Set<number>())
@@ -516,6 +543,67 @@ export function AttemptRunner({
   const onAttemptedExit = useCallback(() => setExitOpen(true), [])
   useExitGuard(examLive, onAttemptedExit)
 
+  /*
+   * ── The exam window itself must stay focused ──────────────────────────────
+   *
+   * An Android floating window — a Meet call bubble, a YouTube popup — can sit
+   * ON TOP of the exam while the page remains fully visible, so the hidden
+   * handler above never fires. What Chrome does emit when the candidate
+   * interacts with the overlay is WINDOW focus loss: a blur event, and
+   * document.hasFocus() going false. That is the strongest signal the web
+   * platform exposes for this attack, and it is enforced here.
+   *
+   * NOT instant, because raw blur has innocent causes (browser chrome, a
+   * peeked notification): losing focus raises a full-screen warning at once,
+   * and only focus still absent after FOCUS_GRACE_MS — measured by a poll, so
+   * a missed blur event changes nothing — submits with reason 'focus_loss'.
+   * One tap back on the exam inside the grace clears it. The poll is the
+   * authority and the events are the messengers: hasFocus() is re-read every
+   * second, so coalesced or suppressed events cannot hide the state.
+   *
+   * While the page is HIDDEN this monitor stands down — the visibilitychange
+   * handler above owns that path and fires first.
+   */
+  useEffect(() => {
+    if (!examLive) return
+
+    let unfocusedMs = 0
+
+    const tick = () => {
+      if (submitted.current || document.visibilityState !== 'visible') return
+      if (document.hasFocus()) {
+        hadFocus.current = true
+        unfocusedMs = 0
+        setFocusWarn(false)
+        return
+      }
+      if (!hadFocus.current) return
+      unfocusedMs += FOCUS_POLL_MS
+      setFocusWarn(true)
+      if (unfocusedMs >= FOCUS_GRACE_MS) void doSubmit('focus_loss')
+    }
+
+    const onBlur = () => {
+      // The overlay goes up immediately; the clock above decides the rest.
+      if (hadFocus.current && document.visibilityState === 'visible') setFocusWarn(true)
+    }
+    const onFocus = () => {
+      hadFocus.current = true
+      unfocusedMs = 0
+      setFocusWarn(false)
+    }
+
+    tick()
+    const id = setInterval(tick, FOCUS_POLL_MS)
+    window.addEventListener('blur', onBlur)
+    window.addEventListener('focus', onFocus)
+    return () => {
+      clearInterval(id)
+      window.removeEventListener('blur', onBlur)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [examLive, doSubmit])
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   if (!current) {
@@ -529,6 +617,23 @@ export function AttemptRunner({
 
   return (
     <div className="pb-safe space-y-4 pb-4">
+      {/*
+        ── Focus lost — the last exit before the verdict ─────────────────────
+        Full-screen and solid on purpose: it must be legible under whatever is
+        floating over the page, and one tap anywhere on it refocuses the
+        window and clears it. role="alert" so it is announced the moment it
+        appears. No dismiss control: the way out is to return to the exam.
+      */}
+      {examLive && focusWarn && (
+        <div
+          role="alert"
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-destructive p-6 text-center text-destructive-foreground"
+        >
+          <AlertTriangleIcon aria-hidden className="size-10" />
+          <p className="text-xl font-semibold">{t('focusWarnTitle')}</p>
+          <p className="max-w-md text-sm">{t('focusWarnBody')}</p>
+        </div>
+      )}
       {/*
         ── Connection ───────────────────────────────────────────────────────
         Shown only while the browser believes it is offline, and worded around

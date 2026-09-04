@@ -1,58 +1,15 @@
-import { requirePermission } from '@/lib/auth/guards'
-import { listPendingRegistrations } from '@/server/actions/users'
-import { listOutletsForRegistration, listDepartmentsForRegistration } from '@/server/actions/org'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { ApprovalRow } from './approval-row'
+import { redirect } from '@/lib/i18n/navigation'
 
-export default async function ApprovalsPage() {
-  // Enforced again here even though nav hides the link and middleware gates the
-  // route. Hiding a link is presentation; this is the check that matters.
-  await requirePermission('users.approve')
-
-  const [registrations, outlets, departments] = await Promise.all([
-    listPendingRegistrations(),
-    listOutletsForRegistration(),
-    listDepartmentsForRegistration(),
-  ])
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Registration approvals</h1>
-        <p className="text-sm text-muted-foreground">
-          New staff cannot sign in until approved. Assigning an outlet and department here sets
-          what they can see across the platform.
-        </p>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            Pending {registrations.length > 0 && `(${registrations.length})`}
-          </CardTitle>
-          <CardDescription>Oldest first.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {registrations.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              Nothing waiting. New registrations appear here.
-            </p>
-          ) : (
-            /* One card per applicant — see the box in approval-row.tsx for why
-               the table died. The list element keeps it announced as a list. */
-            <ul className="space-y-4">
-              {registrations.map((r) => (
-                <ApprovalRow
-                  key={r.id}
-                  registration={r}
-                  outlets={outlets}
-                  departments={departments}
-                />
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  )
+/**
+ * Approvals moved into the Users section (/users/approvals) — the same work
+ * as the directory beside it. This address keeps working for anything that
+ * linked or bookmarked it.
+ */
+export default async function ApprovalsRedirect({
+  params,
+}: {
+  params: Promise<{ locale: string }>
+}) {
+  const { locale } = await params
+  redirect({ href: '/users/approvals', locale })
 }

@@ -131,7 +131,13 @@ export default async function MonitorAttemptPage({
               {/* A cheating closure is named as such; only the clock and the
                   sweeper keep the neutral mechanism note. */}
               {cheated ? (
-                <span className="text-destructive"> · {t('cheatingNote')}</span>
+                // The machine reason rides along for the reviewer:
+                // tab_switch = the page went hidden, focus_loss = a window
+                // covered it. §closure.ts is the vocabulary.
+                <span className="text-destructive">
+                  {' · '}
+                  {t('cheatingNote')} ({header.submit_reason})
+                </span>
               ) : (
                 auto &&
                 header.submit_reason && (

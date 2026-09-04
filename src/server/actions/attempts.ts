@@ -480,7 +480,7 @@ const submitSchema = z.object({
    * 'sweeper' and 'admin' outright — they are the server's to assert — and this
    * enum keeps the UI from ever forming that request in the first place.
    */
-  reason: z.enum(['user', 'timer', 'tab_switch']).default('user'),
+  reason: z.enum(['user', 'timer', 'tab_switch', 'focus_loss']).default('user'),
 })
 
 export async function submitAttempt(input: unknown): Promise<ActionResult<AttemptResult>> {

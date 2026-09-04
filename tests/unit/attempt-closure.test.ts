@@ -18,8 +18,9 @@ import { isCheating, isAutoSubmitted } from '@/lib/attempts/closure'
  */
 
 describe('closure classification', () => {
-  it('only leaving the exam is cheating', () => {
+  it('only leaving the exam is cheating — hidden page or lost focus', () => {
     expect(isCheating('tab_switch')).toBe(true)
+    expect(isCheating('focus_loss')).toBe(true)
 
     expect(isCheating('user')).toBe(false)
     expect(isCheating('timer')).toBe(false)
@@ -45,6 +46,7 @@ describe('closure classification', () => {
     // The monitoring table shows ONE chip: the cheating verdict replaces the
     // neutral auto-submitted note precisely because it implies it.
     expect(isAutoSubmitted('tab_switch')).toBe(true)
+    expect(isAutoSubmitted('focus_loss')).toBe(true)
   })
 
   it('a pressed Submit is neither', () => {

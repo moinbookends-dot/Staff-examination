@@ -14,7 +14,6 @@ import {
   PenLine,
   RadioIcon,
   Settings,
-  UserRoundCheck,
   type LucideIcon,
 } from 'lucide-react'
 import { Link, usePathname } from '@/lib/i18n/navigation'
@@ -55,7 +54,6 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   evaluate: PenLine,
   myExams: ClipboardList,
   results: Award,
-  approvals: UserRoundCheck,
   settings: Settings,
 }
 

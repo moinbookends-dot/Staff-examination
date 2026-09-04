@@ -350,9 +350,10 @@ try {
     p_duration_minutes: 45,
     p_opens_at: null,
     p_closes_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
-    // 2, not 1: the leave-policy section needs a second, fresh attempt after
-    // the voluntary submit closes the first.
-    p_max_attempts: 2,
+    // 3, not 1: the leave-policy sections each need a fresh attempt after
+    // the voluntary submit closes the first — one for the hidden-page
+    // violation, one for the focus-loss violation.
+    p_max_attempts: 3,
     p_pass_mark_percent: 60,
     p_instructions: null,
     p_results_release: 'immediate',
@@ -749,6 +750,54 @@ try {
 
   // Restore, so any later navigation in this run behaves normally.
   await evaluate(page, `(() => { delete document.visibilityState; return 'restored' })()`)
+
+  // ── 8b. A floating window over the visible exam ───────────────────────────
+  //
+  // The Android Meet-bubble case: the page stays VISIBLE, so visibilitychange
+  // never fires — what Chrome emits is window focus loss. Simulated the same
+  // way the hidden state was: hasFocus() is overridden to false and blur is
+  // dispatched. The runner shows its warning for FOCUS_GRACE_MS (4s) and then
+  // submits with reason 'focus_loss'.
+  console.log('\n── Focus loss over a visible exam ──────────────────────')
+  const third = await rpc(employee, 'start_attempt', { p_exam_id: examId })
+  if (!third.ok) throw new Error(`third start_attempt failed: ${JSON.stringify(third.error)}`)
+  const thirdId = third.data[0].attempt_id
+  // Headless Chrome never actually holds focus, so the runner's monitor would
+  // never arm (it deliberately ignores a page that was never focused). Focus
+  // emulation makes hasFocus() true; the override below then forces it false,
+  // which is exactly the Meet-bubble shape: armed, visible, unfocused.
+  await page.send('Emulation.setFocusEmulationEnabled', { enabled: true })
+  await goto(page, `${APP}/en/attempt/${thirdId}`)
+  await sleep(1200)
+
+  await evaluate(
+    page,
+    `(() => {
+      Object.defineProperty(document, 'hasFocus', { value: () => false, configurable: true })
+      window.dispatchEvent(new Event('blur'))
+      return 'unfocused'
+    })()`,
+  )
+  await sleep(1500)
+  const warnUp = await evaluate(
+    page,
+    `document.body.innerText.includes(${JSON.stringify('Return to the exam')})`,
+  )
+  check('the warning overlay appears inside the grace', warnUp === true, String(warnUp))
+
+  // Ride out the rest of the grace plus the network round-trip.
+  await sleep(5500)
+  const { rows: focusClosed } = await db.query(
+    `select status, submit_reason from public.attempts where id = $1`,
+    [thirdId],
+  )
+  check('an unfocused-but-visible exam is submitted', focusClosed[0].status !== 'in_progress', focusClosed[0].status)
+  check(
+    "the record says why — submit_reason 'focus_loss'",
+    focusClosed[0].submit_reason === 'focus_loss',
+    String(focusClosed[0].submit_reason),
+  )
+  await evaluate(page, `(() => { delete document.hasFocus; window.dispatchEvent(new Event('focus')); return 'restored' })()`)
 
   // ── What cannot be tested here ────────────────────────────────────────────
   console.log('\n── Not testable in this environment ────────────────────')

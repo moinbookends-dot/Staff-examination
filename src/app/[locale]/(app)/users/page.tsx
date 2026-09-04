@@ -2,6 +2,7 @@ import { getTranslations } from 'next-intl/server'
 import { requireAnyPermission } from '@/lib/auth/guards'
 import { listUsers, listRoles } from '@/server/actions/monitoring'
 import { UsersTable } from '@/components/team/users-table'
+import { UsersTabs } from '@/components/team/users-tabs'
 import { PageHeader } from '@/components/ui/page-header'
 import { Card, CardContent } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -24,6 +25,7 @@ export default async function UsersPage() {
   return (
     <div className="space-y-6">
       <PageHeader title={t('title')} description={t('subtitle')} />
+      <UsersTabs />
 
       {rows.length === 0 ? (
         <Card>

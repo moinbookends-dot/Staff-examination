@@ -38,7 +38,6 @@ export type NavIcon =
   | 'evaluate'
   | 'myExams'
   | 'results'
-  | 'approvals'
   | 'settings'
 
 /**
@@ -278,18 +277,23 @@ const NAV_ITEMS: NavItemConfig[] = [
     mobile: true,
   },
   {
-    href: '/approvals',
-    labelKey: 'approvals',
-    icon: 'approvals',
-    permissions: ['users.approve'],
-  },
-  {
     href: '/users',
     labelKey: 'users',
     icon: 'users',
-    // Either reach works; admin_list_users() narrows team callers to their
-    // own outlet, exactly as the reports scope does.
-    permissions: ['users.read_team', 'users.read_all'],
+    /*
+     * Approvals is a TAB of this section now (/users/approvals), the way
+     * Generate and Exam History share Papers — so users.approve grants the
+     * item too. Any one reach works; admin_list_users() narrows team callers
+     * to their own outlet, exactly as the reports scope does.
+     */
+    permissions: ['users.read_team', 'users.read_all', 'users.approve'],
+    // Same Papers lesson: an approver without directory reach must land on
+    // the tab they may actually open, not 403 on the directory.
+    hrefFor: (claims) =>
+      can(claims, 'users.read_team') || can(claims, 'users.read_all')
+        ? '/users'
+        : '/users/approvals',
+    activeFor: ['/users'],
   },
 ]
 

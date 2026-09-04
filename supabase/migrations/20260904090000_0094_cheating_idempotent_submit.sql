@@ -19,6 +19,20 @@
 -- ║ reason lists there and here must stay in step.                            ║
 -- ╚═══════════════════════════════════════════════════════════════════════════╝
 
+-- ── 0. A second violation reason: the exam window lost focus ─────────────────
+--
+-- An Android floating window (a Meet call bubble, a YouTube popup) can cover
+-- the exam while the page stays VISIBLE — visibilitychange never fires. What
+-- Chrome does emit is window focus loss. The runner enforces it with a grace
+-- period; when it submits, the record must be able to say which signal fired,
+-- so 'tab_switch' (page hidden) and 'focus_loss' (window unfocused) are kept
+-- distinct. Both classify as cheating — src/lib/attempts/closure.ts.
+--
+-- Comparisons below use ::text so this new value is never instantiated inside
+-- this transaction (Postgres forbids using an enum value added in the same
+-- transaction; comparing text never touches it).
+alter type public.submit_reason add value if not exists 'focus_loss';
+
 -- ── 1. submit_attempt: first closer wins, everyone after gets the truth ──────
 --
 -- Verbatim from the live definition (pg_get_functiondef, 2026-09-04) with two
@@ -52,11 +66,13 @@ begin
     raise exception 'attempt not found' using errcode = '42501';
   end if;
 
-  -- A candidate may declare that they finished, that their timer ran out, or
-  -- that they switched tabs. They may not declare that a sweeper or an
-  -- administrator closed their attempt — those are the server's to claim, and
-  -- accepting them here would let a candidate forge the audit trail.
-  if p_reason not in ('user', 'timer', 'tab_switch') then
+  -- A candidate may declare that they finished, that their timer ran out,
+  -- that the page was hidden, or that the exam window lost focus. They may
+  -- not declare that a sweeper or an administrator closed their attempt —
+  -- those are the server's to claim, and accepting them here would let a
+  -- candidate forge the audit trail. (::text so 'focus_loss', added above in
+  -- this same migration, is compared without instantiating the enum value.)
+  if p_reason::text not in ('user', 'timer', 'tab_switch', 'focus_loss') then
     raise exception 'invalid submit reason' using errcode = '22023';
   end if;
 
@@ -155,10 +171,10 @@ begin
       when b.status = 'published'        then 'released'
       else 'submitted'
     end,
-    -- The candidate did not press Submit themselves: the clock, a tab switch,
+    -- The candidate did not press Submit themselves: the clock, a violation,
     -- or the sweeper closed the paper. 'user' and null both mean a real press.
     -- Kept in step with isAutoSubmitted() in src/lib/attempts/closure.ts.
-    coalesce(b.submit_reason::text in ('timer', 'tab_switch', 'sweeper'), false),
+    coalesce(b.submit_reason::text in ('timer', 'tab_switch', 'focus_loss', 'sweeper'), false),
     b.id,
     b.attempt_number,
     coalesce(pr.answered_n, 0),

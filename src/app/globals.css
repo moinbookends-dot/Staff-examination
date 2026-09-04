@@ -485,6 +485,15 @@
   min-height: 2.75rem;
 }
 
+/* ── The sidebar's open/closed choice ────────────────────────────────────────
+   The app shell stamps data-sidebar from a cookie (layout.tsx) and the header
+   toggle flips it live (sidebar-toggle.tsx). One rule does the hiding, here
+   rather than in a utility class, because it must beat the aside's own
+   `md:flex` — attribute + id outranks a single class at every width. */
+[data-sidebar='closed'] > #app-sidebar {
+  display: none;
+}
+
 /* ═════════════════════════════════════════════════════════════════════════════
    THE SAME 44px FLOOR AS THE AUTH SCREENS, FOR THE APP, ON PHONES ONLY.
 
