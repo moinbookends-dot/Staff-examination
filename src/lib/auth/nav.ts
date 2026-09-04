@@ -30,6 +30,7 @@ import { canGeneratePapers, canOpenQuestionBank } from './bank-access'
  * Keeping it minimal means tsc reports the mismatch the moment the two drift.
  */
 export type NavIcon =
+  | 'users'
   | 'dashboard'
   | 'bank'
   | 'generate'
@@ -281,6 +282,14 @@ const NAV_ITEMS: NavItemConfig[] = [
     labelKey: 'approvals',
     icon: 'approvals',
     permissions: ['users.approve'],
+  },
+  {
+    href: '/users',
+    labelKey: 'users',
+    icon: 'users',
+    // Either reach works; admin_list_users() narrows team callers to their
+    // own outlet, exactly as the reports scope does.
+    permissions: ['users.read_team', 'users.read_all'],
   },
 ]
 

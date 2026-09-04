@@ -84,7 +84,7 @@ export async function TeamSections({ canExport }: { canExport: boolean }) {
                 <li key={m.candidate_id} className="space-y-2 px-4 py-3">
                   <div className="flex items-center justify-between gap-2">
                     <Link
-                      href={`/team/${m.candidate_id}`}
+                      href={`/users/${m.candidate_id}`}
                       className="min-w-0 truncate font-medium text-primary hover:underline"
                     >
                       {m.full_name}
@@ -125,7 +125,7 @@ export async function TeamSections({ canExport }: { canExport: boolean }) {
                   <TableRow key={m.candidate_id}>
                     <TableCell>
                       <Link
-                        href={`/team/${m.candidate_id}`}
+                        href={`/users/${m.candidate_id}`}
                         className="font-medium text-primary hover:underline"
                       >
                         {m.full_name}

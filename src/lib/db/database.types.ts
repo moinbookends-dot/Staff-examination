@@ -1856,6 +1856,10 @@ export type Database = {
       }
     }
     Functions: {
+      "admin_list_users": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "analytics_scope": {
         Args: Record<string, unknown>
         Returns: unknown
@@ -2136,6 +2140,10 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "list_roles": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "locale_chain": {
         Args: Record<string, unknown>
         Returns: unknown
@@ -2329,6 +2337,10 @@ export type Database = {
         Returns: unknown
       }
       "set_updated_at": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "set_user_access": {
         Args: Record<string, unknown>
         Returns: unknown
       }

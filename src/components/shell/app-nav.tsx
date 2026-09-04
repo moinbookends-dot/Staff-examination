@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl'
 import {
   Award,
   MenuIcon,
+  UsersRound,
   ClipboardList,
   Database,
   FilePlus2,
@@ -46,6 +47,7 @@ import { cn } from '@/lib/utils'
  * survive serialisation.
  */
 const ICONS: Record<NavIcon, LucideIcon> = {
+  users: UsersRound,
   dashboard: LayoutDashboard,
   bank: Database,
   generate: FilePlus2,

@@ -647,7 +647,9 @@
     "monBest": "Highest",
     "monWorst": "Lowest",
     "monOutlet": "Outlet",
-    "monExpired": "Expired"
+    "monExpired": "Expired",
+    "minutesUnit": "min",
+    "paperPageLink": "Paper & publishing"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -668,7 +670,7 @@
     "import": "Import",
     "liveExams": "Live exams",
     "papers": "Papers",
-    "users": "User Management",
+    "users": "Users",
     "bankShort": "Questions"
   },
   "errors": {
@@ -1678,6 +1680,43 @@
     "givenAnswer": "Answer given",
     "notAnswered": "Not answered",
     "needsReview": "Needs review",
-    "autoSubmittedNote": "Closed automatically ({reason})"
+    "autoSubmittedNote": "Closed automatically ({reason})",
+    "paperQuestions": "Questions",
+    "paperAnswered": "Answered",
+    "paperUnanswered": "Unanswered",
+    "paperCorrect": "Correct",
+    "paperWrong": "Wrong",
+    "navigatorLabel": "Jump to question",
+    "selectedMark": "Selected",
+    "correctMark": "Correct answer"
+  },
+  "users": {
+    "title": "Users",
+    "subtitle": "Everyone in reach — their role, place and record.",
+    "search": "Search name, email or ID…",
+    "person": "Person",
+    "employeeId": "Employee ID",
+    "role": "Role",
+    "department": "Department",
+    "outlet": "Outlet",
+    "status": "Status",
+    "view": "View",
+    "allRoles": "All roles",
+    "allDepartments": "All departments",
+    "allOutlets": "All outlets",
+    "allStatuses": "All statuses",
+    "statusApproved": "Approved",
+    "statusPending": "Pending",
+    "statusRejected": "Rejected",
+    "noMatch": "Nobody matches these filters.",
+    "empty": "Nobody here yet.",
+    "manageAccess": "Manage access",
+    "rolePermissions": "This role can",
+    "superAdminAll": "Super admin holds every permission.",
+    "save": "Save changes",
+    "savedNote": "Saved. Their access updates at their next sign-in or token refresh.",
+    "unsavedNote": "Unsaved changes.",
+    "saveFailed": "Could not save the changes.",
+    "tokenNote": "Access changes take effect when the person’s session token refreshes — within an hour, or immediately on their next sign-in."
   }
 }

@@ -1,5 +1,7 @@
 'use server'
 
+import { z } from 'zod'
+
 import { requirePermission, requireAnyPermission } from '@/lib/auth/guards'
 import { createClient } from '@/lib/supabase/server'
 import { dbId } from '@/lib/db/id'
@@ -45,14 +47,22 @@ export interface MonitorReviewItem {
   question_id: string
   paper_position: number
   stem: string
+  /** choice_single, text_short, … — the snapshot's own format. */
+  qformat: string
+  /** The content the candidate received: choices for MCQ, limits for text. */
+  content: { choices?: Array<{ id: string; text: string }> } | null
   marks: number
   score: number | null
   answered: boolean
+  /** The RECORDED verdict from grade_detail — never recomputed. */
   correct: boolean | null
   needs_review: boolean
-  answer: Record<string, unknown> | null
-  /** Present only when the caller holds evaluation.evaluate — see 0092. */
-  model_answer: string | null
+  /** The option id the candidate picked, for MCQ. */
+  selected: string | null
+  /** The text the candidate wrote, for short answers. */
+  answer_text: string | null
+  /** Present only when the caller holds evaluation.evaluate — see 0093. */
+  correct_answer: string | null
 }
 
 export async function getMonitorAttemptHeader(
@@ -110,4 +120,75 @@ export async function getCandidateHistory(candidateId?: string): Promise<History
     score: r.score === null ? null : Number(r.score),
     max_score: r.max_score === null ? null : Number(r.max_score),
   }))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The Users page — list, roles, access. All three front 0093 RPCs that gate
+// themselves; the checks here are the fast legible fail, as everywhere above.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const USERS = ['users.read_team', 'users.read_all'] as const
+
+export interface AdminUserRow {
+  user_id: string
+  full_name: string | null
+  email: string
+  employee_code: string | null
+  department: string | null
+  outlet: string | null
+  approval_status: string
+  role_keys: string[]
+  last_attempt_at: string | null
+}
+
+export async function listUsers(): Promise<AdminUserRow[]> {
+  await requireAnyPermission(USERS)
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('admin_list_users')
+  if (error) return []
+  return (data ?? []) as unknown as AdminUserRow[]
+}
+
+export async function listRoles(): Promise<Array<{ role_key: string; role_name: string }>> {
+  await requireAnyPermission(USERS)
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('list_roles')
+  if (error) return []
+  return (data ?? []) as unknown as Array<{ role_key: string; role_name: string }>
+}
+
+/**
+ * Role + department + outlet in one confirmed save. set_user_access() (0093)
+ * enforces the rules that matter — super-admin-only via users.assign_roles,
+ * never your own row, never the last super admin — so a forged client request
+ * hits the same wall this form does.
+ */
+export async function setUserAccess(input: unknown): Promise<{ ok: boolean; error?: string }> {
+  await requirePermission('users.assign_roles')
+
+  const schema = z.object({
+    userId: dbId(),
+    roleKey: z.string().min(1).max(64),
+    departmentId: dbId().nullable().optional(),
+    outletId: dbId().nullable().optional(),
+  })
+  const parsed = schema.safeParse(input)
+  if (!parsed.success) return { ok: false, error: 'Check the form and try again.' }
+
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('set_user_access', {
+    p_user_id: parsed.data.userId,
+    p_role_key: parsed.data.roleKey,
+    p_department_id: parsed.data.departmentId ?? undefined,
+    p_outlet_id: parsed.data.outletId ?? undefined,
+  })
+
+  if (error) {
+    const raw = error.message ?? ''
+    if (/own access/i.test(raw)) return { ok: false, error: 'You cannot change your own access.' }
+    if (/last super admin/i.test(raw)) return { ok: false, error: 'Someone must remain super admin — demote yourself last, via another super admin.' }
+    if (/forbidden/i.test(raw)) return { ok: false, error: 'Only a super admin can manage access.' }
+    return { ok: false, error: 'Could not save the changes.' }
+  }
+  return { ok: true }
 }

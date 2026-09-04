@@ -23,7 +23,7 @@
     "import": "आयात",
     "liveExams": "चालू परीक्षाएँ",
     "papers": "पेपर",
-    "users": "उपयोगकर्ता प्रबंधन",
+    "users": "उपयोगकर्ता",
     "bankShort": "प्रश्न"
   },
   "common": {
@@ -510,7 +510,9 @@
     "monBest": "सर्वोच्च",
     "monWorst": "न्यूनतम",
     "monOutlet": "आउटलेट",
-    "monExpired": "समय समाप्त"
+    "monExpired": "समय समाप्त",
+    "minutesUnit": "मिनट",
+    "paperPageLink": "पेपर और प्रकाशन"
   },
   "bank": {
     "title": "प्रश्न बैंक",
@@ -1208,6 +1210,43 @@
     "givenAnswer": "दिया गया उत्तर",
     "notAnswered": "उत्तर नहीं दिया",
     "needsReview": "समीक्षा आवश्यक",
-    "autoSubmittedNote": "स्वतः बंद हुई ({reason})"
+    "autoSubmittedNote": "स्वतः बंद हुई ({reason})",
+    "paperQuestions": "प्रश्न",
+    "paperAnswered": "उत्तर दिए",
+    "paperUnanswered": "बिना उत्तर",
+    "paperCorrect": "सही",
+    "paperWrong": "गलत",
+    "navigatorLabel": "प्रश्न पर जाएँ",
+    "selectedMark": "चुना गया",
+    "correctMark": "सही उत्तर"
+  },
+  "users": {
+    "title": "उपयोगकर्ता",
+    "subtitle": "पहुँच में हर व्यक्ति — उनकी भूमिका, स्थान और रिकॉर्ड।",
+    "search": "नाम, ईमेल या ID खोजें…",
+    "person": "व्यक्ति",
+    "employeeId": "कर्मचारी ID",
+    "role": "भूमिका",
+    "department": "विभाग",
+    "outlet": "आउटलेट",
+    "status": "स्थिति",
+    "view": "देखें",
+    "allRoles": "सभी भूमिकाएँ",
+    "allDepartments": "सभी विभाग",
+    "allOutlets": "सभी आउटलेट",
+    "allStatuses": "सभी स्थितियाँ",
+    "statusApproved": "स्वीकृत",
+    "statusPending": "लंबित",
+    "statusRejected": "अस्वीकृत",
+    "noMatch": "इन फ़िल्टरों से कोई मेल नहीं खाता।",
+    "empty": "यहाँ अभी कोई नहीं है।",
+    "manageAccess": "पहुँच प्रबंधित करें",
+    "rolePermissions": "यह भूमिका कर सकती है",
+    "superAdminAll": "सुपर एडमिन के पास हर अनुमति है।",
+    "save": "बदलाव सहेजें",
+    "savedNote": "सहेजा गया। अगली साइन-इन या टोकन रिफ़्रेश पर उनकी पहुँच बदल जाएगी।",
+    "unsavedNote": "बिना सहेजे बदलाव।",
+    "saveFailed": "बदलाव सहेजे नहीं जा सके।",
+    "tokenNote": "पहुँच के बदलाव व्यक्ति के सेशन टोकन रिफ़्रेश होने पर लागू होते हैं — एक घंटे के भीतर, या अगली साइन-इन पर तुरंत।"
   }
 }

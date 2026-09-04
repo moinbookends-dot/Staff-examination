@@ -23,7 +23,7 @@
     "import": "આયાત",
     "liveExams": "ચાલુ પરીક્ષાઓ",
     "papers": "પેપર",
-    "users": "વપરાશકર્તા સંચાલન",
+    "users": "વપરાશકર્તાઓ",
     "bankShort": "પ્રશ્નો"
   },
   "common": {
@@ -510,7 +510,9 @@
     "monBest": "સર્વોચ્ચ",
     "monWorst": "ન્યૂનતમ",
     "monOutlet": "આઉટલેટ",
-    "monExpired": "સમય પૂરો"
+    "monExpired": "સમય પૂરો",
+    "minutesUnit": "મિનિટ",
+    "paperPageLink": "પેપર અને પ્રકાશન"
   },
   "bank": {
     "title": "પ્રશ્ન બેંક",
@@ -1208,6 +1210,43 @@
     "givenAnswer": "આપેલો જવાબ",
     "notAnswered": "જવાબ નથી",
     "needsReview": "સમીક્ષા જરૂરી",
-    "autoSubmittedNote": "આપોઆપ બંધ થઈ ({reason})"
+    "autoSubmittedNote": "આપોઆપ બંધ થઈ ({reason})",
+    "paperQuestions": "પ્રશ્નો",
+    "paperAnswered": "જવાબ આપ્યા",
+    "paperUnanswered": "જવાબ વગર",
+    "paperCorrect": "સાચા",
+    "paperWrong": "ખોટા",
+    "navigatorLabel": "પ્રશ્ન પર જાઓ",
+    "selectedMark": "પસંદ કરેલ",
+    "correctMark": "સાચો જવાબ"
+  },
+  "users": {
+    "title": "વપરાશકર્તાઓ",
+    "subtitle": "પહોંચમાં દરેક વ્યક્તિ — તેમની ભૂમિકા, સ્થાન અને રેકોર્ડ.",
+    "search": "નામ, ઈમેલ કે ID શોધો…",
+    "person": "વ્યક્તિ",
+    "employeeId": "કર્મચારી ID",
+    "role": "ભૂમિકા",
+    "department": "વિભાગ",
+    "outlet": "આઉટલેટ",
+    "status": "સ્થિતિ",
+    "view": "જુઓ",
+    "allRoles": "બધી ભૂમિકાઓ",
+    "allDepartments": "બધા વિભાગ",
+    "allOutlets": "બધા આઉટલેટ",
+    "allStatuses": "બધી સ્થિતિઓ",
+    "statusApproved": "મંજૂર",
+    "statusPending": "બાકી",
+    "statusRejected": "નામંજૂર",
+    "noMatch": "આ ફિલ્ટર સાથે કોઈ મેળ ખાતું નથી.",
+    "empty": "અહીં હજી કોઈ નથી.",
+    "manageAccess": "પહોંચ મેનેજ કરો",
+    "rolePermissions": "આ ભૂમિકા કરી શકે",
+    "superAdminAll": "સુપર એડમિન પાસે દરેક પરવાનગી છે.",
+    "save": "ફેરફારો સાચવો",
+    "savedNote": "સાચવ્યું. આગલી સાઇન-ઇન કે ટોકન રિફ્રેશ પર તેમની પહોંચ બદલાશે.",
+    "unsavedNote": "સાચવ્યા વગરના ફેરફારો.",
+    "saveFailed": "ફેરફારો સાચવી શકાયા નહીં.",
+    "tokenNote": "પહોંચના ફેરફારો વ્યક્તિના સેશન ટોકન રિફ્રેશ થાય ત્યારે લાગુ થાય છે — એક કલાકમાં, અથવા આગલી સાઇન-ઇન પર તરત."
   }
 }
