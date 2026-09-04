@@ -6,7 +6,8 @@ import { getResultDetail, getAttemptReview, type AttemptReviewItem } from '@/ser
 import { buttonVariants } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { ArrowLeftIcon, CheckCircle2Icon, XCircleIcon } from 'lucide-react'
+import { AlertTriangleIcon, ArrowLeftIcon, CheckCircle2Icon, XCircleIcon } from 'lucide-react'
+import { isCheating } from '@/lib/attempts/closure'
 
 /**
  * One published result.
@@ -58,6 +59,14 @@ export default async function ResultDetailPage({
 
       <Card>
         <CardContent className="space-y-4 pt-6">
+          {/* The closure is part of the record: a result earned by leaving the
+              exam says so on the result, permanently. */}
+          {isCheating(detail.submit_reason) && (
+            <p className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              <AlertTriangleIcon aria-hidden className="mt-0.5 size-4 shrink-0" />
+              {t('cheatedNotice')}
+            </p>
+          )}
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <p className="text-4xl font-semibold tabular-nums">

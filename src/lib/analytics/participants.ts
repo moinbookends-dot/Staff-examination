@@ -9,6 +9,7 @@ import type { ParticipantRow } from '@/server/exams/live'
 
 export type ParticipantStatusFilter =
   | 'all'
+  | 'attempted'
   | 'not_started'
   | 'in_progress'
   | 'submitted'
@@ -17,6 +18,29 @@ export type ParticipantStatusFilter =
   | 'auto_submitted'
   | 'passed'
   | 'failed'
+
+/**
+ * The three groups the monitoring spec is built around, counted once so the
+ * tabs and the summary tiles can never disagree:
+ *
+ *   not attempted — assigned but no attempt row (state 'not_started')
+ *   live          — an attempt in progress right now
+ *   attempted     — an attempt that ENDED, however it ended: submitted,
+ *                   released, or expired. An auto-submitted attempt is
+ *                   attempted; the auto flag is an annotation, not a group.
+ */
+export function participantCounts(rows: readonly ParticipantRow[]) {
+  const notAttempted = rows.filter((r) => r.state === 'not_started').length
+  const live = rows.filter((r) => r.state === 'in_progress').length
+  return {
+    all: rows.length,
+    attempted: rows.length - notAttempted - live,
+    live,
+    notAttempted,
+    passed: rows.filter((r) => r.passed === true).length,
+    failed: rows.filter((r) => r.passed === false).length,
+  }
+}
 
 export interface ParticipantFilter {
   search?: string
@@ -45,6 +69,8 @@ export function filterParticipants(
     }
     switch (status) {
       case 'all': return true
+      case 'attempted':
+        return r.state !== 'not_started' && r.state !== 'in_progress'
       // Auto-submit cuts across states: an expired attempt was auto-closed
       // too. The filter answers "who did not press Submit themselves".
       case 'auto_submitted': return r.autoSubmitted

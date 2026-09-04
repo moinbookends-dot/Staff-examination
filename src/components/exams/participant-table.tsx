@@ -7,10 +7,12 @@ import { Link } from '@/lib/i18n/navigation'
 import type { ParticipantRow } from '@/server/exams/live'
 import {
   filterParticipants,
+  participantCounts,
   sortParticipants,
   type ParticipantSort,
   type ParticipantStatusFilter,
 } from '@/lib/analytics/participants'
+import { isCheating } from '@/lib/attempts/closure'
 import { Badge } from '@/components/ui/badge'
 import {
   Table,
@@ -49,11 +51,6 @@ const STATE_TONE: Record<ParticipantRow['state'], string> = {
   not_started: 'border-muted-foreground/30 text-muted-foreground',
 }
 
-const STATUS_FILTERS: ParticipantStatusFilter[] = [
-  'all', 'not_started', 'in_progress', 'submitted', 'released', 'expired',
-  'auto_submitted', 'passed', 'failed',
-]
-
 const SORTS: ParticipantSort[] = ['name', 'started', 'submitted', 'activity', 'highest', 'lowest']
 
 export function ParticipantTable({ rows }: { rows: ParticipantRow[] }) {
@@ -66,10 +63,29 @@ export function ParticipantTable({ rows }: { rows: ParticipantRow[] }) {
   const [status, setStatus] = useState<ParticipantStatusFilter>('all')
   const [sort, setSort] = useState<ParticipantSort>('name')
 
-  const shown = useMemo(
-    () => sortParticipants(filterParticipants(rows, { search, status }), sort),
-    [rows, search, status, sort],
+  const [department, setDepartment] = useState('all')
+  const [outlet, setOutlet] = useState('all')
+
+  const departments = useMemo(
+    () => [...new Set(rows.map((r) => r.department).filter((v): v is string => !!v))].sort(),
+    [rows],
   )
+  const outlets = useMemo(
+    () => [...new Set(rows.map((r) => r.outlet).filter((v): v is string => !!v))].sort(),
+    [rows],
+  )
+
+  // One counting function feeds the tabs AND the page tiles — see participants.ts.
+  const counts = useMemo(() => participantCounts(rows), [rows])
+
+  const shown = useMemo(() => {
+    const base = filterParticipants(rows, { search, status }).filter(
+      (r) =>
+        (department === 'all' || r.department === department) &&
+        (outlet === 'all' || r.outlet === outlet),
+    )
+    return sortParticipants(base, sort)
+  }, [rows, search, status, sort, department, outlet])
 
   const when = (iso: string | null) =>
     iso
@@ -93,17 +109,6 @@ export function ParticipantTable({ rows }: { rows: ParticipantRow[] }) {
         : r.state === 'expired' ? 'pExpired'
         : 'pReleased') as 'pNotStarted',
     )
-
-  const filterLabel = (v: ParticipantStatusFilter) =>
-    v === 'all' ? t('monFilterAll')
-    : v === 'auto_submitted' ? t('monAutoSubmitted')
-    : v === 'passed' ? t('monPassedF')
-    : v === 'failed' ? t('monFailedF')
-    : v === 'not_started' ? t('pNotStarted')
-    : v === 'in_progress' ? t('pInProgress')
-    : v === 'submitted' ? t('pSubmitted')
-    : v === 'expired' ? t('pExpired')
-    : t('pReleased')
 
   const sortLabel = (v: ParticipantSort) =>
     v === 'name' ? t('monSortName')
@@ -137,8 +142,42 @@ export function ParticipantTable({ rows }: { rows: ParticipantRow[] }) {
    */
   const rowHref = (r: ParticipantRow) => (r.attemptId ? `/monitoring/${r.attemptId}` : null)
 
+  const TABS: Array<{ value: ParticipantStatusFilter; label: string; count: number }> = [
+    { value: 'all', label: t('tabAll'), count: counts.all },
+    { value: 'attempted', label: t('tabAttempted'), count: counts.attempted },
+    { value: 'in_progress', label: t('tabLive'), count: counts.live },
+    { value: 'not_started', label: t('tabNotAttempted'), count: counts.notAttempted },
+    { value: 'passed', label: t('monPassedF'), count: counts.passed },
+    { value: 'failed', label: t('monFailedF'), count: counts.failed },
+  ]
+
   return (
     <div className="space-y-3">
+      {/* ── The three groups, as tabs with their counts ─────────────────── */}
+      <div role="tablist" aria-label={t('monStatus')} className="-mx-1 flex gap-1 overflow-x-auto px-1">
+        {TABS.map((tab) => {
+          const active = status === tab.value
+          return (
+            <button
+              key={tab.value}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setStatus(tab.value)}
+              className={cn(
+                'flex min-h-11 shrink-0 items-center gap-1.5 rounded-md border px-3 text-sm',
+                active
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-input text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {tab.label}
+              <span className="tabular-nums">{tab.count}</span>
+            </button>
+          )
+        })}
+      </div>
+
       {/* ── Controls ────────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <div className="relative flex-1">
@@ -156,13 +195,25 @@ export function ParticipantTable({ rows }: { rows: ParticipantRow[] }) {
           />
         </div>
         <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value as ParticipantStatusFilter)}
-          aria-label={t('monStatus')}
+          value={department}
+          onChange={(e) => setDepartment(e.target.value)}
+          aria-label={t('monDepartment')}
           className="min-h-11 rounded-md border border-input bg-transparent px-2 text-sm"
         >
-          {STATUS_FILTERS.map((v) => (
-            <option key={v} value={v}>{filterLabel(v)}</option>
+          <option value="all">{t('monAllDepartments')}</option>
+          {departments.map((d) => (
+            <option key={d} value={d}>{d}</option>
+          ))}
+        </select>
+        <select
+          value={outlet}
+          onChange={(e) => setOutlet(e.target.value)}
+          aria-label={t('monOutlet')}
+          className="min-h-11 rounded-md border border-input bg-transparent px-2 text-sm"
+        >
+          <option value="all">{t('monAllOutlets')}</option>
+          {outlets.map((o) => (
+            <option key={o} value={o}>{o}</option>
           ))}
         </select>
         <select
@@ -199,10 +250,16 @@ export function ParticipantTable({ rows }: { rows: ParticipantRow[] }) {
                       <Badge variant="outline" className={cn(STATE_TONE[r.state])}>
                         {statusLabel(r)}
                       </Badge>
-                      {r.autoSubmitted && (
-                        <Badge variant="outline" className="text-muted-foreground">
-                          {t('monAutoSubmitted')}
-                        </Badge>
+                      {/* A tab_switch closure is a verdict, not a mechanism —
+                          it replaces the neutral chip, never joins it. */}
+                      {isCheating(r.submitReason) ? (
+                        <Badge variant="destructive">{t('monCheating')}</Badge>
+                      ) : (
+                        r.autoSubmitted && (
+                          <Badge variant="outline" className="text-muted-foreground">
+                            {t('monAutoSubmitted')}
+                          </Badge>
+                        )
                       )}
                     </span>
                   </div>
@@ -211,10 +268,16 @@ export function ParticipantTable({ rows }: { rows: ParticipantRow[] }) {
                       <span className="tabular-nums">
                         {t('monProgress')}: {r.answeredN}/{r.questionN}
                         {left && <> · {t('monTimeLeft')}: {left}</>}
+                        {' · '}
+                        {t('monLastActivity')}: {when(r.lastActivity)}
                       </span>
                     )}
-                    <span className="tabular-nums">{t('monStarted')}: {when(r.startedAt)}</span>
-                    <span className="tabular-nums">{t('monSubmittedCol')}: {when(r.submittedAt)}</span>
+                    {r.state !== 'not_started' && (
+                      <>
+                        <span className="tabular-nums">{t('monStarted')}: {when(r.startedAt)}</span>
+                        <span className="tabular-nums">{t('monSubmittedCol')}: {when(r.submittedAt)}</span>
+                      </>
+                    )}
                   </div>
                   <div className="mt-2 flex items-center justify-between gap-2">
                     <span className="tabular-nums text-sm">
@@ -232,7 +295,22 @@ export function ParticipantTable({ rows }: { rows: ParticipantRow[] }) {
                   {href ? (
                     <Link href={href} className="block p-3">{body}</Link>
                   ) : (
-                    <div className="p-3">{body}</div>
+                    /*
+                     * No attempt exists, so there is no paper to open — but a
+                     * dead card reads as broken. A native disclosure answers
+                     * the tap with the one honest sentence there is.
+                     */
+                    <details className="p-3">
+                      <summary className="cursor-pointer list-none">
+                        {body}
+                        <span className="mt-1 block text-sm font-medium text-primary">
+                          {t('monViewDetails')}
+                        </span>
+                      </summary>
+                      <p className="mt-2 border-t pt-2 text-sm text-muted-foreground">
+                        {t('monNotAttemptedMsg')}
+                      </p>
+                    </details>
                   )}
                 </li>
               )
@@ -277,10 +355,14 @@ export function ParticipantTable({ rows }: { rows: ParticipantRow[] }) {
                           <Badge variant="outline" className={cn(STATE_TONE[r.state])}>
                             {statusLabel(r)}
                           </Badge>
-                          {r.autoSubmitted && (
-                            <Badge variant="outline" className="text-muted-foreground">
-                              {t('monAutoSubmitted')}
-                            </Badge>
+                          {isCheating(r.submitReason) ? (
+                            <Badge variant="destructive">{t('monCheating')}</Badge>
+                          ) : (
+                            r.autoSubmitted && (
+                              <Badge variant="outline" className="text-muted-foreground">
+                                {t('monAutoSubmitted')}
+                              </Badge>
+                            )
                           )}
                         </span>
                       </TableCell>
@@ -291,6 +373,9 @@ export function ParticipantTable({ rows }: { rows: ParticipantRow[] }) {
                             {left && (
                               <span className="block text-xs text-muted-foreground">{left}</span>
                             )}
+                            <span className="block text-xs text-muted-foreground">
+                              {when(r.lastActivity)}
+                            </span>
                           </span>
                         ) : r.attemptId ? (
                           `${r.answeredN}/${r.questionN}`
@@ -305,13 +390,22 @@ export function ParticipantTable({ rows }: { rows: ParticipantRow[] }) {
                       </TableCell>
                       <TableCell>{resultCell(r)}</TableCell>
                       <TableCell>
-                        {href && (
+                        {href ? (
                           <Link
                             href={href}
                             className="text-sm font-medium text-primary hover:underline"
                           >
                             {t('monOpen')}
                           </Link>
+                        ) : (
+                          <details className="relative">
+                            <summary className="cursor-pointer list-none text-sm font-medium text-primary hover:underline">
+                              {t('monViewDetails')}
+                            </summary>
+                            <p className="absolute right-0 z-10 mt-1 w-56 rounded-md border bg-card p-3 text-sm text-muted-foreground shadow-md">
+                              {t('monNotAttemptedMsg')}
+                            </p>
+                          </details>
                         )}
                       </TableCell>
                     </TableRow>

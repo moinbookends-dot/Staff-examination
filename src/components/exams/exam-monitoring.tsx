@@ -2,6 +2,7 @@ import { getTranslations } from 'next-intl/server'
 import { StatCard } from '@/components/papers/stat-card'
 import { ParticipantTable } from '@/components/exams/participant-table'
 import type { ParticipantRow } from '@/server/exams/live'
+import { participantCounts } from '@/lib/analytics/participants'
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -62,20 +63,42 @@ export async function ExamMonitoring({
 
   const pct = (v: number | null) => (v === null ? '—' : `${v}%`)
 
+  /*
+   * One truth for the headline numbers. When the caller may see the table,
+   * the tiles are counted from the SAME rows the tabs count — they cannot
+   * disagree. A caller who may only see participation gets the equivalent
+   * arithmetic from exam_participation(): attempted = eligible − not started.
+   */
+  const counts = canSeeTable
+    ? participantCounts(participants)
+    : {
+        all: participation.eligible,
+        attempted:
+          participation.eligible - participation.notStarted - participation.inProgress,
+        live: participation.inProgress,
+        notAttempted: participation.notStarted,
+        passed: null as number | null,
+        failed: null as number | null,
+      }
+
   return (
     <div className="space-y-4">
       <section className="rounded-xl border bg-card p-5">
         <h2 className="text-title-md">{t('monParticipation')}</h2>
 
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-5">
+          <StatCard label={t('tileAssigned')} value={counts.all.toLocaleString()} tone="primary" />
+          {/* Attempted here = anyone with an attempt, live included — the
+              spec's own arithmetic (attempted = completed + currently live).
+              The ATTEMPTED tab below is narrower (ended attempts only), and
+              both labels say what they count. */}
           <StatCard
-            label={t('monEligible')}
-            value={participation.eligible.toLocaleString()}
-            tone="primary"
+            label={t('tileAttempted')}
+            value={(counts.all - counts.notAttempted).toLocaleString()}
           />
-          <StatCard label={t('monNotStarted')} value={participation.notStarted.toLocaleString()} />
-          <StatCard label={t('monInProgress')} value={participation.inProgress.toLocaleString()} />
-          <StatCard label={t('monSubmitted')} value={participation.submitted.toLocaleString()} />
+          <StatCard label={t('tileLive')} value={counts.live.toLocaleString()} />
+          <StatCard label={t('tileCompleted')} value={counts.attempted.toLocaleString()} />
+          <StatCard label={t('tileNotAttempted')} value={counts.notAttempted.toLocaleString()} />
         </div>
 
         <dl className="mt-4 grid gap-4 sm:grid-cols-2">

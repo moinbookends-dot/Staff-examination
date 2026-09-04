@@ -11,6 +11,7 @@ import {
   type HistoryRow,
   type HistorySort,
 } from '@/lib/analytics/performance'
+import { isCheating } from '@/lib/attempts/closure'
 import { ScoreChart } from './score-chart'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -158,7 +159,12 @@ export function PerformancePanel({ rows }: { rows: HistoryRow[] }) {
                   <Link href={`/monitoring/${r.attempt_id}`} className="block p-3">
                     <div className="flex items-start justify-between gap-2">
                       <p className="min-w-0 truncate font-medium">{r.exam_title}</p>
-                      <ResultBadge passed={r.passed} pass={te('resultPass')} fail={te('resultFail')} />
+                      <span className="flex shrink-0 items-center gap-1">
+                        {isCheating(r.submit_reason) && (
+                          <Badge variant="destructive">{te('monCheating')}</Badge>
+                        )}
+                        <ResultBadge passed={r.passed} pass={te('resultPass')} fail={te('resultFail')} />
+                      </span>
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
                       <span>
@@ -212,7 +218,12 @@ export function PerformancePanel({ rows }: { rows: HistoryRow[] }) {
                         {r.minutes !== null ? t('minutesShort', { n: r.minutes }) : '—'}
                       </TableCell>
                       <TableCell>
-                        <ResultBadge passed={r.passed} pass={te('resultPass')} fail={te('resultFail')} />
+                        <span className="flex flex-wrap items-center gap-1">
+                          {isCheating(r.submit_reason) && (
+                            <Badge variant="destructive">{te('monCheating')}</Badge>
+                          )}
+                          <ResultBadge passed={r.passed} pass={te('resultPass')} fail={te('resultFail')} />
+                        </span>
                       </TableCell>
                       <TableCell>
                         <Link

@@ -418,11 +418,34 @@ describeDb('attempt lifecycle', () => {
       })
     })
 
-    it('refuses a second submit', async () => {
+    /**
+     * Idempotent since 0094, deliberately: the runner submits the moment the
+     * page is hidden, the timer submits at zero, and the two race whenever a
+     * candidate leaves in the final second. The first closer wins; everyone
+     * after gets the closed row back, not an error a client would have to
+     * special-case.
+     */
+    it('a second submit is a no-op that returns the closed row', async () => {
       await scenario(async () => {
         const { attempt } = await startAndAnswer(() => 'a')
-        await submit(attempt)
-        await expect(submit(attempt)).rejects.toThrow(/already been submitted/i)
+        const first = await submit(attempt)
+        const second = await submit(attempt)
+        expect(second.status).toBe(first.status)
+        expect(second.score).toBe(first.score)
+      })
+    })
+
+    it('re-submitting cannot launder a cheating mark back to normal', async () => {
+      await scenario(async () => {
+        const { attempt } = await startAndAnswer(() => 'a')
+        await submit(attempt, 'tab_switch')
+
+        // The candidate returns and presses Submit — or replays the RPC by
+        // hand. The recorded reason must be the first closure's, permanently.
+        await submit(attempt, 'user')
+        const { rows } = await db.query(
+          'select submit_reason from public.attempts where id = $1', [attempt])
+        expect(rows[0].submit_reason).toBe('tab_switch')
       })
     })
 

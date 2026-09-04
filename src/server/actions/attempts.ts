@@ -84,6 +84,12 @@ export interface AttemptState {
   exam_title: string
   /** When false the runner will not offer Previous. */
   allow_backtrack: boolean
+  /**
+   * Why it closed, null while open. 'tab_switch' = the candidate left the
+   * active exam, which the product records as cheating — see
+   * src/lib/attempts/closure.ts.
+   */
+  submit_reason: string | null
 }
 
 export interface AttemptResult {
@@ -93,6 +99,9 @@ export interface AttemptResult {
   passed: boolean | null
   /** False until the result is released. Everything above is null while it is. */
   published: boolean
+  /** Never withheld, unlike the score: how an attempt closed is the
+   *  candidate's own recorded act, and the cheating notice depends on it. */
+  submit_reason: string | null
 }
 
 export interface AttemptReviewItem {
@@ -351,6 +360,8 @@ export interface ResultDetail {
   evaluator_name: string | null
   /** Who signed it off. Names only — never what they wrote to each other. */
   verifier_names: string[]
+  /** 'tab_switch' keeps the cheating mark on the released record. */
+  submit_reason: string | null
 }
 
 /**

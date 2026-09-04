@@ -675,14 +675,15 @@ try {
   ])
   check('the attempt is closed server-side', after[0].status !== 'in_progress', after[0].status)
 
-  // ── 8. Leaving is submitting ──────────────────────────────────────────────
+  // ── 8. Leaving is cheating ────────────────────────────────────────────────
   //
   // Product decision: minimising, switching apps, or navigating away closes
-  // the paper as it stands, reason 'tab_switch'. A fresh attempt (the exam
-  // allows two), backgrounded for real by overriding the visibilityState
-  // getter — dispatching the event alone leaves the state 'visible' and the
-  // runner rightly ignores it.
-  console.log('\n── Leaving is submitting ───────────────────────────────')
+  // the paper as it stands, reason 'tab_switch', and every surface displays
+  // that closure as CHEATING. A fresh attempt (the exam allows two),
+  // backgrounded for real by overriding the visibilityState getter —
+  // dispatching the event alone leaves the state 'visible' and the runner
+  // rightly ignores it.
+  console.log('\n── Leaving is cheating ─────────────────────────────────')
   const second = await rpc(employee, 'start_attempt', { p_exam_id: examId })
   if (!second.ok) throw new Error(`second start_attempt failed: ${JSON.stringify(second.error)}`)
   const secondId = second.data[0].attempt_id
@@ -711,6 +712,41 @@ try {
     closed[0].submit_reason === 'tab_switch',
     String(closed[0].submit_reason),
   )
+
+  // The candidate meets the verdict, in words: the runner's blocking dialog
+  // first, and the refreshed result card after.
+  const noticeShown = await evaluate(
+    page,
+    `document.body.innerText.includes(${JSON.stringify('marked as cheating because you left the exam')})`,
+  )
+  check('the candidate is told it was marked as cheating', noticeShown === true, String(noticeShown))
+
+  // Repeated visibility events must be a no-op: same attempt, same reason,
+  // no second attempt row. submit_attempt is idempotent since 0094, so the
+  // duplicate the browser fires on some devices cannot double-close anything.
+  await evaluate(page, `(document.dispatchEvent(new Event('visibilitychange')), 'again')`)
+  await sleep(1500)
+  const { rows: again } = await db.query(
+    `select status, submit_reason,
+            (select count(*)::int from public.attempts where exam_id = $2) as attempts_n
+       from public.attempts where id = $1`,
+    [secondId, examId],
+  )
+  check('a duplicate hidden event changes nothing', again[0].submit_reason === 'tab_switch', String(again[0].submit_reason))
+  check('no extra attempt appears', again[0].attempts_n === 2, String(again[0].attempts_n))
+
+  // And the closed paper takes no more answers — the server's refusal, not
+  // the client's politeness.
+  const lateSave = await rpc(employee, 'save_answer', {
+    p_attempt_id: secondId,
+    p_question_id: (await db.query(
+      `select question_id from public.attempt_questions where attempt_id = $1 limit 1`,
+      [secondId],
+    )).rows[0].question_id,
+    p_answer: { format: 'choice_single', choice: 'a' },
+  })
+  check('a closed attempt refuses further answers', lateSave.ok === false, JSON.stringify(lateSave.error?.message ?? lateSave))
+
   // Restore, so any later navigation in this run behaves normally.
   await evaluate(page, `(() => { delete document.visibilityState; return 'restored' })()`)
 

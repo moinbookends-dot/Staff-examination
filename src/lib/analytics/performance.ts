@@ -30,6 +30,8 @@ export interface HistoryRow {
   max_score: number | null
   percent: number | null
   passed: boolean | null
+  /** attempts.submit_reason — 'tab_switch' marks the attempt as cheating. */
+  submit_reason?: string | null
 }
 
 export type Trend = 'improving' | 'declining' | 'stable' | 'insufficient'

@@ -649,7 +649,21 @@
     "monOutlet": "Outlet",
     "monExpired": "Expired",
     "minutesUnit": "min",
-    "paperPageLink": "Paper & publishing"
+    "paperPageLink": "Paper & publishing",
+    "tabAll": "All",
+    "tabAttempted": "Attempted",
+    "tabLive": "Live",
+    "tabNotAttempted": "Not attempted",
+    "monAllDepartments": "All departments",
+    "monAllOutlets": "All outlets",
+    "monViewDetails": "View details",
+    "monNotAttemptedMsg": "This person has not attempted this exam yet.",
+    "tileAssigned": "Total assigned",
+    "tileAttempted": "Attempted",
+    "tileCompleted": "Completed",
+    "tileNotAttempted": "Not attempted",
+    "tileLive": "Currently attempting",
+    "monCheating": "Cheating"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -740,9 +754,11 @@
     "savedOnDevice": "Saved on this device",
     "offlineBanner": "No connection. Your answers are on this device and will be sent when it returns.",
     "leaveTitle": "Leave exam?",
-    "leaveBody": "Leaving, minimising, or switching apps will SUBMIT your exam as it stands. Your saved answers will be marked and you cannot return to the paper.",
+    "leaveBody": "Leaving, minimising, or switching apps will SUBMIT your exam as it stands and mark the attempt as cheating. Your saved answers will be marked and you cannot return to the paper.",
     "leaveStay": "Stay in exam",
-    "leaveConfirm": "Leave exam"
+    "leaveConfirm": "Leave exam",
+    "cheatedTitle": "Exam submitted",
+    "cheatedBody": "Your exam has been submitted and marked as cheating because you left the exam."
   },
   "evaluation": {
     "title": "Evaluate",
@@ -843,7 +859,8 @@
     "standingSuppressedHint": "A position is only shown once at least ten people at your company have a released result. Below that, a rank would say more about your colleagues than about you.",
     "standingNone": "No released result yet",
     "standingNoneHint": "Once a result is released, your position will appear here.",
-    "standingScope": "Company-wide · released results only"
+    "standingScope": "Company-wide · released results only",
+    "cheatedNotice": "Your exam has been submitted and marked as cheating because you left the exam."
   },
   "reports": {
     "title": "Reports",
@@ -1688,7 +1705,8 @@
     "paperWrong": "Wrong",
     "navigatorLabel": "Jump to question",
     "selectedMark": "Selected",
-    "correctMark": "Correct answer"
+    "correctMark": "Correct answer",
+    "cheatingNote": "Marked as cheating — left the exam"
   },
   "users": {
     "title": "Users",

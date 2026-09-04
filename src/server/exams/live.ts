@@ -283,6 +283,12 @@ export interface ParticipantRow {
   state: 'not_started' | 'in_progress' | 'submitted' | 'released' | 'expired'
   /** The clock, a tab switch or the sweeper closed it — not a Submit press. */
   autoSubmitted: boolean
+  /**
+   * WHY it closed, verbatim from attempts.submit_reason. 'tab_switch' means
+   * the candidate left the active exam — classified as cheating by
+   * isCheating() in src/lib/attempts/closure.ts.
+   */
+  submitReason: string | null
   attemptId: string | null
   attemptNo: number | null
   answeredN: number
@@ -325,6 +331,7 @@ export async function loadParticipants(examId: string): Promise<ParticipantRow[]
     expires_at: string | null
     state: ParticipantRow['state']
     auto_submitted: boolean
+    submit_reason: string | null
     attempt_id: string | null
     attempt_no: number | null
     answered_n: number
@@ -345,6 +352,7 @@ export async function loadParticipants(examId: string): Promise<ParticipantRow[]
     expiresAt: r.expires_at,
     state: r.state,
     autoSubmitted: r.auto_submitted,
+    submitReason: r.submit_reason ?? null,
     attemptId: r.attempt_id,
     attemptNo: r.attempt_no,
     answeredN: r.answered_n,

@@ -8,7 +8,7 @@ import {
   TREND_MINIMUM,
   type HistoryRow,
 } from '@/lib/analytics/performance'
-import { filterParticipants, sortParticipants } from '@/lib/analytics/participants'
+import { filterParticipants, sortParticipants, participantCounts } from '@/lib/analytics/participants'
 import type { ParticipantRow } from '@/server/exams/live'
 
 /**
@@ -164,6 +164,7 @@ function participant(over: Partial<ParticipantRow>): ParticipantRow {
     expiresAt: null,
     state: 'not_started',
     autoSubmitted: false,
+    submitReason: null,
     attemptId: null,
     attemptNo: null,
     answeredN: 0,
@@ -208,5 +209,55 @@ describe('participant filters', () => {
     const sorted = sortParticipants(rows, 'highest')
     expect(sorted[0].employeeId).toBe('b')
     expect(sorted[1].employeeId).toBe('c')
+  })
+})
+
+describe('participant counts — the tabs and the tiles share these', () => {
+  const rows = [
+    participant({ employeeId: '1', state: 'not_started' }),
+    participant({ employeeId: '2', state: 'not_started' }),
+    participant({ employeeId: '3', state: 'in_progress', attemptId: 'a3' }),
+    participant({ employeeId: '4', state: 'released', passed: true, attemptId: 'a4' }),
+    participant({ employeeId: '5', state: 'released', passed: false, autoSubmitted: true, attemptId: 'a5' }),
+    participant({ employeeId: '6', state: 'expired', attemptId: 'a6' }),
+    participant({ employeeId: '7', state: 'submitted', attemptId: 'a7' }),
+  ]
+
+  it('splits the three groups the way the spec defines them', () => {
+    const c = participantCounts(rows)
+    expect(c).toEqual({ all: 7, attempted: 4, live: 1, notAttempted: 2, passed: 1, failed: 1 })
+  })
+
+  it('counts an auto-submitted attempt as attempted, never as its own group', () => {
+    const c = participantCounts(rows)
+    // employee 5 is auto-submitted AND failed AND attempted — three facts,
+    // one person, no double-counted group.
+    expect(c.attempted + c.live + c.notAttempted).toBe(c.all)
+  })
+
+  it('an expired attempt is attempted — it existed and ended', () => {
+    expect(filterParticipants(rows, { status: 'attempted' }).map((r) => r.employeeId)).toEqual(
+      ['4', '5', '6', '7'],
+    )
+  })
+
+  it('the attempted filter and the count agree by construction', () => {
+    expect(filterParticipants(rows, { status: 'attempted' })).toHaveLength(
+      participantCounts(rows).attempted,
+    )
+  })
+
+  it('a cheating closure changes the chip, never the arithmetic', () => {
+    // The verdict lives in submit_reason and is rendered as a badge; the
+    // person still attempted, still failed, still sums into the same groups.
+    // A cheated attempt that vanished from the counts would understate how
+    // many people sat the paper.
+    const cheated = rows.map((r) =>
+      r.employeeId === '5' ? { ...r, submitReason: 'tab_switch' } : r,
+    )
+    expect(participantCounts(cheated)).toEqual(participantCounts(rows))
+    expect(filterParticipants(cheated, { status: 'attempted' })).toHaveLength(
+      filterParticipants(rows, { status: 'attempted' }).length,
+    )
   })
 })

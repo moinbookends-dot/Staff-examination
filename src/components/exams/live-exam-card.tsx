@@ -1,4 +1,11 @@
-import { ClockIcon, ListChecksIcon, TargetIcon, TimerIcon, UsersIcon } from 'lucide-react'
+import {
+  ChevronRightIcon,
+  ClockIcon,
+  ListChecksIcon,
+  TargetIcon,
+  TimerIcon,
+  UsersIcon,
+} from 'lucide-react'
 import { Link } from '@/lib/i18n/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ExamStateBadge } from './exam-state-badge'
@@ -55,18 +62,28 @@ export function LiveExamCard({
   const noAudience = exam.eligible === 0
 
   return (
-    <Card className="flex flex-col">
+    /*
+     * The WHOLE card navigates, not just the title. On a phone the card is the
+     * obvious tap target; a link confined to two words of title text made every
+     * other tap a dead one, which read as "the details page doesn't exist".
+     * A stretched pseudo-element cannot do this job here — CardHeader is a CSS
+     * container (contain: layout), so an inset-0 overlay inside it covers only
+     * the header — hence the card sits inside the anchor, which is legal
+     * because nothing else in the card is interactive.
+     */
+    <Link
+      href={`/exams/${exam.id}`}
+      aria-label={exam.title}
+      className="group block rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+    >
+      <Card className="flex h-full flex-col transition-colors group-hover:border-primary/60">
       <CardHeader className="gap-2">
         <div className="flex items-start justify-between gap-2">
-          <CardTitle className="text-base">
-            <Link
-              href={`/exams/${exam.id}`}
-              className="inline-flex min-h-11 min-w-11 items-center hover:underline md:min-h-0 md:min-w-0"
-            >
-              {exam.title}
-            </Link>
-          </CardTitle>
-          <ExamStateBadge state={exam.state} label={stateLabel} className="shrink-0" />
+          <CardTitle className="text-base group-hover:underline">{exam.title}</CardTitle>
+          <span className="flex shrink-0 items-center gap-1">
+            <ExamStateBadge state={exam.state} label={stateLabel} className="shrink-0" />
+            <ChevronRightIcon aria-hidden className="size-4 text-muted-foreground" />
+          </span>
         </div>
         {exam.paperNo !== null && (
           <p className="text-body-sm text-muted-foreground">
@@ -194,7 +211,8 @@ export function LiveExamCard({
           </div>
         )}
       </CardContent>
-    </Card>
+      </Card>
+    </Link>
   )
 }
 

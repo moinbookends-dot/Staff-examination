@@ -148,6 +148,14 @@ export function AttemptRunner({
 
   /** Raised when back is pressed, so leaving is a decision rather than a swipe. */
   const [exitOpen, setExitOpen] = useState(false)
+  /**
+   * The paper was closed because the candidate left the active exam. Drives
+   * the blocking dialog below — the DISPLAY only. The record itself is
+   * attempts.submit_reason='tab_switch', written server-side by the submit;
+   * clearing this state, or any client state, changes nothing the server or
+   * an admin will ever see.
+   */
+  const [leftExam, setLeftExam] = useState(false)
 
   const current = questions[index]
   const answered = useMemo(
@@ -343,6 +351,10 @@ export function AttemptRunner({
     async (reason: 'user' | 'timer' | 'tab_switch') => {
       if (submitted.current) return
       submitted.current = true
+      // Shown the moment they come back, not when the network round-trip
+      // finishes — a candidate returning from another app should meet the
+      // consequence, not a still-open paper.
+      if (reason === 'tab_switch') setLeftExam(true)
       // The attempt is closed; the server will refuse these from here on.
       clearOutbox(attempt.attempt_id)
       setSubmitting(true)
@@ -372,21 +384,32 @@ export function AttemptRunner({
   )
 
   /*
-   * ── Leaving the exam IS submitting the exam ───────────────────────────────
+   * ── Leaving the exam IS cheating ──────────────────────────────────────────
    *
-   * Explicit product decision, reversing the earlier "the timer keeps running
-   * if you leave": minimising the app, switching tabs, or navigating away
-   * closes the paper as it stands, with reason 'tab_switch' — the one
-   * violation reason submit_attempt accepts from a candidate.
+   * Explicit product decision: minimising the app, switching tabs or apps,
+   * locking the phone, split-screen that hides the page, or navigating away
+   * closes the paper as it stands with reason 'tab_switch', and the product
+   * displays that closure as CHEATING everywhere — monitoring, history, and
+   * to the candidate. visibilitychange→hidden is the primary trigger because
+   * it is the one signal every browser fires reliably for all of those.
    *
-   * THE COST IS REAL AND ACCEPTED: visibilitychange→hidden also fires for an
-   * incoming call answered, a screen that auto-locks while the candidate is
-   * thinking, or a notification followed by an accidental tap. All of those
-   * now count as attempt given. Every answer is already on the server (each
-   * change saves through the outbox), so what is lost is the chance to keep
-   * going — never work already done. The exit dialog says exactly this before
-   * anybody can claim surprise, and the server sweeper remains the authority
-   * if this handler never gets to run.
+   * WHAT IS DELIBERATELY NOT A TRIGGER:
+   *  · window blur alone — clicking the address bar, a permission prompt, or
+   *    a print dialog blurs the window while the exam stays fully visible.
+   *    Submitting on it would brand people for using their browser. A desktop
+   *    window placed alongside (exam still visible) therefore goes undetected;
+   *    that limitation is documented, not papered over.
+   *  · pagehide — the only case it adds over visibilitychange is a RELOAD,
+   *    and an accidental refresh is not leaving the exam.
+   *
+   * THE COST IS REAL AND ACCEPTED: hidden also fires for an incoming call
+   * answered or a screen that auto-locks while the candidate is thinking.
+   * Those now count as cheating, and the exit dialog says so up front. Every
+   * answer is already on the server (each change saves through the outbox),
+   * so what is lost is the chance to continue — never work already done. The
+   * server stays authoritative: repeated events are a no-op (submit_attempt
+   * is idempotent since 0094), and the sweeper closes the paper if this
+   * handler never runs at all.
    *
    * Distinct from the drain-on-visible listener above on purpose: that one
    * recovers answers, this one enforces policy, and coupling them would make
@@ -485,7 +508,7 @@ export function AttemptRunner({
    * either is true the attempt is over, so every guard lifts together and the
    * candidate is not trapped on a results card with the screen forced awake.
    */
-  const examLive = !timedOut && !submitting
+  const examLive = !timedOut && !submitting && !leftExam
 
   useExamChrome(examLive)
   const online = useOnline()
@@ -502,7 +525,7 @@ export function AttemptRunner({
   const format = (current.snapshot.response_format ?? 'choice_single') as ResponseFormat
   const stem = String(current.snapshot.stem ?? '')
   const progressPercent = Math.round((answered / questions.length) * 100)
-  const locked = timedOut || submitting
+  const locked = timedOut || submitting || leftExam
 
   return (
     <div className="pb-safe space-y-4 pb-4">
@@ -734,6 +757,23 @@ export function AttemptRunner({
           <AlertDialogHeader>
             <AlertDialogTitle>{t('timeUp')}</AlertDialogTitle>
             <AlertDialogDescription>{t('timeUpBody')}</AlertDialogDescription>
+          </AlertDialogHeader>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/*
+        The violation counterpart of the time-up dialog. No footer and no way
+        to dismiss: there is no decision left to make. router.refresh() is
+        already in flight and replaces this whole screen with the closed
+        result card, which repeats the same sentence in ink.
+        `!timedOut` so the two verdicts can never stack — the clock's dialog
+        wins the race it lost the paper to.
+      */}
+      <AlertDialog open={leftExam && !timedOut}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('cheatedTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('cheatedBody')}</AlertDialogDescription>
           </AlertDialogHeader>
         </AlertDialogContent>
       </AlertDialog>

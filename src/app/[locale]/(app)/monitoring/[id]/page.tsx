@@ -9,8 +9,9 @@ import {
 } from '@/server/actions/monitoring'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
-import { ArrowLeftIcon, CheckCircle2Icon, XCircleIcon } from 'lucide-react'
+import { AlertTriangleIcon, ArrowLeftIcon, CheckCircle2Icon, XCircleIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { isAutoSubmitted, isCheating } from '@/lib/attempts/closure'
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -81,7 +82,8 @@ export default async function MonitorAttemptPage({
       ? Math.round((Number(header.score) / Number(header.max_score)) * 100)
       : null
 
-  const auto = ['timer', 'tab_switch', 'sweeper'].includes(header.submit_reason ?? '')
+  const auto = isAutoSubmitted(header.submit_reason)
+  const cheated = isCheating(header.submit_reason)
 
   // Counted from the recorded verdicts, the same source every card shows.
   const verdicts = review.map(verdictOf)
@@ -126,12 +128,26 @@ export default async function MonitorAttemptPage({
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
               {t('colAttempt')} {header.attempt_no ?? 1}
-              {auto && header.submit_reason && (
-                <> · {t('autoSubmittedNote', { reason: header.submit_reason })}</>
+              {/* A cheating closure is named as such; only the clock and the
+                  sweeper keep the neutral mechanism note. */}
+              {cheated ? (
+                <span className="text-destructive"> · {t('cheatingNote')}</span>
+              ) : (
+                auto &&
+                header.submit_reason && (
+                  <> · {t('autoSubmittedNote', { reason: header.submit_reason })}</>
+                )
               )}
             </p>
           </div>
 
+          <span className="flex flex-wrap items-center gap-1.5">
+          {cheated && (
+            <Badge variant="destructive" className="gap-1.5 px-3 py-1 text-sm">
+              <AlertTriangleIcon className="size-4" />
+              {te('monCheating')}
+            </Badge>
+          )}
           {header.passed !== null ? (
             <Badge
               variant="outline"
@@ -152,6 +168,7 @@ export default async function MonitorAttemptPage({
           ) : (
             <Badge variant="outline">{te('resultPending')}</Badge>
           )}
+          </span>
         </div>
 
         <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">

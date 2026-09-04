@@ -6,7 +6,8 @@ import { getAttemptPaper, getAttemptState, getAttemptResult } from '@/server/act
 import { AttemptRunner } from '@/components/attempts/attempt-runner'
 import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { CheckCircle2Icon, ClockIcon } from 'lucide-react'
+import { AlertTriangleIcon, CheckCircle2Icon, ClockIcon } from 'lucide-react'
+import { isCheating } from '@/lib/attempts/closure'
 
 /**
  * Sitting one attempt.
@@ -44,12 +45,20 @@ export default async function AttemptPage({
     // max_score and passed as null for anything unreleased, so even if this
     // branch were wrong there would be nothing here to show.
     const released = result?.published === true
+    /*
+     * The reason comes from my_attempt_state — the candidate's own recorded
+     * act, never withheld the way the score is. It is the server's word, not
+     * client state: nothing the browser stores or replays can change it.
+     */
+    const cheated = isCheating(attempt.submit_reason)
 
     return (
       <div className="mx-auto max-w-xl space-y-6">
         <Card>
           <CardHeader className="items-center gap-2 text-center">
-            {released ? (
+            {cheated ? (
+              <AlertTriangleIcon className="size-8 text-destructive" />
+            ) : released ? (
               <CheckCircle2Icon className="size-8 text-muted-foreground" />
             ) : (
               <ClockIcon className="size-8 text-muted-foreground" />
@@ -58,6 +67,14 @@ export default async function AttemptPage({
             <CardDescription>{attempt.exam_title}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 text-center">
+            {cheated && (
+              <p
+                role="alert"
+                className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              >
+                {t('cheatedBody')}
+              </p>
+            )}
             {released ? (
               <>
                 <p className="text-3xl font-semibold tabular-nums">
