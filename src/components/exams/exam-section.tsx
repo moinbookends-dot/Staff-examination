@@ -71,6 +71,11 @@ export async function ExamSection({
     notStarted: t('cardNotStarted'),
     ofEmployees: t('cardOfEmployees'),
     noAudience: t('cardNoAudience'),
+    passed: t('monPassedN'),
+    failed: t('monFailedN'),
+    avg: t('monAvg'),
+    best: t('monBest'),
+    worst: t('monWorst'),
   }
 
   return (

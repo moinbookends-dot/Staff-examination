@@ -1,6 +1,6 @@
 import { requirePermission } from '@/lib/auth/guards'
 import { ExamSection } from '@/components/exams/exam-section'
-import { loadExamsByState, withParticipation } from '@/server/exams/live'
+import { loadExamsByState, withParticipation, withScoreSpread } from '@/server/exams/live'
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -37,7 +37,9 @@ export default async function LiveExamsPage() {
 
   // Participation is fetched for the rendered bucket only — each row is an RPC
   // that expands the exam's audience, and the other tabs are not on screen.
-  const rows = await withParticipation(buckets.live)
+  // Outcomes ride along for callers the database allows; everyone else gets
+  // the rows back unchanged (exam_score_spread refuses below team scope).
+  const rows = await withScoreSpread(await withParticipation(buckets.live))
 
   return <ExamSection current="live" rows={rows} counts={counts} />
 }

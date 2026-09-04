@@ -1,15 +1,6 @@
-import { getTranslations, getFormatter } from 'next-intl/server'
-import { Badge } from '@/components/ui/badge'
+import { getTranslations } from 'next-intl/server'
 import { StatCard } from '@/components/papers/stat-card'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { cn } from '@/lib/utils'
+import { ParticipantTable } from '@/components/exams/participant-table'
 import type { ParticipantRow } from '@/server/exams/live'
 
 /**
@@ -19,25 +10,23 @@ import type { ParticipantRow } from '@/server/exams/live'
  * ╔═══════════════════════════════════════════════════════════════════════════╗
  * ║ A SCORE APPEARS HERE ONLY ONCE THE CANDIDATE HAS BEEN GIVEN IT.           ║
  * ║                                                                           ║
- * ║ 0064's exam_participants() returns null for score and passed until the    ║
- * ║ attempt reaches `published`. That is not squeamishness — an exam set to   ║
- * ║ release on close exists precisely so nobody sees results early, and a     ║
- * ║ monitoring table showing them to a chef who then mentions one in the      ║
- * ║ kitchen would make the setting a lie.                                     ║
+ * ║ 0064's exam_participants() (extended in 0092) returns null for score and  ║
+ * ║ passed until the attempt reaches `published`. That is not squeamishness — ║
+ * ║ an exam set to release on close exists precisely so nobody sees results   ║
+ * ║ early, and a monitoring table showing them to a chef who then mentions    ║
+ * ║ one in the kitchen would make the setting a lie.                          ║
  * ║                                                                           ║
  * ║ The withholding is done by the DATABASE. This component renders a dash    ║
- * ║ because it received null, not because it decided to hide anything.        ║
+ * ║ because it received null, not because it decided to hide anything. The    ║
+ * ║ same holds for the spread tiles: exam_score_spread() reads                ║
+ * ║ analytics_attempts, so its numbers can never disagree with /reports.      ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * The table itself is a client component — search, filters and sort operate
+ * on rows already fetched here, with the logic unit-tested in
+ * lib/analytics/participants.ts.
  * ═══════════════════════════════════════════════════════════════════════════
  */
-
-const STATE_TONE: Record<ParticipantRow['state'], string> = {
-  released: 'border-emerald-500/40 text-emerald-700 dark:text-emerald-400',
-  submitted: 'border-sky-500/40 text-sky-700 dark:text-sky-400',
-  in_progress: 'border-amber-500/40 text-amber-700 dark:text-amber-400',
-  expired: 'border-destructive/40 text-destructive',
-  not_started: 'border-muted-foreground/30 text-muted-foreground',
-}
 
 export interface Participation {
   eligible: number
@@ -49,24 +38,29 @@ export interface Participation {
   submittedPercent: number
 }
 
+export interface ScoreSpread {
+  gradedN: number
+  passedN: number
+  failedN: number
+  avgPercent: number | null
+  bestPercent: number | null
+  worstPercent: number | null
+}
+
 export async function ExamMonitoring({
   participation,
+  spread,
   participants,
   canSeeTable,
 }: {
   participation: Participation
+  spread: ScoreSpread | null
   participants: ParticipantRow[]
   canSeeTable: boolean
 }) {
   const t = await getTranslations('exams')
-  const format = await getFormatter()
 
-  const when = (iso: string | null) =>
-    iso
-      ? format.dateTime(new Date(iso), {
-          day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
-        })
-      : '—'
+  const pct = (v: number | null) => (v === null ? '—' : `${v}%`)
 
   return (
     <div className="space-y-4">
@@ -88,6 +82,21 @@ export async function ExamMonitoring({
           <Rate label={t('monAttemptRate')} percent={participation.attemptPercent} />
           <Rate label={t('monSubmitRate')} percent={participation.submittedPercent} />
         </dl>
+
+        {/*
+          Outcomes, only for eyes the database already allows: spread is null
+          when exam_score_spread refused the caller, and "no numbers" beats a
+          row of zeros pretending everybody failed.
+        */}
+        {spread && spread.gradedN > 0 && (
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            <StatCard label={t('monPassedN')} value={spread.passedN.toLocaleString()} />
+            <StatCard label={t('monFailedN')} value={spread.failedN.toLocaleString()} />
+            <StatCard label={t('monAvg')} value={pct(spread.avgPercent)} />
+            <StatCard label={t('monBest')} value={pct(spread.bestPercent)} />
+            <StatCard label={t('monWorst')} value={pct(spread.worstPercent)} />
+          </div>
+        )}
       </section>
 
       <section className="rounded-xl border bg-card p-5">
@@ -101,138 +110,11 @@ export async function ExamMonitoring({
         {!canSeeTable ? (
           <p className="mt-3 text-body-sm text-muted-foreground">{t('monNoAccess')}</p>
         ) : participants.length === 0 ? (
-          <p className="mt-3 text-body-sm text-muted-foreground">{t('monNobody')}</p>
+          <p className="mt-3 text-body-sm text-muted-foreground">{t('monWaiting')}</p>
         ) : (
-          <>
-          {/* Phones: one card per person. The eight-column table forced the
-              whole page to pan sideways at 390px, which on a live exam is the
-              moment a chef most needs to read it one-handed. */}
-          <ul className="mt-4 space-y-3 md:hidden">
-            {participants.map((p) => {
-              const percent =
-                p.score !== null && p.maxScore
-                  ? Math.round((p.score / p.maxScore) * 100)
-                  : null
-              return (
-                <li key={`m-${p.employeeId}`} className="rounded-lg border p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate font-medium">{p.fullName || p.email}</p>
-                      <p className="truncate text-sm text-muted-foreground">{p.department ?? '—'}</p>
-                    </div>
-                    <Badge variant="outline" className={cn('shrink-0', STATE_TONE[p.state])}>
-                      {t(
-                        (p.state === 'not_started' ? 'pNotStarted'
-                          : p.state === 'in_progress' ? 'pInProgress'
-                          : p.state === 'submitted' ? 'pSubmitted'
-                          : p.state === 'expired' ? 'pExpired'
-                          : 'pReleased') as 'pNotStarted',
-                      )}
-                    </Badge>
-                  </div>
-                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                    <span className="tabular-nums">{t('monStarted')}: {when(p.startedAt)}</span>
-                    <span className="tabular-nums">{t('monSubmittedCol')}: {when(p.submittedAt)}</span>
-                  </div>
-                  <div className="mt-2 flex items-center justify-between gap-2">
-                    <span className="tabular-nums text-sm">
-                      {p.score !== null ? `${p.score} / ${p.maxScore ?? 0}` : '—'}
-                      {percent !== null && ` · ${percent}%`}
-                    </span>
-                    {p.passed === null ? (
-                      <span className="text-body-sm text-muted-foreground">
-                        {p.state === 'not_started' ? '—' : t('resultPending')}
-                      </span>
-                    ) : (
-                      <Badge
-                        variant="outline"
-                        className={
-                          p.passed
-                            ? 'border-emerald-500/40 text-emerald-700 dark:text-emerald-400'
-                            : 'border-destructive/40 text-destructive'
-                        }
-                      >
-                        {p.passed ? t('resultPass') : t('resultFail')}
-                      </Badge>
-                    )}
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
-          <div className="mt-4 hidden overflow-x-auto md:block">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t('monEmployee')}</TableHead>
-                  <TableHead>{t('monDepartment')}</TableHead>
-                  <TableHead>{t('monStarted')}</TableHead>
-                  <TableHead>{t('monSubmittedCol')}</TableHead>
-                  <TableHead>{t('monStatus')}</TableHead>
-                  <TableHead className="text-right">{t('monScore')}</TableHead>
-                  <TableHead className="text-right">{t('monPercent')}</TableHead>
-                  <TableHead>{t('monResult')}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {participants.map((p) => {
-                  const percent =
-                    p.score !== null && p.maxScore
-                      ? Math.round((p.score / p.maxScore) * 100)
-                      : null
-
-                  return (
-                    <TableRow key={p.employeeId}>
-                      <TableCell className="font-medium">{p.fullName || p.email}</TableCell>
-                      <TableCell className="text-muted-foreground">{p.department ?? '—'}</TableCell>
-                      <TableCell className="tabular-nums text-muted-foreground">
-                        {when(p.startedAt)}
-                      </TableCell>
-                      <TableCell className="tabular-nums text-muted-foreground">
-                        {when(p.submittedAt)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={cn(STATE_TONE[p.state])}>
-                          {t(
-                            (p.state === 'not_started' ? 'pNotStarted'
-                              : p.state === 'in_progress' ? 'pInProgress'
-                              : p.state === 'submitted' ? 'pSubmitted'
-                              : p.state === 'expired' ? 'pExpired'
-                              : 'pReleased') as 'pNotStarted',
-                          )}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {p.score !== null ? `${p.score} / ${p.maxScore ?? 0}` : '—'}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {percent !== null ? `${percent}%` : '—'}
-                      </TableCell>
-                      <TableCell>
-                        {p.passed === null ? (
-                          <span className="text-body-sm text-muted-foreground">
-                            {p.state === 'not_started' ? '—' : t('resultPending')}
-                          </span>
-                        ) : (
-                          <Badge
-                            variant="outline"
-                            className={
-                              p.passed
-                                ? 'border-emerald-500/40 text-emerald-700 dark:text-emerald-400'
-                                : 'border-destructive/40 text-destructive'
-                            }
-                          >
-                            {p.passed ? t('resultPass') : t('resultFail')}
-                          </Badge>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
+          <div className="mt-4">
+            <ParticipantTable rows={participants} />
           </div>
-          </>
         )}
       </section>
     </div>
@@ -244,7 +126,11 @@ function Rate({ label, percent }: { label: string; percent: number }) {
     <div className="rounded-lg border p-4">
       <dt className="text-label-caps text-muted-foreground">{label}</dt>
       <dd className="mt-2 flex items-center gap-3">
-        <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+        <div
+          role="img"
+          aria-label={`${label}: ${percent}%`}
+          className="h-2 flex-1 overflow-hidden rounded-full bg-muted"
+        >
           <div className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
         </div>
         <span className="text-title-md tabular-nums">{percent}%</span>

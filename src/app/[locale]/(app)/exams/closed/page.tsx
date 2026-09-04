@@ -1,6 +1,6 @@
 import { requirePermission } from '@/lib/auth/guards'
 import { ExamSection } from '@/components/exams/exam-section'
-import { loadExamsByState, withParticipation } from '@/server/exams/live'
+import { loadExamsByState, withParticipation, withScoreSpread } from '@/server/exams/live'
 
 /**
  * /exams/closed — finished, and the record of what happened.
@@ -28,7 +28,7 @@ export default async function ClosedExamsPage() {
     closed: buckets.closed.length,
   }
 
-  const rows = await withParticipation(buckets.closed)
+  const rows = await withScoreSpread(await withParticipation(buckets.closed))
 
   return <ExamSection current="closed" rows={rows} counts={counts} />
 }

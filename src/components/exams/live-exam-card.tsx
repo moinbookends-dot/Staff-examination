@@ -44,6 +44,11 @@ export function LiveExamCard({
     notStarted: string
     ofEmployees: string
     noAudience: string
+    passed: string
+    failed: string
+    avg: string
+    best: string
+    worst: string
   }
   formatDate: (iso: string) => string
 }) {
@@ -149,6 +154,43 @@ export function LiveExamCard({
                 <span className="tabular-nums text-foreground">{exam.notStarted}</span>
               </span>
             </div>
+
+            {/*
+              Outcomes appear only once something was graded — a row of zeros
+              on a fresh exam would read as "everyone failed". Numbers come
+              from exam_score_spread(), i.e. the same analytics_attempts that
+              /reports reads, so the two screens cannot disagree.
+            */}
+            {exam.gradedN > 0 && (
+              <div className="flex flex-wrap gap-x-4 gap-y-1 border-t pt-3 text-body-sm text-muted-foreground">
+                <span>
+                  {labels.passed}{' '}
+                  <span className="tabular-nums text-foreground">{exam.passedN}</span>
+                </span>
+                <span>
+                  {labels.failed}{' '}
+                  <span className="tabular-nums text-foreground">{exam.failedN}</span>
+                </span>
+                {exam.avgPercent !== null && (
+                  <span>
+                    {labels.avg}{' '}
+                    <span className="tabular-nums text-foreground">{exam.avgPercent}%</span>
+                  </span>
+                )}
+                {exam.bestPercent !== null && (
+                  <span>
+                    {labels.best}{' '}
+                    <span className="tabular-nums text-foreground">{exam.bestPercent}%</span>
+                  </span>
+                )}
+                {exam.worstPercent !== null && (
+                  <span>
+                    {labels.worst}{' '}
+                    <span className="tabular-nums text-foreground">{exam.worstPercent}%</span>
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         )}
       </CardContent>

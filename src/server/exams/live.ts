@@ -25,6 +25,13 @@ import { examState, percentOf, type ExamState, type StoredExamStatus } from '@/l
  */
 
 export interface LiveExamRow {
+  /** Filled by withScoreSpread() for the live/closed cards; zeroed otherwise. */
+  gradedN: number
+  passedN: number
+  failedN: number
+  avgPercent: number | null
+  bestPercent: number | null
+  worstPercent: number | null
   id: string
   title: string
   paperNo: number | null
@@ -146,6 +153,8 @@ export async function loadExamsByState(): Promise<Record<ExamState, LiveExamRow[
       resultsRelease: row.results_release,
       eligible: 0, notStarted: 0, inProgress: 0, submitted: 0, released: 0,
       attemptPercent: 0, submittedPercent: 0,
+      gradedN: 0, passedN: 0, failedN: 0,
+      avgPercent: null, bestPercent: null, worstPercent: null,
     })
   }
 
@@ -198,6 +207,62 @@ export async function withParticipation(rows: LiveExamRow[]): Promise<LiveExamRo
   )
 }
 
+/**
+ * Fill in pass/fail and the score range for a set of exams.
+ *
+ * Follows withParticipation's pattern exactly, including the trade it
+ * documents: one RPC per exam, acceptable because the live list is short.
+ * Callers WITHOUT attempts.read_team/read_all get the rows back unchanged —
+ * the spread is other people's outcomes and exam_score_spread refuses them,
+ * which is the database's call to make, not this file's.
+ */
+/** One exam's spread, for the monitoring header. Null when refused or empty. */
+export async function loadScoreSpread(examId: string): Promise<{
+  gradedN: number; passedN: number; failedN: number
+  avgPercent: number | null; bestPercent: number | null; worstPercent: number | null
+} | null> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('exam_score_spread', { p_exam_id: examId })
+  const sp = (data as unknown as Array<{
+    graded_n: number; passed_n: number; failed_n: number
+    avg_percent: number | null; best_percent: number | null; worst_percent: number | null
+  }> | null)?.[0]
+  if (error || !sp) return null
+  return {
+    gradedN: sp.graded_n,
+    passedN: sp.passed_n,
+    failedN: sp.failed_n,
+    avgPercent: sp.avg_percent === null ? null : Number(sp.avg_percent),
+    bestPercent: sp.best_percent === null ? null : Number(sp.best_percent),
+    worstPercent: sp.worst_percent === null ? null : Number(sp.worst_percent),
+  }
+}
+
+export async function withScoreSpread(rows: LiveExamRow[]): Promise<LiveExamRow[]> {
+  const supabase = await createClient()
+
+  return Promise.all(
+    rows.map(async (row) => {
+      const { data, error } = await supabase.rpc('exam_score_spread', { p_exam_id: row.id })
+      const sp = (data as unknown as Array<{
+        graded_n: number; passed_n: number; failed_n: number
+        avg_percent: number | null; best_percent: number | null; worst_percent: number | null
+      }> | null)?.[0]
+      if (error || !sp) return row
+
+      return {
+        ...row,
+        gradedN: sp.graded_n,
+        passedN: sp.passed_n,
+        failedN: sp.failed_n,
+        avgPercent: sp.avg_percent === null ? null : Number(sp.avg_percent),
+        bestPercent: sp.best_percent === null ? null : Number(sp.best_percent),
+        worstPercent: sp.worst_percent === null ? null : Number(sp.worst_percent),
+      }
+    }),
+  )
+}
+
 interface ParticipationRow {
   eligible: number
   not_started: number
@@ -211,9 +276,18 @@ export interface ParticipantRow {
   fullName: string | null
   email: string
   department: string | null
+  outlet: string | null
   startedAt: string | null
   submittedAt: string | null
+  expiresAt: string | null
   state: 'not_started' | 'in_progress' | 'submitted' | 'released' | 'expired'
+  /** The clock, a tab switch or the sweeper closed it — not a Submit press. */
+  autoSubmitted: boolean
+  attemptId: string | null
+  attemptNo: number | null
+  answeredN: number
+  questionN: number
+  lastActivity: string | null
   score: number | null
   maxScore: number | null
   passed: boolean | null
@@ -245,9 +319,17 @@ export async function loadParticipants(examId: string): Promise<ParticipantRow[]
     full_name: string | null
     email: string
     department: string | null
+    outlet: string | null
     started_at: string | null
     submitted_at: string | null
+    expires_at: string | null
     state: ParticipantRow['state']
+    auto_submitted: boolean
+    attempt_id: string | null
+    attempt_no: number | null
+    answered_n: number
+    question_n: number
+    last_activity: string | null
     score: number | null
     max_score: number | null
     passed: boolean | null
@@ -257,9 +339,17 @@ export async function loadParticipants(examId: string): Promise<ParticipantRow[]
     fullName: r.full_name,
     email: r.email,
     department: r.department,
+    outlet: r.outlet,
     startedAt: r.started_at,
     submittedAt: r.submitted_at,
+    expiresAt: r.expires_at,
     state: r.state,
+    autoSubmitted: r.auto_submitted,
+    attemptId: r.attempt_id,
+    attemptNo: r.attempt_no,
+    answeredN: r.answered_n,
+    questionN: r.question_n,
+    lastActivity: r.last_activity,
     score: r.score === null ? null : Number(r.score),
     maxScore: r.max_score === null ? null : Number(r.max_score),
     passed: r.passed,

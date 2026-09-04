@@ -1976,6 +1976,10 @@ export type Database = {
         Args: Record<string, unknown>
         Returns: unknown
       }
+      "candidate_attempt_history": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
       "candidate_category_stats": {
         Args: Record<string, unknown>
         Returns: unknown
@@ -2053,6 +2057,10 @@ export type Database = {
         Returns: unknown
       }
       "exam_rule_counts": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "exam_score_spread": {
         Args: Record<string, unknown>
         Returns: unknown
       }
@@ -2137,6 +2145,18 @@ export type Database = {
         Returns: unknown
       }
       "me_status": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "monitor_attempt_header": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "monitor_attempt_reach": {
+        Args: Record<string, unknown>
+        Returns: unknown
+      }
+      "monitor_attempt_review": {
         Args: Record<string, unknown>
         Returns: unknown
       }

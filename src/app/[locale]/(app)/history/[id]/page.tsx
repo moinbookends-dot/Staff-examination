@@ -5,8 +5,9 @@ import { setExamStatus } from '@/server/actions/exams'
 import { ExamAssignments } from '@/components/exams/exam-assignments'
 import { ExamLifecycle } from '@/components/exams/exam-lifecycle'
 import { ExamMonitoring } from '@/components/exams/exam-monitoring'
+import { LiveRefresh } from '@/components/exams/live-refresh'
 import { ExamStateBadge } from '@/components/exams/exam-state-badge'
-import { loadParticipation, loadParticipants } from '@/server/exams/live'
+import { loadParticipation, loadParticipants, loadScoreSpread } from '@/server/exams/live'
 import {
   listOutlets, listDepartments, listBrands, listAssignableRoles, listTeamMembers,
 } from '@/server/actions/directory'
@@ -91,7 +92,7 @@ export default async function PaperDetailPage({
   const canMonitor = can(claims, 'attempts.read_all') || can(claims, 'attempts.read_team')
   const examId = paper.liveExam?.id ?? null
 
-  const [directory, participation, participants, reviewQuestions, editable] = await Promise.all([
+  const [directory, participation, participants, spread, reviewQuestions, editable] = await Promise.all([
     canAssign
       ? Promise.all([listOutlets(), listDepartments(), listBrands(), listAssignableRoles(), listTeamMembers()])
           .then(([outlets, departments, brands, roles, people]) => ({
@@ -100,6 +101,9 @@ export default async function PaperDetailPage({
       : Promise.resolve(undefined),
     examId ? loadParticipation(examId) : Promise.resolve(null),
     examId && canMonitor ? loadParticipants(examId) : Promise.resolve([]),
+    // Same gate as the table: exam_score_spread refuses anyone below
+    // attempts.read_team, so it is not even asked for.
+    examId && canMonitor ? loadScoreSpread(examId) : Promise.resolve(null),
     /*
      * Added to the EXISTING Promise.all rather than awaited after it. Both are
      * independent of the three above, so they ride along in the same round-trip
@@ -496,9 +500,13 @@ export default async function PaperDetailPage({
       {/* Below publishing, because until an exam exists there is nothing to
           report, and above downloads, because once one does this is the reason
           somebody opened the page. */}
+      {/* Live numbers stay live: mounted only while the exam is running. */}
+      {paper.liveExam?.state === 'live' && <LiveRefresh />}
+
       {participation && (
         <ExamMonitoring
           participation={participation}
+          spread={spread}
           participants={participants}
           canSeeTable={canMonitor}
         />

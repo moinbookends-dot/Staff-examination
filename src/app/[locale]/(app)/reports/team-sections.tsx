@@ -1,4 +1,5 @@
 import { getTranslations, getFormatter } from 'next-intl/server'
+import { Link } from '@/lib/i18n/navigation'
 import { getTeamStats, getExamStats, getQuestionStats } from '@/server/actions/reports'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -82,7 +83,12 @@ export async function TeamSections({ canExport }: { canExport: boolean }) {
               {team.map((m) => (
                 <li key={m.candidate_id} className="space-y-2 px-4 py-3">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="min-w-0 truncate font-medium">{m.full_name}</p>
+                    <Link
+                      href={`/team/${m.candidate_id}`}
+                      className="min-w-0 truncate font-medium text-primary hover:underline"
+                    >
+                      {m.full_name}
+                    </Link>
                     {m.last_attempt_at ? (
                       <span className="shrink-0 text-xs text-muted-foreground">
                         {format.dateTime(new Date(m.last_attempt_at), { dateStyle: 'medium' })}
@@ -117,7 +123,14 @@ export async function TeamSections({ canExport }: { canExport: boolean }) {
               <TableBody>
                 {team.map((m) => (
                   <TableRow key={m.candidate_id}>
-                    <TableCell className="font-medium">{m.full_name}</TableCell>
+                    <TableCell>
+                      <Link
+                        href={`/team/${m.candidate_id}`}
+                        className="font-medium text-primary hover:underline"
+                      >
+                        {m.full_name}
+                      </Link>
+                    </TableCell>
                     <TableCell className="text-right tabular-nums">{m.attempts_n}</TableCell>
                     <TableCell className="text-right tabular-nums">
                       {/* Null, not zero — they have not sat anything, which is
