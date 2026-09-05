@@ -350,10 +350,10 @@ try {
     p_duration_minutes: 45,
     p_opens_at: null,
     p_closes_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
-    // 3, not 1: the leave-policy sections each need a fresh attempt after
-    // the voluntary submit closes the first — one for the hidden-page
-    // violation, one for the focus-loss violation.
-    p_max_attempts: 3,
+    // 4, not 1: the leave-policy sections each need a fresh attempt after
+    // the voluntary submit closes the first — hidden page, focus loss, and
+    // the confirmed back-exit.
+    p_max_attempts: 4,
     p_pass_mark_percent: 60,
     p_instructions: null,
     p_results_release: 'immediate',
@@ -798,6 +798,35 @@ try {
     String(focusClosed[0].submit_reason),
   )
   await evaluate(page, `(() => { delete document.hasFocus; window.dispatchEvent(new Event('focus')); return 'restored' })()`)
+
+  // ── 8c. The polite exit is still an exit ──────────────────────────────────
+  //
+  // Back raises the dialog (section 5 pins that pressing back alone does NOT
+  // submit). CONFIRMING it is leaving, and leaving is cheating — the same
+  // verdict as a hidden page. Before this, confirming navigated away with the
+  // attempt still open: an escape hatch the dialog's own wording denied.
+  console.log('\n── Confirmed back-exit is cheating ─────────────────────')
+  await page.send('Emulation.setFocusEmulationEnabled', { enabled: false })
+  const fourth = await rpc(employee, 'start_attempt', { p_exam_id: examId })
+  if (!fourth.ok) throw new Error(`fourth start_attempt failed: ${JSON.stringify(fourth.error)}`)
+  const fourthId = fourth.data[0].attempt_id
+  await goto(page, `${APP}/en/attempt/${fourthId}`)
+  await sleep(1500)
+
+  await evaluate(page, `history.back(); 'ok'`)
+  await sleep(900)
+  check('back raises the dialog again', (await evaluate(page, clickByText('Leave exam'))) === 'clicked')
+  await sleep(2500)
+  const { rows: leftRows } = await db.query(
+    `select status, submit_reason from public.attempts where id = $1`,
+    [fourthId],
+  )
+  check('confirming the exit closes the attempt', leftRows[0].status !== 'in_progress', leftRows[0].status)
+  check(
+    "the record says why — submit_reason 'tab_switch'",
+    leftRows[0].submit_reason === 'tab_switch',
+    String(leftRows[0].submit_reason),
+  )
 
   // ── What cannot be tested here ────────────────────────────────────────────
   console.log('\n── Not testable in this environment ────────────────────')

@@ -138,13 +138,13 @@ export async function exitFullscreen(): Promise<void> {
  * │ styled or replaced. Fine — the answers are in the outbox either way.      │
  * │                                                                           │
  * │ Going BACK is ours. A history entry is pushed on mount so the first back  │
- * │ press lands on it instead of leaving; we then ask, and only leave if the  │
- * │ candidate says so. Without the guard, one careless swipe on a phone       │
- * │ abandons a timed exam with no prompt at all.                              │
+ * │ press lands on it instead of leaving; we then ask. Without the guard, one │
+ * │ careless swipe on a phone abandons a timed exam with no prompt at all.    │
  * │                                                                           │
- * │ Neither ever submits. Leaving is not finishing, the timer keeps running   │
- * │ server-side, and deciding otherwise for somebody would be worse than any  │
- * │ accident this prevents.                                                   │
+ * │ The QUESTION never submits — a mis-swipe answered with Stay costs         │
+ * │ nothing. CONFIRMING does: leaving is cheating under the same policy as a  │
+ * │ hidden page, and the runner's dialog closes the paper with that verdict   │
+ * │ rather than opening an exit the other signals all lock.                   │
  * └───────────────────────────────────────────────────────────────────────────┘
  *
  * @param active While false — already submitted, or timed out — nothing is

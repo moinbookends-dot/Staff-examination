@@ -887,13 +887,14 @@ export function AttemptRunner({
         ── Leaving ──────────────────────────────────────────────────────────
         Raised by the back button, never by the timer.
 
-        It does NOT submit. Leaving is not finishing: the attempt stays open,
-        the deadline keeps running on the server, and the answers are already
-        durable. Submitting on somebody's behalf because they mis-swiped would
-        be a worse outcome than the accident it prevents.
-
-        The wording says the timer keeps running, because that is the part a
-        candidate cannot see and would otherwise assume is paused.
+        A mis-swipe costs nothing: Stay closes the dialog and the paper is
+        exactly as it was. But CONFIRMING is leaving, and leaving is cheating
+        — the same policy as a hidden page or a stolen window, applied to the
+        one exit that politely asks first. It used to navigate away with the
+        attempt still open, which was both an escape hatch (leave, look
+        something up, come back and resume) and a lie in the dialog's own
+        wording, which already promised submission. The result screen appears
+        in place; there is nowhere to go back TO once the paper is closed.
       */}
       <AlertDialog open={exitOpen} onOpenChange={setExitOpen}>
         <AlertDialogContent>
@@ -905,10 +906,8 @@ export function AttemptRunner({
             <AlertDialogCancel>{t('leaveStay')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                // The guard pushed a sentinel entry to catch this press; going
-                // back twice steps over it and off the exam.
                 setExitOpen(false)
-                window.history.go(-2)
+                void doSubmit('tab_switch')
               }}
             >
               {t('leaveConfirm')}
