@@ -94,14 +94,26 @@ describeDb('RLS — organisation & identity', () => {
   })
 
   describe('anonymous visitors', () => {
-    it('see no outlets or departments', async () => {
-      // The registration form needs these dropdowns, but they are served by a
-      // server action through the admin client. Opening an anon read policy to
-      // serve two dropdowns would be a permanent hole for a temporary need.
-      const rows = await asAnon(db, async (c) =>
-        (await c.query('select id from public.outlets')).rows,
-      )
-      expect(rows).toHaveLength(0)
+    it('see exactly the live outlets and departments — the registration dropdowns', async () => {
+      /*
+       * REVERSED, deliberately, when registration dropped the service key
+       * (0081/0082): the signup form's outlet and department dropdowns are
+       * now served by the anon read policies outlets_read_for_registration
+       * and departments_read_for_registration. What this pins is the SCOPE:
+       * an anonymous visitor sees active, undeleted rows and nothing more —
+       * never a retired outlet, never a deleted department.
+       */
+      const truth = await asOwner(db, async (c) => ({
+        outlets: (await c.query(
+          `select count(*)::int n from public.outlets where deleted_at is null and is_active`)).rows[0].n,
+        departments: (await c.query(
+          `select count(*)::int n from public.departments where deleted_at is null`)).rows[0].n,
+      }))
+      const anonSees = await asAnon(db, async (c) => ({
+        outlets: (await c.query('select id from public.outlets')).rows.length,
+        departments: (await c.query('select id from public.departments')).rows.length,
+      }))
+      expect(anonSees).toEqual(truth)
     })
 
     it('see no profiles', async () => {

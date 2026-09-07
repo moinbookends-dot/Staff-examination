@@ -440,6 +440,7 @@ describeDb('attempt lifecycle', () => {
         const { attempt } = await startAndAnswer(() => 'a')
         const r = await submit(attempt, 'focus_loss')
         expect(r.status).not.toBe('in_progress')
+        await actAsOwner()
         const { rows } = await db.query(
           'select submit_reason from public.attempts where id = $1', [attempt])
         expect(rows[0].submit_reason).toBe('focus_loss')
@@ -454,6 +455,7 @@ describeDb('attempt lifecycle', () => {
         // The candidate returns and presses Submit — or replays the RPC by
         // hand. The recorded reason must be the first closure's, permanently.
         await submit(attempt, 'user')
+        await actAsOwner()
         const { rows } = await db.query(
           'select submit_reason from public.attempts where id = $1', [attempt])
         expect(rows[0].submit_reason).toBe('tab_switch')
