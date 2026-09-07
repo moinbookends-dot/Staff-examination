@@ -374,21 +374,28 @@ try {
     }
     await rpc(employee, 'submit_attempt', { p_attempt_id: aid, p_reason: 'user' })
 
-    // Short answers always route to a human, so nothing is releasable yet.
+    /*
+     * ┌─────────────────────────────────────────────────────────────────────┐
+     * │ 0088 CHANGED THIS SECTION'S PREMISE. Bank papers carry only MCQs    │
+     * │ and short answers, and short answers now self-grade against their   │
+     * │ key — nothing on a bank paper routes to a human any more. So the    │
+     * │ release policy is exercised on a FULLY AUTO-GRADED attempt:         │
+     * │ 'immediate' publishes at submission, 'on_close' holds the grade     │
+     * │ until the exam closes. The old leg that faked an evaluator with a   │
+     * │ raw UPDATE died with the premise.                                   │
+     * └─────────────────────────────────────────────────────────────────────┘
+     */
     await rpc(chef, 'release_due_results')
     let st = (await db.query(`select status from public.attempts where id=$1`, [aid])).rows[0].status
-    check(`${policy}: nothing released while marking is outstanding`, st === 'evaluating', st)
-
-    // Stand in for the evaluator finishing.
-    await db.query(`update public.attempts set status='evaluated' where id=$1`, [aid])
-
-    await rpc(chef, 'release_due_results')
-    st = (await db.query(`select status from public.attempts where id=$1`, [aid])).rows[0].status
 
     if (policy === 'immediate') {
-      check('immediate: released as soon as marking is done', st === 'published', st)
+      check('immediate: auto-graded and released at submission', st === 'published', st)
     } else {
-      check('on_close: still held while the exam is open', st === 'evaluated', st)
+      check(
+        'on_close: graded but held while the exam is open',
+        st !== 'published' && st !== 'in_progress',
+        st,
+      )
 
       await db.query(`update public.exams set closes_at = now() - interval '1 minute' where id=$1`, [examId])
       await rpc(chef, 'release_due_results')
@@ -458,27 +465,22 @@ try {
     }
 
     /*
-     * `/en/exams/${monId}` used to be in that matrix and is not any more.
-     *
-     * There has never been a per-exam page under this tree — monitoring is a
-     * row on the three section pages, expanded from exam_participation() — and
-     * the consolidation removed /exams/[id] along with the rest of the
-     * authoring area. The chef row expected ALLOW and would now fail on a 404,
-     * which reads as a permission bug rather than a deleted route.
-     *
-     * Asserted the other way instead, because a DENY expectation is satisfied
-     * by a 404 and would have gone on "passing" against a page that no longer
-     * exists — for everyone, including the chef.
+     * `/en/exams/${monId}` came BACK: the live-monitoring rounds built the
+     * per-exam monitoring page there (participants, tabs, tiles), reachable
+     * from every live-exam card. A chef holds exams.read + attempts.read_team
+     * and must be let in — this assertion once pinned the route's absence,
+     * from the era after the authoring area was deleted and before the
+     * monitoring page reclaimed the address.
      */
-    const gone = await fetch(`${APP}/en/exams/${monId}`, {
+    const monPage = await fetch(`${APP}/en/exams/${monId}`, {
       headers: { cookie: chef.cookie },
       redirect: 'manual',
     })
-    const goneBody = await gone.text()
+    const monPageBody = await monPage.text()
     check(
-      'there is no per-exam admin page left behind',
-      verdictOf(gone.status, goneBody) === 'NOTFOUND',
-      `got ${verdictOf(gone.status, goneBody)}`,
+      'the per-exam monitoring page admits the chef',
+      verdictOf(monPage.status, monPageBody) === 'ALLOW',
+      `got ${verdictOf(monPage.status, monPageBody)}`,
     )
 
     for (const [path, wanted] of Object.entries(expect)) {

@@ -221,15 +221,34 @@ try {
   // ── 5. Approved access ─────────────────────────────────────────────────────
   console.log('\n5. Approved user access')
 
+  /*
+   * ┌─────────────────────────────────────────────────────────────────────────┐
+   * │ COUNTED AGAINST THE DATABASE, NOT AGAINST THE 2026-07 SEED.             │
+   * │                                                                         │
+   * │ This pinned "3 outlets / 5 departments" — the numbers the seed shipped  │
+   * │ with — and the live org has since been edited on purpose: Prep was      │
+   * │ retired and every department but Cook removed. A check that fails when  │
+   * │ the owner runs their own product is testing the wrong thing; what RLS   │
+   * │ must guarantee is that an approved user sees exactly the LIVE rows.     │
+   * └─────────────────────────────────────────────────────────────────────────┘
+   */
+  const { rows: [{ n: outletTruth }] } = await db.query(
+    `select count(*)::int n from public.outlets where deleted_at is null`)
   const outletsAfter = await asUser(refreshedSession.access_token, 'outlets?select=id,name')
   check(
-    Array.isArray(outletsAfter.body) && outletsAfter.body.length === 3,
-    `approved user sees all 3 outlets`,
-    `approved user saw ${outletsAfter.body?.length} outlets`,
+    Array.isArray(outletsAfter.body) && outletsAfter.body.length === outletTruth,
+    `approved user sees all ${outletTruth} live outlets`,
+    `approved user saw ${outletsAfter.body?.length} of ${outletTruth} outlets`,
   )
 
+  const { rows: [{ n: deptTruth }] } = await db.query(
+    `select count(*)::int n from public.departments where deleted_at is null`)
   const depts = await asUser(refreshedSession.access_token, 'departments?select=id,name')
-  check(Array.isArray(depts.body) && depts.body.length === 5, 'approved user sees 5 departments', `saw ${depts.body?.length}`)
+  check(
+    Array.isArray(depts.body) && depts.body.length === deptTruth,
+    `approved user sees all ${deptTruth} live departments`,
+    `saw ${depts.body?.length} of ${deptTruth}`,
+  )
 
   // Still must not read colleagues.
   const colleague = await asUser(refreshedSession.access_token, `profiles?select=id&id=eq.${chef.id}`)

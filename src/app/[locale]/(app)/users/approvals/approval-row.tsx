@@ -1,7 +1,7 @@
 'use client'
 
 import { useId, useState, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/i18n/navigation'
 import { approveRegistration, rejectRegistration, type PendingRegistration } from '@/server/actions/users'
 import type { OrgOption } from '@/server/actions/org'
 import { Button } from '@/components/ui/button'

@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { useTranslations } from 'next-intl'
 import {
   Award,
+  ChartColumn,
   MenuIcon,
   UsersRound,
   ClipboardList,
@@ -54,6 +55,7 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   evaluate: PenLine,
   myExams: ClipboardList,
   results: Award,
+  reports: ChartColumn,
   settings: Settings,
 }
 
@@ -89,7 +91,7 @@ export function SidebarNav({ items }: { items: NavItem[] }) {
   const isActive = useIsActive()
 
   return (
-    <nav className="flex flex-col gap-1" aria-label="Main">
+    <nav className="flex flex-col gap-1" aria-label={t('mainLabel')}>
       {items.map((item) => {
         const active = isActive(item)
         const Icon = ICONS[item.icon]
@@ -150,7 +152,7 @@ export function MobileTabBar({ items }: { items: NavItem[] }) {
   const isActive = useIsActive()
 
   return (
-    <nav className="flex items-stretch" aria-label="Main">
+    <nav className="flex items-stretch" aria-label={t('mainLabel')}>
       {items.map((item) => {
         const active = isActive(item)
         const Icon = ICONS[item.icon]

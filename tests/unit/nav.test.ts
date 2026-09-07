@@ -279,13 +279,15 @@ describe('the mobile tab bar stays within its design budget', () => {
 })
 
 describe('navigation for the delivery workflow', () => {
-  it('still offers no route to the parts that remain unbuilt', () => {
+  it('still offers no route to the verify queue', () => {
     const all = [...hrefs(visibleNavItems(SUPER_ADMIN)), ...hrefs(visibleNavItems(ADMIN))]
     // Paper-backed exams publish with verification_mode 'auto', so nothing
-    // ever reaches the verify queue; analytics is separate work.
-    for (const gone of ['/verify', '/reports']) {
-      expect(all).not.toContain(gone)
-    }
+    // ever reaches the verify queue. /reports left this list when its entry
+    // was restored — the page had been fully built for two milestones while
+    // reachable only by typing the URL, which its own header comment called
+    // a nav entry that ought to exist.
+    expect(all).not.toContain('/verify')
+    expect(all).toContain('/reports')
   })
 
   it('gives an Administrator the two screens that finish a sitting', () => {
@@ -305,9 +307,16 @@ describe('navigation for the delivery workflow', () => {
     expect(admin).not.toContain('/my-exams')
   })
 
-  it('gives an Employee exactly the three screens they can use', () => {
+  it('gives an Employee exactly the four screens they can use', () => {
     const employee = claimsFor('employee')
-    expect(hrefs(visibleNavItems(employee))).toEqual(['/dashboard', '/my-exams', '/results'])
+    // Reports is theirs through reports.read_own: analytics_scope() shows an
+    // employee their own record and nobody else's.
+    expect(hrefs(visibleNavItems(employee))).toEqual([
+      '/dashboard',
+      '/my-exams',
+      '/results',
+      '/reports',
+    ])
   })
 
   /*

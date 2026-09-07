@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/i18n/navigation'
 import { useTranslations } from 'next-intl'
 import type { EvaluationItem } from '@/server/actions/evaluation'
 import { saveEvaluation, completeEvaluation } from '@/server/actions/evaluation'

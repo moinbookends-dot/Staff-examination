@@ -298,12 +298,25 @@ try {
   const submitted = await rpc(employee, 'submit_attempt', { p_attempt_id: attemptId, p_reason: 'user' })
   check('submit succeeds', submitted.ok, JSON.stringify(submitted.error ?? '').slice(0, 140))
 
+  /*
+   * ┌─────────────────────────────────────────────────────────────────────────┐
+   * │ 0088 CHANGED THESE ASSERTIONS' PREMISE. Short answers grade themselves  │
+   * │ against their key now, so a bank paper of MCQs + shorts finishes with   │
+   * │ no human in the loop: a status past 'evaluating', a real verdict, and   │
+   * │ every answer 'graded'. The old expectations pinned the pre-0088 flow    │
+   * │ where any text_short parked the attempt in the marking queue.          │
+   * └─────────────────────────────────────────────────────────────────────────┘
+   */
   const [att] = (await db.query(
     `select status, score, max_score, passed from public.attempts where id = $1`, [attemptId])).rows
-  check('it went to a human, not straight to a result', att.status === 'evaluating', `status=${att.status}`)
+  check(
+    'a machine-markable paper never queues for a human',
+    att.status !== 'evaluating' && att.status !== 'in_progress',
+    `status=${att.status}`,
+  )
   check('the MCQs scored exactly what they should', Number(att.score) === expected, `got ${att.score}, expected ${expected}`)
   check('max_score is the whole paper', Number(att.max_score) === paper.marks)
-  check('no pass/fail verdict before a human finishes', att.passed === null)
+  check('the verdict is recorded at grading', att.passed !== null, `passed=${att.passed}`)
 
   const byFormat = (await db.query(
     `select aq.snapshot ->> 'response_format' fmt, aa.auto_grade_status st, count(*)::int n
@@ -314,8 +327,8 @@ try {
     [attemptId],
   )).rows
   check(
-    'short answers wait for a human and MCQs do not',
-    byFormat.every((g) => (g.fmt === 'text_short') === (g.st === 'not_applicable')),
+    'every format self-grades — shorts included since 0088',
+    byFormat.every((g) => g.st === 'graded'),
     byFormat.map((g) => `${g.fmt}/${g.st}=${g.n}`).join(' '),
   )
 

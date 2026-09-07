@@ -366,6 +366,8 @@ export async function loadQuestionPage(options: {
   pageSize?: number
   /** Show one brand's bank only. A brand-pinned Editor's pin wins over this. */
   brandId?: string | null
+  /** Show one difficulty only. Null/absent means every level. */
+  difficulty?: Difficulty | null
 } = {}): Promise<BankQuestionPage> {
   const supabase = await createClient()
   const claims = await getAppClaims()
@@ -386,6 +388,9 @@ export async function loadQuestionPage(options: {
     })
     .is('deleted_at', null)
   if (brandId) query = query.eq('brand_id', brandId)
+  // Same shape as the brand filter: applied to the SELECT with count:'exact',
+  // so the page count and the rows can never disagree about the slice.
+  if (options.difficulty) query = query.eq('difficulty', options.difficulty)
 
   const { data, count } = await query
     .order('created_at', { ascending: false })

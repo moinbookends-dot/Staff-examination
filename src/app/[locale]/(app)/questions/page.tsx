@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { buttonVariants } from '@/components/ui/button'
 import { QuestionList } from '@/components/bank/question-list'
 import { loadFormOptions, loadQuestionPage } from '@/server/papers/bank-data'
+import { DIFFICULTIES, type Difficulty } from '@/lib/bank/vocabulary'
 import { cn } from '@/lib/utils'
 
 /**
@@ -56,7 +57,7 @@ import { cn } from '@/lib/utils'
 export default async function QuestionBankPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; brand?: string }>
+  searchParams: Promise<{ page?: string; brand?: string; difficulty?: string }>
 }) {
   await requireApproved()
 
@@ -66,7 +67,7 @@ export default async function QuestionBankPage({
   }
 
   const t = await getTranslations('bank')
-  const { page, brand } = await searchParams
+  const { page, brand, difficulty } = await searchParams
 
   // Number('abc') is NaN and Number('') is 0, so both fall back to page 1
   // rather than reaching the loader as a nonsense range.
@@ -79,8 +80,17 @@ export default async function QuestionBankPage({
   // brand on top of whatever survives here.
   const options = await loadFormOptions()
   const activeBrandId = options.brands.some((b) => b.id === brand) ? brand! : null
+  // Same rule as the brand: the vocabulary decides what a difficulty is, and
+  // junk in the URL silently reads as "all levels" rather than as an error.
+  const activeDifficulty = (DIFFICULTIES as readonly string[]).includes(difficulty ?? '')
+    ? (difficulty as Difficulty)
+    : null
 
-  const questions = await loadQuestionPage({ page: current, brandId: activeBrandId })
+  const questions = await loadQuestionPage({
+    page: current,
+    brandId: activeBrandId,
+    difficulty: activeDifficulty,
+  })
 
   const canWrite = canEditQuestions(claims)
   const canExport = can(claims, 'bank.export')
@@ -93,9 +103,26 @@ export default async function QuestionBankPage({
       ? claims.brand_id
       : (activeBrandId ?? options.brands[0]?.id)) ?? null
 
-  // Filter links keep the brand in the query string so pagination, reload and
-  // a shared URL all land on the same slice of the bank.
-  const brandQuery = activeBrandId ? `&brand=${encodeURIComponent(activeBrandId)}` : ''
+  /*
+   * Filter links carry EVERY active filter, so switching one never silently
+   * drops the other, and pagination, reload and a shared URL all land on the
+   * same slice of the bank. `undefined` means "keep the current value";
+   * `null` means "clear it".
+   */
+  const bankHref = (over: {
+    brand?: string | null
+    difficulty?: string | null
+    page?: number
+  } = {}) => {
+    const params = new URLSearchParams()
+    if (over.page && over.page > 1) params.set('page', String(over.page))
+    const b = over.brand === undefined ? activeBrandId : over.brand
+    if (b) params.set('brand', b)
+    const d = over.difficulty === undefined ? activeDifficulty : over.difficulty
+    if (d) params.set('difficulty', d)
+    const s = params.toString()
+    return s ? `/questions?${s}` : '/questions'
+  }
   const showsBrandFilter = !claims.brand_id && options.brands.length > 1
   const lastPage = Math.max(1, Math.ceil(questions.total / questions.pageSize))
 
@@ -173,32 +200,70 @@ export default async function QuestionBankPage({
         />
       ) : (
         <>
-          {showsBrandFilter && (
-            <nav className="flex flex-wrap gap-2" aria-label={t('brandFilterLabel')}>
+          {/* One row: which bank, then which level — both survive in the URL. */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            {showsBrandFilter && (
+              <nav className="flex flex-wrap gap-2" aria-label={t('brandFilterLabel')}>
+                <Link
+                  href={bankHref({ brand: null })}
+                  className={cn(
+                    buttonVariants({ variant: activeBrandId ? 'outline' : 'default', size: 'sm' }),
+                  )}
+                >
+                  {t('brandAll')}
+                </Link>
+                {options.brands.map((b) => (
+                  <Link
+                    key={b.id}
+                    href={bankHref({ brand: b.id })}
+                    className={cn(
+                      buttonVariants({
+                        variant: activeBrandId === b.id ? 'default' : 'outline',
+                        size: 'sm',
+                      }),
+                    )}
+                  >
+                    {b.name}
+                  </Link>
+                ))}
+              </nav>
+            )}
+
+            <nav
+              className={cn(
+                'flex flex-wrap gap-2',
+                // The divider exists only when there is something to divide from.
+                showsBrandFilter && 'sm:border-l sm:pl-4',
+              )}
+              aria-label={t('levelFilterLabel')}
+            >
               <Link
-                href="/questions"
+                href={bankHref({ difficulty: null })}
                 className={cn(
-                  buttonVariants({ variant: activeBrandId ? 'outline' : 'default', size: 'sm' }),
+                  buttonVariants({
+                    variant: activeDifficulty ? 'outline' : 'default',
+                    size: 'sm',
+                  }),
                 )}
               >
-                {t('brandAll')}
+                {t('levelAll')}
               </Link>
-              {options.brands.map((b) => (
+              {DIFFICULTIES.map((d) => (
                 <Link
-                  key={b.id}
-                  href={`/questions?brand=${encodeURIComponent(b.id)}`}
+                  key={d}
+                  href={bankHref({ difficulty: d })}
                   className={cn(
                     buttonVariants({
-                      variant: activeBrandId === b.id ? 'default' : 'outline',
+                      variant: activeDifficulty === d ? 'default' : 'outline',
                       size: 'sm',
                     }),
                   )}
                 >
-                  {b.name}
+                  {options.difficultyLabels[d]}
                 </Link>
               ))}
             </nav>
-          )}
+          </div>
 
           <QuestionList
             rows={questions.rows}
@@ -218,9 +283,9 @@ export default async function QuestionBankPage({
           />
 
           {lastPage > 1 && (
-            <nav className="flex items-center justify-between gap-3" aria-label="Pagination">
+            <nav className="flex items-center justify-between gap-3" aria-label={t('paginationLabel')}>
               <Link
-                href={`/questions?page=${current - 1}${brandQuery}`}
+                href={bankHref({ page: current - 1 })}
                 aria-disabled={current <= 1}
                 className={cn(
                   buttonVariants({ variant: 'outline', size: 'sm' }),
@@ -235,7 +300,7 @@ export default async function QuestionBankPage({
               </span>
 
               <Link
-                href={`/questions?page=${current + 1}${brandQuery}`}
+                href={bankHref({ page: current + 1 })}
                 aria-disabled={current >= lastPage}
                 className={cn(
                   buttonVariants({ variant: 'outline', size: 'sm' }),

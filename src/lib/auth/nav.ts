@@ -38,6 +38,7 @@ export type NavIcon =
   | 'evaluate'
   | 'myExams'
   | 'results'
+  | 'reports'
   | 'settings'
 
 /**
@@ -275,6 +276,19 @@ const NAV_ITEMS: NavItemConfig[] = [
     icon: 'results',
     permissions: ['attempts.read_own'],
     mobile: true,
+  },
+  {
+    /*
+     * Restored: reports/page.tsx has always documented "a single /reports
+     * entry" here, but the entry was lost in the sidebar consolidation and
+     * the page became reachable only by typing the URL. Everybody holds
+     * reports.read_own; analytics_scope() decides whether the page shows
+     * own, team or company figures.
+     */
+    href: '/reports',
+    labelKey: 'reports',
+    icon: 'reports',
+    permissions: ['reports.read_own', 'reports.read_team', 'reports.read_all'],
   },
   {
     href: '/users',

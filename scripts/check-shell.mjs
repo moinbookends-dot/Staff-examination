@@ -199,11 +199,12 @@ try {
    * │ authoring pages /exams, /exams/new and /exams/[id] were deleted, and a  │
    * │ chef is offered no link to a route that does not exist.)               │
    * │                                                                         │
-   * │ /verify and /reports STAY forbidden and are still asserted below.       │
+   * │ /verify STAYS forbidden and is still asserted below.                    │
    * │ Paper-backed exams publish with verification_mode 'auto' — 0067 changed │
    * │ it from 'single', which required a counter-signer the chef could not be │
-   * │ and stranded every result — so nothing reaches the verify queue, and    │
-   * │ analytics is separate work.                                             │
+   * │ and stranded every result — so nothing reaches the verify queue.        │
+   * │ /reports left this list when its nav entry was restored: the page had   │
+   * │ been fully built for two milestones while reachable only by URL.        │
    * └─────────────────────────────────────────────────────────────────────────┘
    */
   /*
@@ -219,8 +220,14 @@ try {
    */
   const forbidden = [
     ['/en/verify', 'Verify'],
-    ['/en/reports', 'Analytics'],
   ]
+
+  // The restored entry, asserted present rather than absent.
+  check(
+    new RegExp('href="/en/reports"').test(dash.html),
+    'an admin is offered Reports',
+    'an admin was NOT offered Reports — the restored nav entry is missing again',
+  )
 
   for (const [href, what] of forbidden) {
     check(

@@ -132,6 +132,24 @@ try {
     `select question_id, answer_key, snapshot, snapshot->>'response_format' fmt
        from public.attempt_questions where attempt_id=$1 order by position`, [attemptId])).rows
 
+  /*
+   * ┌─────────────────────────────────────────────────────────────────────────┐
+   * │ 0088 made short answers self-grade, so a fully-keyed bank paper never   │
+   * │ reaches the marking queue any more — and this suite exists to exercise  │
+   * │ that queue. ONE short answer's frozen key loses its model here: the     │
+   * │ authoring gap 0088 deliberately routes to a human, reproduced on this   │
+   * │ script's own attempt (removed again in cleanup). The attempt then lands │
+   * │ in 'evaluating' exactly as a real gapped paper would.                   │
+   * └─────────────────────────────────────────────────────────────────────────┘
+   */
+  const gapped = sheet.find((r) => r.fmt === 'text_short')
+  await db.query(
+    `update public.attempt_questions
+        set answer_key = answer_key - 'model'
+      where attempt_id = $1 and question_id = $2`,
+    [attemptId, gapped.question_id],
+  )
+
   for (const row of sheet) {
     await rpc(employee, 'save_answer', {
       p_attempt_id: attemptId, p_question_id: row.question_id,
@@ -175,8 +193,30 @@ try {
    * ╚═══════════════════════════════════════════════════════════════════════════╝
    */
   const visible = JSON.stringify(sheet.map((r) => r.snapshot))
-  const models = allModels.filter((m) => !visible.includes(m))
+  /*
+   * ┌─────────────────────────────────────────────────────────────────────────┐
+   * │ THE MESSAGE BUNDLE IS THE SECOND PLACE A CANARY CAN INNOCENTLY LIVE.    │
+   * │                                                                         │
+   * │ next-intl serialises the whole bundle into EVERY page — the repo's own  │
+   * │ render-check rule exists because of it — so a model answer that happens │
+   * │ to equal a line of UI copy ("Not set", a Bloom hint) is "found" on any  │
+   * │ page ever served, including a refusal. Found it live: a canary matched  │
+   * │ inside …"bloomNone":"Not set","provenance"… on a DENIED page. Same      │
+   * │ treatment as the paper-printed case: excluded, loudly.                  │
+   * └─────────────────────────────────────────────────────────────────────────┘
+   */
+  const bundleText = ['en', 'hi', 'gu']
+    .map((l) => readFileSync(new URL(`../messages/${l}.json`, import.meta.url), 'utf8'))
+    .join('\n')
+  const models = allModels.filter((m) => !visible.includes(m) && !bundleText.includes(m))
   const alsoPrinted = allModels.filter((m) => visible.includes(m))
+  const alsoInBundle = allModels.filter((m) => !visible.includes(m) && bundleText.includes(m))
+  if (alsoInBundle.length) {
+    console.log(
+      `  ${alsoInBundle.length} not usable as a canary — also in the message bundle: ` +
+        alsoInBundle.map((m) => JSON.stringify(m)).join(', '),
+    )
+  }
 
   console.log(`\n  ${allModels.length} short answer(s), model text e.g. "${allModels[0]}"`)
   if (alsoPrinted.length) {
@@ -207,21 +247,35 @@ try {
   const items = await rpc(chef, 'attempt_evaluation_items', { p_attempt_id: attemptId })
   check('an evaluator can open a paper-backed attempt', items.ok,
     items.ok ? '' : `${items.status} ${JSON.stringify(items.data).slice(0, 120)}`)
-  // allModels, not models: the evaluator is entitled to every model answer,
-  // including the one excluded from the leak canaries for being printed on the
-  // paper. Narrowing the canary set must not narrow what marking must deliver.
+  /*
+   * The truth to compare against is the attempt's CURRENT frozen keys — one
+   * model was deliberately gapped above, and the canary list (allModels) is
+   * both stale and length-filtered, so neither may drive these assertions.
+   */
+  const frozen = (await db.query(
+    `select question_id,
+            nullif(btrim(coalesce(answer_key ->> 'model', '')), '') as model
+       from public.attempt_questions
+      where attempt_id = $1
+        and snapshot ->> 'response_format' = 'text_short'`, [attemptId])).rows
+  const frozenModels = frozen.filter((r) => r.model).map((r) => r.model)
+
   check('every short answer is listed for marking',
-    (items.data ?? []).length >= allModels.length,
+    (items.data ?? []).length >= frozen.length,
     `${(items.data ?? []).length} item(s)`)
 
   // ── The evaluator sees it ────────────────────────────────────────────────
   section('the evaluator sees the model answer')
 
   const withModel = (items.data ?? []).filter((i) => i.model_answer)
-  check('the model answer reaches the evaluator', withModel.length === allModels.length,
-    `${withModel.length} of ${allModels.length}`)
+  check('the model answer reaches the evaluator', withModel.length === frozenModels.length,
+    `${withModel.length} of ${frozenModels.length}`)
   check('it is the text frozen onto the attempt, not re-read from the bank',
-    withModel.every((i) => allModels.includes(i.model_answer)))
+    withModel.every((i) => frozenModels.includes(i.model_answer)))
+  // The gapped short is the one the queue exists for: listed, and offered no
+  // model the attempt does not carry — a bank re-read here would be a leak.
+  check('the gapped question arrives with no model to lean on',
+    (items.data ?? []).some((i) => i.question_id === gapped.question_id && !i.model_answer))
   check('the marks available are shown', (items.data ?? []).every((i) => i.marks != null))
   check('the candidate answer is shown', (items.data ?? []).some((i) => i.answer != null))
 
@@ -364,8 +418,11 @@ try {
         check('  …and the page actually shows the model answer',
           models.some((m) => body.includes(m)))
       } else {
-        check('  …and the page body carries no model answer', leaks(body).length === 0,
-          leaks(body).length ? 'LEAKED' : '')
+        // Context, not just LEAKED: the 90 characters around the hit decide
+        // between a real leak and a canary that also lives somewhere benign.
+        const hit = leaks(body)[0]
+        check('  …and the page body carries no model answer', !hit,
+          hit ? `LEAKED ${JSON.stringify(context(body, hit))}` : '')
       }
     }
 

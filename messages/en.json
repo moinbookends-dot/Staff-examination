@@ -685,7 +685,8 @@
     "liveExams": "Live exams",
     "papers": "Papers",
     "users": "Users",
-    "bankShort": "Questions"
+    "bankShort": "Questions",
+    "mainLabel": "Main navigation"
   },
   "errors": {
     "notFound": "That page doesn’t exist.",
@@ -770,7 +771,7 @@
     "candidate": "Candidate",
     "exam": "Exam",
     "submitted": "Submitted",
-    "sentBack": "Sent back {count, plural, one {once} other {# times}}",
+    "sentBack": "Sent back {count, plural, one {# time} other {# times}}",
     "mark": "Mark",
     "open": "Open",
     "markingTitle": "Marking",
@@ -1136,7 +1137,10 @@
     "untitled": "(no English text yet)",
     "countLabel": "{count} questions",
     "prev": "Previous",
-    "pageOf": "Page {page} of {total}"
+    "pageOf": "Page {page} of {total}",
+    "levelAll": "All levels",
+    "levelFilterLabel": "Filter by difficulty",
+    "paginationLabel": "Pagination"
   },
   "shell": {
     "search": "Search…",
