@@ -350,10 +350,10 @@ try {
     p_duration_minutes: 45,
     p_opens_at: null,
     p_closes_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
-    // 4, not 1: the leave-policy sections each need a fresh attempt after
-    // the voluntary submit closes the first — hidden page, focus loss, and
-    // the confirmed back-exit.
-    p_max_attempts: 4,
+    // 5, not 1: the leave-policy sections each need a fresh attempt after
+    // the voluntary submit closes the first — hidden page, focus loss, the
+    // confirmed back-exit, and the offline-violation delivery test.
+    p_max_attempts: 5,
     p_pass_mark_percent: 60,
     p_instructions: null,
     p_results_release: 'immediate',
@@ -414,6 +414,15 @@ try {
   const page = connect(target.webSocketDebuggerUrl)
   await page.ready
   await page.send('Page.enable')
+  /*
+   * Focus, made deterministic for the WHOLE run. Headless Chrome's
+   * document.hasFocus() otherwise mirrors whatever the host machine is doing,
+   * and one run watched the runner's focus-loss monitor convict attempt #1 as
+   * cheating mid-layout-loop because a human touched another window. With
+   * emulation on, hasFocus() is true everywhere; the focus-loss section
+   * overrides document.hasFocus directly, which wins regardless.
+   */
+  await page.send('Emulation.setFocusEmulationEnabled', { enabled: true })
   await page.send('Runtime.enable')
   await page.send('Network.enable')
 
@@ -762,11 +771,9 @@ try {
   const third = await rpc(employee, 'start_attempt', { p_exam_id: examId })
   if (!third.ok) throw new Error(`third start_attempt failed: ${JSON.stringify(third.error)}`)
   const thirdId = third.data[0].attempt_id
-  // Headless Chrome never actually holds focus, so the runner's monitor would
-  // never arm (it deliberately ignores a page that was never focused). Focus
-  // emulation makes hasFocus() true; the override below then forces it false,
-  // which is exactly the Meet-bubble shape: armed, visible, unfocused.
-  await page.send('Emulation.setFocusEmulationEnabled', { enabled: true })
+  // Focus emulation is on for the whole run (see the connect block); the
+  // override below beats it, which is exactly the Meet-bubble shape:
+  // armed, visible, unfocused.
   await goto(page, `${APP}/en/attempt/${thirdId}`)
   await sleep(1200)
 
@@ -806,7 +813,6 @@ try {
   // verdict as a hidden page. Before this, confirming navigated away with the
   // attempt still open: an escape hatch the dialog's own wording denied.
   console.log('\n── Confirmed back-exit is cheating ─────────────────────')
-  await page.send('Emulation.setFocusEmulationEnabled', { enabled: false })
   const fourth = await rpc(employee, 'start_attempt', { p_exam_id: examId })
   if (!fourth.ok) throw new Error(`fourth start_attempt failed: ${JSON.stringify(fourth.error)}`)
   const fourthId = fourth.data[0].attempt_id
@@ -827,6 +833,73 @@ try {
     leftRows[0].submit_reason === 'tab_switch',
     String(leftRows[0].submit_reason),
   )
+
+  // ── 8d. A violation with the network down — the split-screen bug ──────────
+  //
+  // The real Android failure: the violation fired exactly as the OS froze the
+  // page, the request died unsent, and the old UI declared "Exam submitted"
+  // anyway. The contract now: while the server has not confirmed, the DB row
+  // stays in_progress and the dialog says SUBMITTING/RETRYING — never the
+  // verdict; when the network returns, the retry pump lands the violation and
+  // only then does the verdict appear. The acceptance criterion is the
+  // DATABASE ROW, not the dialog.
+  console.log('\n── Violation with the network down ─────────────────────')
+  const fifth = await rpc(employee, 'start_attempt', { p_exam_id: examId })
+  if (!fifth.ok) throw new Error(`fifth start_attempt failed: ${JSON.stringify(fifth.error)}`)
+  const fifthId = fifth.data[0].attempt_id
+  await goto(page, `${APP}/en/attempt/${fifthId}`)
+  await sleep(1500)
+
+  await page.send('Network.enable')
+  await page.send('Network.emulateNetworkConditions', {
+    offline: true, latency: 0, downloadThroughput: -1, uploadThroughput: -1,
+  })
+  await evaluate(
+    page,
+    `(() => {
+      Object.defineProperty(document, 'visibilityState', { get: () => 'hidden', configurable: true })
+      document.dispatchEvent(new Event('visibilitychange'))
+      return 'hidden-offline'
+    })()`,
+  )
+  await sleep(2500)
+
+  const { rows: still } = await db.query(
+    `select status from public.attempts where id = $1`, [fifthId])
+  check('offline: the row is honestly still open', still[0].status === 'in_progress', still[0].status)
+  const offlineText = await evaluate(page, `document.body.innerText`)
+  check(
+    'offline: the dialog says submitting/retrying, not the verdict',
+    /Submitting exam|Unable to finalize/.test(offlineText) && !/marked as cheating/.test(offlineText),
+    offlineText.match(/Submitting exam|Unable to finalize|marked as cheating/)?.[0] ?? 'neither message',
+  )
+
+  // The paper must stay locked while unconfirmed — no answer path, no Submit.
+  const lockedProbe = await evaluate(
+    page,
+    `[...document.querySelectorAll('button')].filter(b => !b.disabled && /^(Submit exam|Next|Previous)$/.test(b.textContent.trim())).length`,
+  )
+  check('offline: the paper is locked while unconfirmed', lockedProbe === 0, `${lockedProbe} live control(s)`)
+
+  await page.send('Network.emulateNetworkConditions', {
+    offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1,
+  })
+  // First retry fires at 2s backoff (or on the online event); allow both.
+  await sleep(6000)
+  const { rows: landed } = await db.query(
+    `select status, submit_reason from public.attempts where id = $1`, [fifthId])
+  check('online again: the violation lands', landed[0].status !== 'in_progress', landed[0].status)
+  check(
+    "…with the recorded reason 'tab_switch'",
+    landed[0].submit_reason === 'tab_switch',
+    String(landed[0].submit_reason),
+  )
+  const verdictNow = await evaluate(
+    page,
+    `document.body.innerText.includes(${JSON.stringify('marked as cheating')})`,
+  )
+  check('…and only now does the UI say cheating', verdictNow === true, String(verdictNow))
+  await evaluate(page, `(() => { delete document.visibilityState; return 'restored' })()`)
 
   // ── What cannot be tested here ────────────────────────────────────────────
   console.log('\n── Not testable in this environment ────────────────────')

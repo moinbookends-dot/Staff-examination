@@ -1,5 +1,10 @@
 import { getTranslations } from 'next-intl/server'
+import { UserPlusIcon } from 'lucide-react'
 import { requireAnyPermission } from '@/lib/auth/guards'
+import { can } from '@/lib/auth/can'
+import { Link } from '@/lib/i18n/navigation'
+import { buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { listUsers, listRoles } from '@/server/actions/monitoring'
 import { UsersTable } from '@/components/team/users-table'
 import { UsersTabs } from '@/components/team/users-tabs'
@@ -16,7 +21,7 @@ import { UsersIcon } from 'lucide-react'
  * fail; an Employee typing this URL is refused by both layers.
  */
 export default async function UsersPage() {
-  await requireAnyPermission(['users.read_team', 'users.read_all'])
+  const claims = await requireAnyPermission(['users.read_team', 'users.read_all'])
   const t = await getTranslations('users')
 
   const [rows, roles] = await Promise.all([listUsers(), listRoles()])
@@ -24,7 +29,20 @@ export default async function UsersPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t('title')} description={t('subtitle')} />
+      <PageHeader
+        title={t('title')}
+        description={t('subtitle')}
+        actions={
+          // Same authority as approving, because it IS approving — see
+          // createUser() in server/actions/users.ts.
+          can(claims, 'users.approve') ? (
+            <Link href="/users/new" className={cn(buttonVariants({ size: 'sm' }))}>
+              <UserPlusIcon />
+              {t('createUser')}
+            </Link>
+          ) : undefined
+        }
+      />
       <UsersTabs />
 
       {rows.length === 0 ? (

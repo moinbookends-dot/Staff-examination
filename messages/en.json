@@ -761,7 +761,10 @@
     "cheatedTitle": "Exam submitted",
     "cheatedBody": "Your exam has been submitted and marked as cheating because you left the exam.",
     "focusWarnTitle": "Return to the exam",
-    "focusWarnBody": "The exam window lost focus. Return immediately or the exam will be submitted and marked as cheating."
+    "focusWarnBody": "The exam window lost focus. Return immediately or the exam will be submitted and marked as cheating.",
+    "finalizingTitle": "Submitting exam…",
+    "finalizingBody": "Your exam is being sent to the server. Do not close this screen.",
+    "finalizeRetry": "Unable to finalize the exam. Retrying…"
   },
   "evaluation": {
     "title": "Evaluate",
@@ -1615,6 +1618,20 @@
     "approvalsSubtitle": "New staff cannot sign in until approved. Assigning an outlet and department here sets what they can see across the platform.",
     "approvalsPending": "Pending",
     "approvalsOldest": "Oldest first.",
-    "approvalsEmpty": "Nothing waiting. New registrations appear here."
+    "approvalsEmpty": "Nothing waiting. New registrations appear here.",
+    "createUser": "Create user",
+    "createTitle": "Create a user",
+    "createSubtitle": "The account arrives verified and approved, ready to sign in with the password you set here.",
+    "createFullName": "Full name",
+    "createEmail": "Email",
+    "createPassword": "Password",
+    "createPasswordHint": "At least 8 characters. Share it with the person — they can change it later in Settings.",
+    "createPhone": "Phone (optional)",
+    "createLocale": "Preferred language",
+    "createOutlet": "Outlet",
+    "createDepartment": "Department",
+    "createChoose": "Choose…",
+    "createSubmit": "Create user",
+    "createSubmitting": "Creating…"
   }
 }

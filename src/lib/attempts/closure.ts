@@ -28,7 +28,9 @@
 export const CHEATING_REASONS = ['tab_switch', 'focus_loss'] as const
 
 /** The candidate left the active exam and the closure recorded it. */
-export function isCheating(reason: string | null | undefined): boolean {
+export function isCheating(
+  reason: string | null | undefined,
+): reason is (typeof CHEATING_REASONS)[number] {
   return reason === 'tab_switch' || reason === 'focus_loss'
 }
 

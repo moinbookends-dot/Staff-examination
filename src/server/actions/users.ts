@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { requirePermission } from '@/lib/auth/guards'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { dbId } from '@/lib/db/id'
 
 /**
@@ -16,7 +17,14 @@ import { dbId } from '@/lib/db/id'
  * come from someone with authority.
  *
  * ┌───────────────────────────────────────────────────────────────────────────┐
- * │ NO ADMIN CLIENT IN THIS FILE ANY MORE — and that is the whole point.      │
+ * │ NO ADMIN CLIENT FOR APPROVE/REJECT — and one narrow exception below.      │
+ * │                                                                           │
+ * │ createUser() is the exception, because creating an AUTH ACCOUNT has no    │
+ * │ non-service-key path at all: only GoTrue's admin API may mint a user with │
+ * │ a password. Everything AFTER that first call goes back through the same   │
+ * │ approve_registration() spine as self-registration, and the key's absence  │
+ * │ is caught and answered in words rather than thrown into the boundary —    │
+ * │ the exact failure this box records.                                       │
  * │                                                                           │
  * │ Both decisions used to run through createAdminClient(), because a chef    │
  * │ holds users.approve but NOT users.update, so profiles_admin_update would  │
@@ -184,4 +192,110 @@ export async function rejectRegistration(input: unknown): Promise<MutationResult
 
   revalidatePath('/approvals')
   return { ok: true }
+}
+
+const createUserSchema = z.object({
+  fullName: z.string().trim().min(2, 'Enter the person’s name.').max(120),
+  email: z.string().trim().toLowerCase().email('Enter a valid email address.'),
+  /*
+   * Eight, not the auth server's six: the dashboard minimum is being raised
+   * to eight anyway, and an admin typing a throwaway five-character password
+   * for somebody else is exactly who this floor is for.
+   */
+  password: z.string().min(8, 'Use at least 8 characters.').max(72),
+  phone: z.string().trim().max(30).optional().or(z.literal('')),
+  locale: z.enum(['en', 'hi', 'gu']).default('en'),
+  outletId: dbId('Select an outlet.'),
+  departmentId: dbId('Select a department.'),
+})
+
+export interface CreateUserResult extends MutationResult {
+  userId?: string
+}
+
+/**
+ * Create a staff account directly — onboarding without the register-and-wait.
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ ONE new thing happens here, everything else is the EXISTING spine.        │
+ * │                                                                           │
+ * │ GoTrue's admin API mints the auth user (the one operation with no        │
+ * │ non-service-key path), with email_confirm true — the admin is standing   │
+ * │ next to the person; a verification email to an inbox that cannot receive │
+ * │ mail yet would strand the account. The 0003/0053 trigger then creates    │
+ * │ the PENDING profile and employee role exactly as self-registration      │
+ * │ does, and approve_registration() — called with the CALLER's own client, │
+ * │ so its has_perm/company checks judge the admin, not the service key —   │
+ * │ sets outlet, department and approval in one audited transaction.        │
+ * │                                                                           │
+ * │ If that second step refuses (a retired outlet, a lost race), the fresh   │
+ * │ auth user is deleted again rather than left as a ghost in the approvals  │
+ * │ queue under a password only the admin knows.                             │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ */
+export async function createUser(input: unknown): Promise<CreateUserResult> {
+  await requirePermission('users.approve')
+
+  const parsed = createUserSchema.safeParse(input)
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid input.' }
+  }
+  const { fullName, email, password, phone, locale, outletId, departmentId } = parsed.data
+
+  let admin: ReturnType<typeof createAdminClient>
+  try {
+    admin = createAdminClient()
+  } catch {
+    // The missing-variable failure, answered in words — see the box above.
+    return {
+      ok: false,
+      error:
+        'Creating accounts needs SUPABASE_SECRET_KEY on the server, and it is not set. ' +
+        'People can still self-register and be approved from the queue.',
+    }
+  }
+
+  const created = await admin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: { full_name: fullName, phone: phone || null, locale },
+  })
+
+  if (created.error || !created.data.user) {
+    if (/already.*(registered|exists)/i.test(created.error?.message ?? '')) {
+      return { ok: false, error: 'An account with that email already exists.' }
+    }
+    return { ok: false, error: 'Could not create the account. Try again.' }
+  }
+  const userId = created.data.user.id
+
+  /*
+   * The caller's client, NOT the admin client: approve_registration re-checks
+   * users.approve and company/outlet reach against the ADMIN pressing the
+   * button, which is the authority this decision must carry.
+   */
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('approve_registration', {
+    p_user_id: userId,
+    p_outlet_id: outletId,
+    p_department_id: departmentId,
+  })
+
+  const approved = !error && (Array.isArray(data) ? (data[0]?.approved ?? 0) : 0) > 0
+  if (!approved) {
+    // No ghosts: take the fresh account back out rather than stranding a
+    // pending profile whose password only the admin knows.
+    await admin.auth.admin.deleteUser(userId).catch(() => {})
+    if (error && /unknown outlet/i.test(error.message)) {
+      return { ok: false, error: 'That outlet is no longer available. Pick another.' }
+    }
+    if (error && /unknown department/i.test(error.message)) {
+      return { ok: false, error: 'That department is no longer available. Pick another.' }
+    }
+    return { ok: false, error: 'The account could not be set up. Nothing was created.' }
+  }
+
+  revalidatePath('/users')
+  return { ok: true, userId }
 }

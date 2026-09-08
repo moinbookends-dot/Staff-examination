@@ -361,17 +361,128 @@ export function AttemptRunner({
 
   // ── The clock ──────────────────────────────────────────────────────────────
 
+  /*
+   * ── The violation pump ────────────────────────────────────────────────────
+   *
+   * ┌─────────────────────────────────────────────────────────────────────────┐
+   * │ THE BUG THIS REPLACES, seen on a real Android split-screen test:        │
+   * │ the old doSubmit showed the terminal dialog BEFORE the server replied, │
+   * │ cleared the outbox on faith, and sent the finalization as an ordinary  │
+   * │ Server Action — a plain fetch Android is free to kill while freezing   │
+   * │ the page, which is precisely the moment a violation fires. The UI said │
+   * │ "Exam submitted"; the row stayed in_progress; the candidate came back  │
+   * │ and closed the paper as a normal 'user' submit. Client and server had  │
+   * │ diverged, and the client had lied about it.                            │
+   * │                                                                        │
+   * │ Now: the request goes through /api/attempts/violation with             │
+   * │ `keepalive: true` — the one transport the browser may deliver AFTER    │
+   * │ the page is frozen — and the dialog knows three honest states:         │
+   * │ sending ("Submitting exam…"), failed ("Unable to finalize. Retrying…") │
+   * │ and confirmed, which alone may show the cheating verdict, because it   │
+   * │ alone has the server's word. Failure retries with backoff, and again   │
+   * │ the moment the connection or the page comes back. The paper never      │
+   * │ unlocks meanwhile, and the outbox is cleared only on confirmation.     │
+   * └─────────────────────────────────────────────────────────────────────────┘
+   */
+  const [finalizing, setFinalizing] = useState<'sending' | 'confirmed' | 'failed'>('sending')
+  const violationReason = useRef<'tab_switch' | 'focus_loss' | null>(null)
+  const finalizeState = useRef<'sending' | 'confirmed' | 'failed'>('sending')
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const retryDelay = useRef(2_000)
+
+  // A reader, not an inline comparison: the ref mutates across the await
+  // below (a concurrent pump can confirm meanwhile), and TypeScript's
+  // narrowing would otherwise call the second check impossible.
+  const isConfirmed = useCallback(() => finalizeState.current === 'confirmed', [])
+
+  const pumpViolation = useCallback(async (): Promise<void> => {
+    const reason = violationReason.current
+    if (!reason || isConfirmed()) return
+    finalizeState.current = 'sending'
+    setFinalizing('sending')
+
+    let ok = false
+    try {
+      const res = await fetch('/api/attempts/violation', {
+        method: 'POST',
+        // The whole point. See the box above and the route's own header.
+        keepalive: true,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ attemptId: attempt.attempt_id, reason }),
+      })
+      const json: unknown = await res.json().catch(() => null)
+      ok = Boolean(res.ok && (json as { ok?: boolean } | null)?.ok)
+    } catch {
+      ok = false
+    }
+
+    if (isConfirmed()) return
+    if (ok) {
+      finalizeState.current = 'confirmed'
+      setFinalizing('confirmed')
+      // Only NOW is the queue stale by the server's word, not by hope.
+      clearOutbox(attempt.attempt_id)
+      startNavigation(() => router.refresh())
+      return
+    }
+
+    finalizeState.current = 'failed'
+    setFinalizing('failed')
+    if (retryTimer.current) clearTimeout(retryTimer.current)
+    retryTimer.current = setTimeout(() => void pumpViolation(), retryDelay.current)
+    retryDelay.current = Math.min(retryDelay.current * 2, 30_000)
+  }, [attempt.attempt_id, router, startNavigation, isConfirmed])
+
+  /*
+   * A failed finalization retries the instant the world changes — connection
+   * back, or the page visible again — rather than waiting out the backoff.
+   */
+  useEffect(() => {
+    const kick = () => {
+      if (violationReason.current && finalizeState.current === 'failed') {
+        if (retryTimer.current) clearTimeout(retryTimer.current)
+        void pumpViolation()
+      }
+    }
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') kick()
+    }
+    window.addEventListener('online', kick)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.removeEventListener('online', kick)
+      document.removeEventListener('visibilitychange', onVisible)
+      if (retryTimer.current) clearTimeout(retryTimer.current)
+    }
+  }, [pumpViolation])
+
   const doSubmit = useCallback(
     async (reason: 'user' | 'timer' | 'tab_switch' | 'focus_loss') => {
       if (submitted.current) return
       submitted.current = true
-      // Shown the moment they come back, not when the network round-trip
-      // finishes — a candidate returning from another app should meet the
-      // consequence, not a still-open paper.
-      if (isCheating(reason)) setLeftExam(true)
-      // The attempt is closed; the server will refuse these from here on.
-      clearOutbox(attempt.attempt_id)
       setSubmitting(true)
+
+      if (isCheating(reason)) {
+        /*
+         * The armoured path. The violation shot goes FIRST — it is tiny and
+         * keepalive, so it survives the freeze that is probably happening
+         * right now — and the debounced answers ride behind it fire-and-
+         * forget: whichever the server closes the door on loses ≤800ms of
+         * typing, never the attempt's verdict. The dialog opens in its
+         * 'sending' state; the pump decides everything after.
+         */
+        setLeftExam(true)
+        violationReason.current = reason
+        void pumpViolation()
+        for (const [questionId, timer] of timers.current) {
+          clearTimeout(timer)
+          const answer = answers[questionId]
+          if (answer) void saveAnswer({ attemptId: attempt.attempt_id, questionId, answer })
+        }
+        timers.current.clear()
+        setSubmitting(false)
+        return
+      }
 
       // Flush anything still waiting on its debounce before closing the paper.
       for (const [questionId, timer] of timers.current) {
@@ -385,6 +496,8 @@ export function AttemptRunner({
       setSubmitting(false)
 
       if (result.ok) {
+        // Confirmed by the server — only now is the queue truly stale.
+        clearOutbox(attempt.attempt_id)
         startNavigation(() => router.refresh())
       } else {
         // The server refused — most likely the deadline passed and the sweeper
@@ -394,7 +507,7 @@ export function AttemptRunner({
         startNavigation(() => router.refresh())
       }
     },
-    [answers, attempt.attempt_id, router, startNavigation],
+    [answers, attempt.attempt_id, router, startNavigation, pumpViolation],
   )
 
   /*
@@ -413,8 +526,14 @@ export function AttemptRunner({
    *    Submitting on it would brand people for using their browser. A desktop
    *    window placed alongside (exam still visible) therefore goes undetected;
    *    that limitation is documented, not papered over.
-   *  · pagehide — the only case it adds over visibilitychange is a RELOAD,
-   *    and an accidental refresh is not leaving the exam.
+   *  · an UNLOAD-driven hidden — reload, navigation, tab close. The keepalive
+   *    transport (below) delivers even from a dying page, so without this
+   *    exclusion every accidental refresh would now convict; before keepalive
+   *    the same shot silently died in flight, which was forgiveness by
+   *    accident. Chrome fires pagehide BEFORE the unload's visibilitychange,
+   *    so the flag below tells the two kinds of hidden apart. A reload keeps
+   *    its resume; an abandoned tab falls to the sweeper as 'sweeper'; the
+   *    back button lands in the exit dialog — all exactly the shipped policy.
    *
    * THE COST IS REAL AND ACCEPTED: hidden also fires for an incoming call
    * answered or a screen that auto-locks while the candidate is thinking.
@@ -429,14 +548,31 @@ export function AttemptRunner({
    * recovers answers, this one enforces policy, and coupling them would make
    * the recovery path depend on the punishment path.
    */
+  const unloading = useRef(false)
   useEffect(() => {
+    const onPageHide = () => {
+      unloading.current = true
+    }
+    const onPageShow = () => {
+      unloading.current = false
+    }
     const onHidden = () => {
-      if (document.visibilityState === 'hidden' && !submitted.current) {
+      if (
+        document.visibilityState === 'hidden' &&
+        !submitted.current &&
+        !unloading.current
+      ) {
         void doSubmit('tab_switch')
       }
     }
+    window.addEventListener('pagehide', onPageHide)
+    window.addEventListener('pageshow', onPageShow)
     document.addEventListener('visibilitychange', onHidden)
-    return () => document.removeEventListener('visibilitychange', onHidden)
+    return () => {
+      window.removeEventListener('pagehide', onPageHide)
+      window.removeEventListener('pageshow', onPageShow)
+      document.removeEventListener('visibilitychange', onHidden)
+    }
   }, [doSubmit])
 
   /** The focus-loss warning overlay is up while this is true. */
@@ -752,13 +888,15 @@ export function AttemptRunner({
           onClick={() => setIndex((i) => Math.max(0, i - 1))}
           // An exam that forbids backtracking is an integrity setting, not a
           // preference: once a question is behind you it stays behind you.
-          disabled={index === 0 || !attempt.allow_backtrack || timedOut}
+          // `locked`, not just timedOut: a paper awaiting violation
+          // finalization must offer no navigation either.
+          disabled={index === 0 || !attempt.allow_backtrack || locked}
         >
           {t('previous')}
         </Button>
 
         {index < questions.length - 1 ? (
-          <Button size="lg" onClick={() => setIndex((i) => Math.min(questions.length - 1, i + 1))} disabled={timedOut}>
+          <Button size="lg" onClick={() => setIndex((i) => Math.min(questions.length - 1, i + 1))} disabled={locked}>
             {t('next')}
           </Button>
         ) : (
@@ -868,17 +1006,31 @@ export function AttemptRunner({
 
       {/*
         The violation counterpart of the time-up dialog. No footer and no way
-        to dismiss: there is no decision left to make. router.refresh() is
-        already in flight and replaces this whole screen with the closed
-        result card, which repeats the same sentence in ink.
+        to dismiss: there is no decision left to make, and the paper beneath
+        stays locked in every state.
+
+        THREE states, and the order is the contract: "Submitting exam…" while
+        the request is out, "Unable to finalize — retrying" when it failed,
+        and the cheating verdict ONLY once the server has confirmed the row —
+        a real Android test caught the previous version declaring the verdict
+        for a request the OS had killed in flight. Never announce what the
+        database has not done.
         `!timedOut` so the two verdicts can never stack — the clock's dialog
         wins the race it lost the paper to.
       */}
       <AlertDialog open={leftExam && !timedOut}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t('cheatedTitle')}</AlertDialogTitle>
-            <AlertDialogDescription>{t('cheatedBody')}</AlertDialogDescription>
+            <AlertDialogTitle>
+              {finalizing === 'confirmed' ? t('cheatedTitle') : t('finalizingTitle')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {finalizing === 'confirmed'
+                ? t('cheatedBody')
+                : finalizing === 'failed'
+                  ? t('finalizeRetry')
+                  : t('finalizingBody')}
+            </AlertDialogDescription>
           </AlertDialogHeader>
         </AlertDialogContent>
       </AlertDialog>

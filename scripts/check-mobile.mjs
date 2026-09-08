@@ -78,6 +78,7 @@ const STATIC_ROUTES = [
   '/evaluate',
   '/reports',
   '/users/approvals',
+  '/users/new',
   '/settings',
   '/verify',
 ]
