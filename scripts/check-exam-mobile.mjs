@@ -158,7 +158,11 @@ function connect(url) {
   return {
     ready,
     // Bounded, always: an unbounded CDP call turns a hung page into a hung run.
-    send(method, params = {}, timeoutMs = 20_000) {
+    // 60s, up from 20: still bounded — the point is a named failure instead
+    // of a silent hang — but tolerant of a dev machine that has been building
+    // and screenshotting all day. Three consecutive runs died at DIFFERENT
+    // viewports on nothing but slow Runtime.evaluate replies.
+    send(method, params = {}, timeoutMs = 60_000) {
       const msgId = ++id
       return new Promise((res, rej) => {
         const timer = setTimeout(() => {
@@ -388,6 +392,11 @@ try {
     CHROME,
     [
       '--headless=new',
+      // Software raster: repeated devicePixelRatio-2 renders on a loaded
+      // Windows box wedged the GPU path mid-run — Runtime.evaluate then hangs
+      // forever on a renderer that will never paint. Layout is measured, not
+      // admired; the GPU buys nothing here.
+      '--disable-gpu',
       `--remote-debugging-port=${port}`,
       `--user-data-dir=${profile}`,
       '--no-first-run',
